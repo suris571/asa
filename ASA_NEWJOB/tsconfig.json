@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/**/*" // มั่นใจว่ามีบรรทัดนี้ เพื่อให้อ่านทุกไฟล์ภายใต้ src รวมถึงไฟล์ .d.ts ด้วย
+  ]
+}

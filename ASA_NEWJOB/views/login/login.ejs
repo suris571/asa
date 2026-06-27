@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เข้าสู่ระบบ | ระบบเครื่องชั่งและคิวงานตัด</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+  <link rel="stylesheet" href="/plugins/fontawesome-free/css/all.min.css">
+  <link rel="stylesheet" href="/dist/css/adminlte.min.css">
+  <link rel="stylesheet" href="/plugins/toastr/toastr.min.css">
+
+  <style>
+    body.login-page {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); /* ย้อมสีน้ำเงินสไตล์วิศวกรรมโรงงาน */
+    }
+    .login-box {
+      width: 400px;
+    }
+    .card-primary.card-outline {
+      border-top: 3px solid #007bff;
+    }
+    .form-control-lg {
+      font-size: 1.1rem;
+      height: calc(2.875rem + 2px);
+    }
+  </style>
+</head>
+<body class="hold-transition login-page">
+<div class="login-box">
+  
+  <div class="card card-outline card-primary shadow-lg">
+    <div class="card-header text-center bg-light">
+      <h3 class="mb-0 font-weight-bold text-dark">
+        <i class="fas fa-industry text-primary mr-2"></i>WAIT-CUT SYSTEM
+      </h3>
+      <small class="text-muted font-weight-bold">ระบบควบคุมเครื่องชั่งน้ำหนักและคิวงานตัด</small>
+    </div>
+    
+    <div class="card-body login-card-body">
+      <p class="login-box-msg text-sm text-secondary">กรุณาป้อนรหัสพนักงานเพื่อเริ่มปฏิบัติงาน</p>
+
+      <% if (error) { %>
+        <div class="alert alert-danger text-sm p-2 mb-3" role="alert">
+          <i class="fas fa-exclamation-triangle mr-1"></i> <%= error %>
+        </div>
+      <% } %>
+
+      <form action="/login" method="POST" id="loginForm">
+        
+        <div class="form-group mb-3">
+          <label class="text-xs font-weight-bold text-secondary">ชื่อผู้ใช้งาน (Username)</label>
+          <div class="input-group">
+            <input type="text" name="username" class="form-control form-control-lg font-weight-bold" placeholder="ระบุชื่อผู้ใช้งาน..." required autocomplete="off">
+            <div class="input-group-append">
+              <div class="input-group-text">
+                <span class="fas fa-user-badge"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group mb-4">
+          <label class="text-xs font-weight-bold text-secondary">รหัสผ่าน (Password)</label>
+          <div class="input-group">
+            <input type="password" name="password" class="form-control form-control-lg font-weight-bold" placeholder="ระบุรหัสผ่าน..." required>
+            <div class="input-group-append">
+              <div class="input-group-text">
+                <span class="fas fa-lock"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary btn-block btn-lg font-weight-bold shadow-sm">
+              <i class="fas fa-sign-in-alt mr-2"></i> เข้าสู่ระบบ
+            </button>
+          </div>
+        </div>
+      </form>
+
+    </div>
+    
+    <div class="card-footer text-center py-2 bg-light">
+      <span class="text-xs text-muted font-weight-bold">🎯 Machine Node: PM1 & PM2 Station</span>
+    </div>
+  </div>
+</div>
+
+<script src="/plugins/jquery/jquery.min.js"></script>
+<script src="/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/dist/js/adminlte.min.js"></script>
+<script src="/plugins/toastr/toastr.min.js"></script>
+
+<script>
+  $(function() {
+    // ตั้งค่าความไวและพิกัดตัวเตือน Toastr (ยิงขึ้นมุมขวาบน ไม่บังช่องกรอกข้อมูล)
+    toastr.options = {
+      "positionClass": "toast-top-right",
+      "timeOut": "4000", // แสดงคาไว้ 4 วินาทีแล้วสลายตัวออโต้
+      "progressBar": true // มีหลอดแถบเวลาวิ่งถอยหลังให้คนงานเห็น
+    };
+
+    $('input[name="username"]').focus();
+
+    $('input[name="username"], input[name="password"]').on('input', function() {
+    
+    // 🛡️ 1. สั่งทำลายป้าย Inline Alert สีแดงในฟอร์มทิ้งทันที
+    $('.alert-danger').fadeOut(200, function() {
+        $(this).remove(); // ค่อยๆ เฟดหายไปใน 0.2 วินาทีแล้วลบ Element ทิ้งเพื่อความเนียนตา
+    });
+
+    // 🛡️ 2. (ตัวแถม) สั่งให้ Toastr มุมจอหดหายไปด้วยทันที (ถ้ามีค้างอยู่)
+    if (typeof toastr !== 'undefined') {
+        toastr.clear(); 
+    }
+  });
+
+    $('#loginForm').on('submit', function(e) {
+      e.preventDefault();
+      
+      // เคลียร์ป้ายเก่า
+      $('.alert-danger').remove(); 
+
+      const $btn = $(this).find('button[type="submit"]');
+      $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> กำลังตรวจสอบสิทธิ์...');
+
+      const payload = {
+        username: $('input[name="username"]').val(),
+        password: $('input[name="password"]').val()
+      };
+
+      $.ajax({
+        url: '/login',
+        method: 'POST',
+        data: JSON.stringify(payload),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function(res) {
+          if (res.success) {
+            // 🎉 ถ้ารหัสผ่านถูก ยิงเตือนความสำเร็จสั้นๆ ก่อนดีดหน้า
+            toastr.success('🔓 ยืนยันตัวตนสำเร็จ กำลังเข้าสู่แท่นคิวงาน...');
+            setTimeout(function() {
+              window.location.href = res.redirectUrl;
+            }, 1000); // หน่วงเวลา 1 วินาทีให้พนักงานเห็นป้ายเขียวฟินๆ ก่อนเปลี่ยนหน้า
+          }
+        },
+        error: function(xhr) {
+          const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : '❌ เกิดข้อผิดพลาดในระบบเครือข่าย';
+          
+          // 🎯 ท่าไม้ตายมาตรฐานสากล: ยิง Toastr สีแดงแจ้งเตือนวาบขึ้นมาที่มุมจอทันที!
+          toastr.error(errorMsg, 'แจ้งเตือนจากระบบ');
+
+          // 🛡️ แถมซ่อมแบบเก่าให้ด้วย (สาเหตุที่รอบแรกไม่ขึ้น เพราะไม่มีกล่องครอบป้าย)
+          // เราเปลี่ยนมาแปะไว้ใต้การ์ดเฮดเดอร์แทน โผล่แน่นอนคาตา 100% ค่ะกัปตัน
+          $('input[name="password"]').val("");
+          $('input[name="password"]').focus();
+          const alertHtml = `
+            <div class="alert alert-danger text-sm p-2 mb-3 mx-3" role="alert">
+              <i class="fas fa-exclamation-triangle mr-1"></i> ${errorMsg}
+            </div>
+          `;
+          $('.card-header').after(alertHtml); 
+          
+          // คืนชีพปุ่มกด
+          $btn.prop('disabled', false).html('<i class="fas fa-sign-in-alt mr-2"></i> เข้าสู่ระบบ');
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+    "name": "weight-print-agent",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "src/agent.ts",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build": "tsc",
+        "dev": "nodemon --watch src --ext ts,ejs --exec \"tsc && node dist/agent.js\"",
+        "start": "node dist/agent.js",
+        "pm2:start": "pm2 start ecosystem.config.cjs && pm2 save",
+        "pm2:stop": "pm2 stop weight-agent",
+        "pm2:restart": "pm2 restart weight-agent",
+        "pm2:logs": "pm2 logs weight-agent",
+        "pm2:status": "pm2 status"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "dependencies": {
+        "@serialport/parser-readline": "^13.0.0",
+        "bwip-js": "^4.11.1",
+        "ejs": "^6.0.1",
+        "express": "^5.2.1",
+        "nodemon": "^3.1.14",
+        "pdf-to-printer": "^5.8.0",
+        "pdfkit": "^0.19.1",
+        "puppeteer": "^25.2.1",
+        "serialport": "^13.0.0",
+        "socket.io": "^4.8.3"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/ejs": "^3.1.5",
+        "@types/express": "^5.0.6",
+        "@types/node": "^26.0.0",
+        "@types/pdfkit": "^0.17.6",
+        "cors": "^2.8.6",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^6.0.3"
+    }
+}

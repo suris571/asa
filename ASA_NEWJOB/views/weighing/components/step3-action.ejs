@@ -1,0 +1,22 @@
+<div class="col-md-4 d-flex flex-column justify-content-between">
+  <div>
+    <h5 class="text-danger font-weight-bold mb-3"><i class="fas fa-check-circle"></i> STEP 3: ผลประเมิน & บันทึก</h5>
+    
+    <div class="d-flex justify-content-around p-2 border rounded bg-light mb-2 shadow-sm">
+      <div class="custom-control custom-radio">
+        <input class="custom-control-input" type="radio" id="statusPass" name="qualityStatus" value="PASS" checked>
+        <label for="statusPass" class="custom-control-label font-weight-bold text-success">🟢 PASS</label>
+      </div>
+      <div class="custom-control custom-radio">
+        <input class="custom-control-input" type="radio" id="statusHold" name="qualityStatus" value="HOLD">
+        <label for="statusHold" class="custom-control-label font-weight-bold text-danger">🔴 HOLD</label>
+      </div>
+    </div>
+
+    <div class="form-group mb-2">
+      <input type="text" class="form-control form-control-sm" id="remark" placeholder="กรณีเลือก HOLD ระบุหมายเหตุตรงนี้...">
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-success btn-lg btn-block font-weight-bold shadow" id="btnSubmitWeighing"><i class="fas fa-save"></i> บันทึกน้ำหนักเข้าคลัง [Enter]</button>
+</div>

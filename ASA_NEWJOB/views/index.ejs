@@ -1,0 +1,59 @@
+<%- include('partials/header') %>
+<%- include('partials/sidebar') %>
+
+
+
+
+
+<div class="content-wrapper">
+  <div class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1 class="m-0">หน้าหลักและแดชบอร์ด</h1>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="container-fluid">
+      
+      <div class="row">
+        
+        <div class="col-lg-3 col-6">
+          <div class="card card-outline card-primary">
+            <div class="card-body">
+              <h3><%= data.pm1_pending %> <small>รายการ</small></h3>
+              <p>งานรอผลิตเครื่องกรอ PM1</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-6">
+          <div class="card card-outline card-info">
+            <div class="card-body">
+              <h3><%= data.pm2_pending %> <small>รายการ</small></h3>
+              <p>งานรอผลิตเครื่องกรอ PM2</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="card card-success card-outline mt-3">
+        <div class="card-body">
+          <h5>ยินดีต้อนรับสู่ระบบเพิ่มตารางงานการตัดลูกม้วนกระดาษ</h5>
+          <p>ระบบพร้อมทำงานร่วมกับฐานข้อมูลจำลองเรียบร้อยแล้วค่ะ</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+<%- include('partials/footer') %>

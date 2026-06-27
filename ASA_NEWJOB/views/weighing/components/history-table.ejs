@@ -1,0 +1,43 @@
+<div class="card card-navy shadow-sm">
+  <div class="card-header bg-navy p-2">
+    <h3 class="card-title font-weight-bold text-sm"><i class="fas fa-history"></i> ประวัติรายการลูกม้วนที่บันทึกน้ำหนักแล้วในกะปัจจุบัน</h3>
+  </div>
+  <div class="card-body p-2">
+    <table id="weighingHistoryTable" class="table table-sm table-bordered table-striped text-center text-nowrap text-sm w-100 shadow-sm">
+      <thead class="bg-light">
+        <tr>
+          <th>Roll No</th>
+          <th>เกรด</th>
+          <th>รุ่น</th>
+          <th>ขนาด</th>
+          <th>น้ำหนัก (Kg.)</th>
+          <th>Rell No.</th> <th>สถานะ</th>
+          <th>พิมพ์บาร์โค้ด</th> </tr>
+      </thead>
+      <tbody>
+        <% if (typeof history !== 'undefined' && history.length > 0) { %>
+          <% history.forEach(function(row) { %>
+            <tr>
+              <td class="font-weight-bold text-primary"><%= row.roll_no %></td>
+              <td><%= row.grade %></td>
+              <td><%= row.version %></td>
+              <td><%= row.size %></td>
+              <td class="font-weight-bold text-success"><%= row.weight.toFixed(2) %></td>
+              <td class="font-weight-bold"><%= row.rell_no || row.roll_no.split('-')[1] || '01' %></td>
+              <td>
+                <span class="badge <%= row.status === 'PASS' ? 'badge-success' : 'badge-danger' %>">
+                  <%= row.status %>
+                </span>
+              </td>
+              <td>
+                <button type="button" class="btn btn-outline-primary btn-xs font-weight-bold" onclick="printBarcode('<%= row.roll_no %>')">
+                  <i class="fas fa-print"></i> พิมพ์บาร์โค้ด
+                </button>
+              </td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

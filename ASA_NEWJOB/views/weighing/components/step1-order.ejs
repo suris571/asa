@@ -1,0 +1,62 @@
+<div class="col-md-4 border-right">
+  <h5 class="text-primary font-weight-bold mb-3"><i class="fas fa-search"></i> STEP 1: ข้อมูลใบสั่งผลิต</h5>
+  
+  <div class="form-group row mb-2">
+    <label class="col-sm-4 col-form-label font-weight-bold text-sm">เลขใบสั่งผลิต</label>
+    <div class="col-sm-8">
+      <div class="input-group">
+        <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" placeholder="ระบุเลขที่...">
+        <div class="input-group-append">
+          <button class="btn btn-info btn-sm font-weight-bold" type="button" id="btnFetchOrder">เลือกรายการลูกม้วน</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-2">
+
+  <div class="row text-sm">
+    <div class="col-6">
+      <div class="form-group mb-2">
+        <label class="mb-0 text-muted font-weight-bold">วันที่ผลิต</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="prodDate" value="18/06/2026" readonly>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="form-group mb-2">
+        <label class="mb-0 text-muted font-weight-bold">กะการทำงาน</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="shift" value="กะ A" readonly>
+      </div>
+    </div>
+  </div>
+
+  <div class="row text-sm">
+    <div class="col-6">
+      <div class="form-group mb-2">
+        <label class="mb-0 text-muted font-weight-bold">เกรด (Grade)</label>
+        <input type="text" class="form-control form-control-sm bg-white" id="grade" placeholder="เช่น KA185">
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="form-group mb-2">
+        <label class="mb-0 text-muted font-weight-bold">รุ่น (Version)</label>
+        <input type="text" class="form-control form-control-sm bg-white" id="version" placeholder="เช่น รุ่น A">
+      </div>
+    </div>
+  </div>
+
+  <div class="row text-sm">
+    <div class="col-6">
+      <div class="form-group mb-0">
+        <label class="mb-0 text-muted font-weight-bold">ขนาด (Size)</label>
+        <input type="text" class="form-control form-control-sm bg-white" id="size" placeholder="เช่น 72 นิ้ว">
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="form-group mb-0">
+        <label class="mb-0 text-muted font-weight-bold">Diameter</label>
+        <input type="text" class="form-control form-control-sm bg-white" id="diameter" placeholder="ระบุค่า...">
+      </div>
+    </div>
+  </div>
+</div>

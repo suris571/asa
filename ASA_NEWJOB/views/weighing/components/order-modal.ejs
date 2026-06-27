@@ -1,0 +1,67 @@
+<div class="modal fade" id="orderQueueModal" tabindex="-1" role="dialog" aria-labelledby="orderQueueModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content shadow-lg">
+      
+      <div class="modal-header bg-info text-white p-2">
+        <h5 class="modal-title font-weight-bold id="orderQueueModalLabel" style="font-size: 1.1rem;">
+          <i class="fas fa-list-ol"></i> รายการลูกม้วนรอชั่งน้ำหนักใน Set ปัจจุบัน
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      
+      <div class="modal-body p-2" style="max-height: 450px; overflow-y: auto;">
+        <p class="text-muted text-xs mb-2">* โปรดเลือกรายการลูกม้วนที่ถูกต้องตรงกับที่อยู่บนแท่นชั่งจริง เพื่อดึงข้อมูลเข้าสู่ฟอร์ม</p>
+        
+        <table id="modalOrderTable" class="table table-sm table-bordered table-hover text-center text-nowrap text-xs w-100 shadow-sm">
+          <thead class="bg-light">
+            <tr>
+              <th>เลือก</th>
+              <th>เลขใบสั่งผลิต</th>
+              <th>Rell No.</th>
+              <th>เกรด</th>
+              <th>รุ่น</th>
+              <th>ขนาด</th>
+              <th>สถานะคิว</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><button type="button" class="btn btn-primary btn-xs font-weight-bold btn-select-order" data-roll="R260618-04" data-rell="04" data-order="0066/2026" data-grade="KA185" data-version="รุ่น A" data-size="72 นิ้ว" data-diameter="1200">เลือก</button></td>
+              <td class="font-weight-bold text-secondary">0066/2026</td>
+              <td class="font-weight-bold text-primary">04</td>
+              <td>KA185</td>
+              <td>รุ่น A</td>
+              <td>72 นิ้ว</td>
+              <td><span class="badge badge-warning">รอชั่งน้ำหนัก</span></td>
+            </tr>
+            <tr>
+              <td><button type="button" class="btn btn-primary btn-xs font-weight-bold btn-select-order" data-roll="R260618-05" data-rell="05" data-order="0066/2026" data-grade="KA185" data-version="รุ่น A" data-size="72 นิ้ว" data-diameter="1200">เลือก</button></td>
+              <td class="font-weight-bold text-secondary">0066/2026</td>
+              <td class="font-weight-bold text-primary">05</td>
+              <td>KA185</td>
+              <td>รุ่น A</td>
+              <td>72 นิ้ว</td>
+              <td><span class="badge badge-warning">รอชั่งน้ำหนัก</span></td>
+            </tr>
+            <tr>
+              <td><button type="button" class="btn btn-primary btn-xs font-weight-bold btn-select-order" data-roll="R260618-06" data-rell="06" data-order="0066/2026" data-grade="KA185" data-version="รุ่น A" data-size="72 นิ้ว" data-diameter="1200">เลือก</button></td>
+              <td class="font-weight-bold text-secondary">0066/2026</td>
+              <td class="font-weight-bold text-primary">06</td>
+              <td>KA185</td>
+              <td>รุ่น A</td>
+              <td>72 นิ้ว</td>
+              <td><span class="badge badge-warning">รอชั่งน้ำหนัก</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="modal-footer p-1">
+        <button type="button" class="btn btn-secondary btn-sm font-weight-bold" data-dismiss="modal">ปิดหน้าต่าง</button>
+      </div>
+
+    </div>
+  </div>
+</div>
