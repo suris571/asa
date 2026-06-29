@@ -114,10 +114,35 @@
     let socket;
     let socketScale;
 
+    async function sendDataToPrint(data) {
+        $.ajax({
+            url: data.url, // 👈 ชี้เป้าไปที่ท่อที่เราเปิดทดสอบไว้ (พอร์ต 3000 หรือ 4000)
+            method: 'POST',        // สลับร่างเป็น POST ตามสเปกงานจริง
+            contentType: 'application/json',
+            data: JSON.stringify(data.body), // แปลงข้อมูลเป็น JSON สตริงก่อนวิ่งผ่านสายแลน
+            success: function(response) {
+                console.log("✅ สั่งพิมพ์สำเร็จ:", response.message);
+                alert("พิมพ์ใบ Label สำเร็จแล้วค่ะ!");
+            },
+            error: function(xhr, status, error) {
+                console.error("💥 ท่อยิงพิมพ์ล่ม:", error);
+                alert("ระบบพิมพ์ขัดข้อง กรุณาเช็กสัญญานเครื่องพิมพ์ค่ะกัปตัน!");
+            }
+        });
+    }
+
     $(function () {
         console.log("⚓️ หน้าจอชั่งน้ำหนักและชิ้นส่วนคอมโพเนนต์พร้อมรบ!");
         socket = io('/socket/weighing');
         socketScale = io('http://localhost:4000');
+
+        $('#remark').on('input', function() {
+            $(this).css({
+                'border-color': '',
+                'background-color': '',
+                'box-shadow': ''
+            });
+        });
 
 
         // ตัวอย่าง: ดักฟังปุ่มกดจากสเต็ป 1
@@ -125,8 +150,35 @@
 
         // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
         // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
-        $('#weighingForm').on('submit', function(e) {
+        $('#weighingForm').on('submit', async function(e) {
             e.preventDefault()
+
+            const selectedStatus = $('input[name="qualityStatus"]:checked').val();
+            const remarkInput = $('#remark'); // ดึง Object ช่องหมายเหตุมาถือไว้
+            const remarkValue = remarkInput.val().trim();
+            if (selectedStatus === 'HOLD' && remarkValue === '') {
+                remarkInput.css({
+                    'border-color': '#dc3545',
+                    'background-color': '#f8d7da',
+                    'box-shadow': '0 0 0 0.2rem rgba(220, 53, 69, 0.25)'
+                });
+                remarkInput.focus();
+                return;
+            }
+
+            remarkInput.css({
+                'border-color': '',
+                'background-color': '',
+                'box-shadow': ''
+            });
+
+            const formData = {};
+            $(this).serializeArray().forEach(item => {
+                formData[item.name] = item.value;
+            });
+
+            let saveDB = await sendDataToPrint({ url: '/preview-label', body: formData });
+
         });
 
         let modalTable = $('#modalOrderTable').DataTable({
