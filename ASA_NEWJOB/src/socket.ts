@@ -98,33 +98,17 @@ function startQueueSimulation() {
         
         try {
             const currentQueue = await WaitCutModel.getAllOrders();
-            let nextId = 1;
-            let nextPriority = 1;
-            let set_qty = 1;
-            
-            if (currentQueue.length > 0) {
-                const lastOrder = currentQueue[currentQueue.length - 1];
-                nextId = lastOrder.id + 1;
-                nextPriority = lastOrder.priority_seq + 1;
-                set_qty = lastOrder.set_qty + 1;
-            }
-            
-            console.log(`📢 [จำลอง]: ใบงานใหม่ไหลเข้าเบส -> ID: ${nextId}`);
             
             currentQueue.push({
-                id: nextId, 
-                priority_seq: nextPriority, 
-                order_no: `00${66 + nextId}/2026`, 
-                item: 1, 
-                grade: 'KA185', 
-                set_qty: set_qty,
-                blade: [1755, 1755, null, null], 
-                size: [68, 68, null, null],
-                finish_date: 'xx/xx/xxx', 
-                finish_time: 'xx:xx:xx', 
-                total_rolls: 10, 
-                current_set: 0, 
-                status: 'รอส่งงาน'
+                    id: 1,
+                    jobNo: 'JOB-001',
+                    rollNo: 'R260621-01',
+                    setIndex: 1,
+                    rollIndexInSet: 1,
+                    targetWeight: 50,
+                    actualWeight: 2,
+                    status: 'รอสั่งตัด',
+                    queue_no: 1
             });
             
             io.of('/socket/wait-cut').emit('update_queue_table', currentQueue);

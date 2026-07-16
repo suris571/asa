@@ -58,7 +58,7 @@ export class WaitCutModel {
 
         const query = `
           SELECT id, job_no, roll_no, set_index, roll_index_in_set, target_weight, actual_weight, status, queue_no
-          FROM c##factory_dev.wait_cut
+          FROM wait_cut
           WHERE status IN ('รอสั่งตัด', 'รอตัด' , 'ตัดไม่ครบ' , 'HOLD')
           ORDER BY queue_no ASC
         `;
@@ -93,8 +93,9 @@ export class WaitCutModel {
       }
     }
 
-    static async getAllOrders(): Promise<OrderQueue[]> {
-        return mockOrdersDatabase;
+    static async getAllOrders(): Promise<WaitCutRow[]> {
+      let a:WaitCutRow[]  = await this.getAllWaitingAndWeighing();
+      return a
     }
 
     static async moveOrderUp(orderId: number): Promise<OrderQueue[]> {

@@ -28,7 +28,7 @@ class WaitCutModel {
             conn = await (0, database_1.getConnection)();
             const query = `
           SELECT id, job_no, roll_no, set_index, roll_index_in_set, target_weight, actual_weight, status, queue_no
-          FROM c##factory_dev.wait_cut
+          FROM wait_cut
           WHERE status IN ('รอสั่งตัด', 'รอตัด' , 'ตัดไม่ครบ' , 'HOLD')
           ORDER BY queue_no ASC
         `;
@@ -62,7 +62,8 @@ class WaitCutModel {
         }
     }
     static async getAllOrders() {
-        return mockOrdersDatabase;
+        let a = await this.getAllWaitingAndWeighing();
+        return a;
     }
     static async moveOrderUp(orderId) {
         const index = mockOrdersDatabase.findIndex(o => o.id === orderId);

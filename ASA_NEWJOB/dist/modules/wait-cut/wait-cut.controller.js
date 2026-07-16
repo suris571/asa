@@ -5,6 +5,7 @@ const wait_cut_model_1 = require("./wait-cut.model");
 const getWaitCutPage = async (req, res) => {
     try {
         const queueData = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing();
+        console.log(queueData[0]);
         res.render('wait-cut/index', { orders: queueData });
     }
     catch (error) {

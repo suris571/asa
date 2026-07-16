@@ -6,7 +6,8 @@
   .dataTables_wrapper .row:first-child {
       display: flex !important;
       flex-direction: row !important;
-      flex-wrap: nowrap !important; /* 🔒 ล็อกห้ามขึ้นบรรทัดใหม่เด็ดขาด */
+      flex-wrap: nowrap !important; 
+      /* 🔒 ล็อกห้ามขึ้นบรรทัดใหม่เด็ดขาด */
       justify-content: space-between !important;
       align-items: center !important;
       width: 100% !important;
@@ -21,6 +22,18 @@
       width: auto !important;
       padding: 0 !important;
   }
+
+
+  #queueTable {
+    width: 100% !important;
+    min-width: 1200px !important; /* 🔥 ไม้ตาย: ล็อกฐานความกว้างขั้นต่ำไว้ ถ้าจอเล็กลงกว่านี้ค่อยขึ้น Scrollbar จะไม่มีวันบี้! */
+    table-layout: auto !important;
+}
+
+/* 🔒 จัดระเบียบปุ่มคอลัมน์สุดท้าย ไม่ให้มันกางเป็นหน้ากระดานยาวเกินไป */
+
+
+
 
   /* 3. จัดการฝั่งซ้าย (Dropdown เลือกจำนวนหน้า) */
   .dataTables_length {
@@ -213,15 +226,29 @@
     });
 
 
-    // socket.on('update_queue_table', function(newQueueArray) {
-    //     console.log('🔄 ได้รับข้อมูลคิวอัปเดตใหม่จากหลังบ้าน:', newQueueArray);
+    socket.on('update_queue_table', function(newQueueArray) {
+        console.log('🔄 ได้รับข้อมูลคิวอัปเดตใหม่จากหลังบ้าน:', newQueueArray);
         
-    //     // ท่าไม้ตายเคลียร์ตารางและวาดใหม่ของ DataTables
-    //     queueTable
-    //     .clear()                 // 1. สลัดข้อมูลชุดเก่าทิ้งไปจากตาราง
-    //     .rows.add(newQueueArray) // 2. ยัดก้อนอาร์เรย์ใหม่ที่สลับตำแหน่งแล้วเข้าไปแทนที่
-    //     .draw(false);            // 3. สั่งวาดหน้าตาตารางใหม่ (ใส่ false เพื่อล็อกตำแหน่งหน้าเดิมของพนักงานไว้ ไม่ให้เด้งกลับไปหน้า 1)
-    // });
+        // ท่าไม้ตายเคลียร์ตารางและวาดใหม่ของ DataTables
+        queueTable
+        .clear()                 // 1. สลัดข้อมูลชุดเก่าทิ้งไปจากตาราง
+        .rows.add(newQueueArray) // 2. ยัดก้อนอาร์เรย์ใหม่ที่สลับตำแหน่งแล้วเข้าไปแทนที่
+        .draw(false);            // 3. สั่งวาดหน้าตาตารางใหม่ (ใส่ false เพื่อล็อกตำแหน่งหน้าเดิมของพนักงานไว้ ไม่ให้เด้งกลับไปหน้า 1)
+    });
+
+
+    $('[data-widget="pushmenu"]').on('click', function() {
+        console.log("💥 ปุ่มสามขีดโดนกดแล้ว กำลังรอระเบิดแอนิเมชัน Sidebar...");
+
+        // ⏳ หน่วงเวลา 350ms รอให้หน้าจอขยับเปลี่ยนขนาดเสร็จสิ้นก่อน
+        setTimeout(function() {
+            // ตรวจเช็กว่าตัวแปรตารางพร้อมรบไหม ถ้าพร้อมสั่งลุยยืดขนาดทันที!
+            if (queueTable) {
+                console.log("🚀 ลั่นไกตรงผ่านตัวแปร queueTable ให้คำนวณสัดส่วนใหม่!");
+                queueTable.columns.adjust().draw(false);
+            }
+        }, 350);
+    });
 
 
   });
@@ -236,6 +263,8 @@
         console.log('ยิงคำสั่งเลื่อนลงไอดี:', id);
         socket.emit('request_move_down', id);
     }
+
+    
 
   // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ให้ไม่เกิด error ตอนพนักงานกดเล่นค่ะ
   function actionCut(id) { console.log('สั่งตัด:', id); }

@@ -12,6 +12,7 @@ const router = Router();
 // 👥 1. ถังข้อมูลพนักงานจำลอง (Mock DB) รอสลับพิกัดจริงของลูกค้าในอนาคต
 const MOCK_USERS = [
   { username: 'admin1', password: 'password123', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
+  { username: 'a', password: 'a', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
   { username: 'op1', password: 'password123', role: 'operator', name: 'พนักงานคุมเครื่อง PM1' },
   { username: 'op2', password: 'password123', role: 'operator', name: 'พนักงานคุมเครื่อง PM2' }
 ];
