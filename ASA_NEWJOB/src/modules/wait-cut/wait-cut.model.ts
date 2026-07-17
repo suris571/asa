@@ -1,5 +1,6 @@
 // src/models/wait-cut.model.ts
 import { getConnection } from '../../database';
+import oracledb from 'oracledb';
 
 // ⚓ 1. อัปเดตอินเตอร์เฟสให้รองรับ queue_no จากเบสจริง
 export interface WaitCutRow {
@@ -49,49 +50,75 @@ let mockOrdersDatabase: OrderQueue[] = [
 ];
 
 export class WaitCutModel {
-    
-    // 🌟 ย้ายเข้ามาอยู่ในคลาสเพื่อความเป็นระบบสากล
-    static async getAllWaitingAndWeighing(): Promise<WaitCutRow[]> {
-      let conn;
-      try {
-        conn = await getConnection();
+  
 
-        const query = `
-          SELECT id, job_no, roll_no, set_index, roll_index_in_set, target_weight, actual_weight, status, queue_no
-          FROM wait_cut
-          WHERE status IN ('รอสั่งตัด', 'รอตัด' , 'ตัดไม่ครบ' , 'HOLD')
-          ORDER BY queue_no ASC
-        `;
+static async getAllWaitingAndWeighing(status: any = null , order_no:string = '0350/2026'): Promise<any[]> {
+  let conn;
+  try {
+    conn = await getConnection();
 
-        const result = await conn.execute<any[]>(query);
-        const dataList: WaitCutRow[] = [];
+    // 1. ระบุชื่อคอลัมน์ที่ต้องการจาก View ให้ชัดเจน (เจาะจง ไม่ใช้ *)
+    const query = `
+      SELECT 
+        order_no, order_item, qty, status,
+        grade_name_1, grade_name_2, grade_name_3, grade_name_4,
+        blad1, blad2, blad3, blad4,
+        size_1, size_2, size_3, size_4,
+        finish_date, finish_time
+      FROM pl_order_view
+      WHERE order_no = '${order_no}'
+    `;
 
-        if (result.rows) {
-          for (const row of result.rows) {
-            dataList.push({
-              id: row[0],
-              jobNo: row[1],
-              rollNo: row[2],
-              setIndex: row[3],
-              rollIndexInSet: row[4],
-              targetWeight: row[5],
-              actualWeight: row[6],
-              status: row[7],
-              queue_no: row[8] // ล็อกพิกัดคิวลงออบเจกต์ส่งออก
-            });
-          }
-        }
+    // 2. บังคับให้ผลลัพธ์ออกมาเป็น Array ของ Object เพื่อให้ใช้ Key ในการ Loop ได้
+    const result = await conn.execute<any>(query, [], {
+      outFormat: oracledb.OUT_FORMAT_OBJECT 
+    });
 
-        return dataList;
-      } catch (error) {
-        console.error('🔴 Model พลั้งพลาดตอนดึงข้อมูลรอบแรก:', error);
-        throw error;
-      } finally {
-        if (conn) {
-          await conn.close();
-        }
+    const dataList: any[] = [];
+    let i = 0;
+    if (result.rows) {
+      for (const row of result.rows) {
+        i++;
+        // Now you can loop or access directly by KEY!
+        // ย้ำ: Oracle จะแปลงชื่อคอลัมน์เป็นตัวพิมพ์ใหญ่ (Uppercase) เสมอในระดับฐานข้อมูล
+        dataList.push({
+          number:i,
+          orderNo: row.ORDER_NO,
+          orderItem: row.ORDER_ITEM,
+          qty: row.QTY,
+          status: row.STATUS,
+          
+          grade1: row.GRADE_NAME_1,
+          grade2: row.GRADE_NAME_2,
+          grade3: row.GRADE_NAME_3,
+          grade4: row.GRADE_NAME_4,
+          
+          blad1: row.BLAD1,
+          blad2: row.BLAD2,
+          blad3: row.BLAD3,
+          blad4: row.BLAD4,
+          
+          size1: row.SIZE_1,
+          size2: row.SIZE_2,
+          size3: row.SIZE_3,
+          size4: row.SIZE_4,
+          
+          finishDate: row.FINISH_DATE,
+          finishTime: row.FINISH_TIME
+        });
       }
     }
+
+    return dataList;
+  } catch (error) {
+    console.error('🔴 Model พลั้งพลาดตอนดึงข้อมูลเจาะจงคอลัมน์:', error);
+    throw error;
+  } finally {
+    if (conn) {
+      await conn.close();
+    }
+  }
+}
 
     static async getAllOrders(): Promise<WaitCutRow[]> {
       let a:WaitCutRow[]  = await this.getAllWaitingAndWeighing();

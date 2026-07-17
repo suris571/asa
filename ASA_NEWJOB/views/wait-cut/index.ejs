@@ -166,25 +166,25 @@
         "ordering": false,
         "data": serverData,
         "columns": [
-            { "data": "queue_no" },                                    // 1. ลำดับคิว (ย้ายมาโชว์ช่องแรกสุดตามการอัปเกรด)
-            { "data": "jobNo" },                                       // 2. เลขที่ใบสั่งผลิต
-            { "data": "rollNo" },                                      // 3. ITEM (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
-            { "data": "rollNo" },                                      // 4. Grade (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
-            { "data": "setIndex" },                                    // 5. Set
+            { "data": "number" },                                    // 1. ลำดับคิว (ย้ายมาโชว์ช่องแรกสุดตามการอัปเกรด)
+            { "data": "orderNo" },                                       // 2. เลขที่ใบสั่งผลิต
+            { "data": "orderItem" },                                      // 3. ITEM (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
+            { "data": "grade1" },                                      // 4. Grade (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
+            { "data": null , "defaultContent": "-" },                                    // 5. Set
 
             // 🔒 ช่องตั้งค่าใบมีด 1-4 และ Size นิ้ว 1-4 (ไม่มีข้อมูลจริงในเบสเทส สั่งให้ขึ้นช่องว่างเคลนๆ ตามคำสั่งกัปตัน)
-            { "data": null, "defaultContent": "" },                    // 6. ใบมีด 1
-            { "data": null, "defaultContent": "" },                    // 7. ใบมีด 2
-            { "data": null, "defaultContent": "" },                    // 8. ใบมีด 3
-            { "data": null, "defaultContent": "" },                    // 9. ใบมีด 4
-            { "data": null, "defaultContent": "" },                    // 10. Size 1
-            { "data": null, "defaultContent": "" },                    // 11. Size 2
-            { "data": null, "defaultContent": "" },                    // 12. Size 3
-            { "data": null, "defaultContent": "" },                    // 13. Size 4
-            { "data": null, "defaultContent": "" },                    // 14. วันที่เสร็จ (เว้นว่างรอเบสจริง)
-            { "data": "mockup 06/21/2026", "defaultContent": "" },     // 15. เวลา (เว้นว่างรอเบสจริง)
-            { "data": "rollIndexInSet" },                              // 16. ลูก (จำนวนลำดับม้วนย่อยในเซต)
-            { "data": "targetWeight", "defaultContent": "-" },         // 17. Set (เอาน้ำหนักเป้าหมายมาแปะดูต่างหน้า)
+            { "data": "blad1", "defaultContent": "" },                    // 6. ใบมีด 1
+            { "data": "blad2", "defaultContent": "" },                    // 7. ใบมีด 2
+            { "data": "blad3", "defaultContent": "" },                    // 8. ใบมีด 3
+            { "data": "blad4", "defaultContent": "" },                    // 9. ใบมีด 4
+            { "data": "size1", "defaultContent": "" },                    // 10. Size 1
+            { "data": "size2", "defaultContent": "" },                    // 11. Size 2
+            { "data": "size3", "defaultContent": "" },                    // 12. Size 3
+            { "data": "size4", "defaultContent": "" },                    // 13. Size 4
+            { "data": "finishDate", "defaultContent": "" },                    // 14. วันที่เสร็จ (เว้นว่างรอเบสจริง)
+            { "data": "finishTime", "defaultContent": "" },     // 15. เวลา (เว้นว่างรอเบสจริง)
+            { "data": null, "defaultContent": "" },                              // 16. ลูก (จำนวนลำดับม้วนย่อยในเซต)
+            { "data": null, "defaultContent": "" },         // 17. Set (เอาน้ำหนักเป้าหมายมาแปะดูต่างหน้า)
             { 
               "data": "status",
               "render": function(data) {
@@ -226,15 +226,15 @@
     });
 
 
-    socket.on('update_queue_table', function(newQueueArray) {
-        console.log('🔄 ได้รับข้อมูลคิวอัปเดตใหม่จากหลังบ้าน:', newQueueArray);
+    // socket.on('update_queue_table', function(newQueueArray) {
+    //     console.log('🔄 ได้รับข้อมูลคิวอัปเดตใหม่จากหลังบ้าน:', newQueueArray);
         
-        // ท่าไม้ตายเคลียร์ตารางและวาดใหม่ของ DataTables
-        queueTable
-        .clear()                 // 1. สลัดข้อมูลชุดเก่าทิ้งไปจากตาราง
-        .rows.add(newQueueArray) // 2. ยัดก้อนอาร์เรย์ใหม่ที่สลับตำแหน่งแล้วเข้าไปแทนที่
-        .draw(false);            // 3. สั่งวาดหน้าตาตารางใหม่ (ใส่ false เพื่อล็อกตำแหน่งหน้าเดิมของพนักงานไว้ ไม่ให้เด้งกลับไปหน้า 1)
-    });
+    //     // ท่าไม้ตายเคลียร์ตารางและวาดใหม่ของ DataTables
+    //     queueTable
+    //     .clear()                 // 1. สลัดข้อมูลชุดเก่าทิ้งไปจากตาราง
+    //     .rows.add(newQueueArray) // 2. ยัดก้อนอาร์เรย์ใหม่ที่สลับตำแหน่งแล้วเข้าไปแทนที่
+    //     .draw(false);            // 3. สั่งวาดหน้าตาตารางใหม่ (ใส่ false เพื่อล็อกตำแหน่งหน้าเดิมของพนักงานไว้ ไม่ให้เด้งกลับไปหน้า 1)
+    // });
 
 
     $('[data-widget="pushmenu"]').on('click', function() {
