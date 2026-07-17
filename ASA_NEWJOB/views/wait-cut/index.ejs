@@ -183,7 +183,7 @@
             { "data": "size4", "defaultContent": "" },                    // 13. Size 4
             { "data": "finishDate", "defaultContent": "" },                    // 14. วันที่เสร็จ (เว้นว่างรอเบสจริง)
             { "data": "finishTime", "defaultContent": "" },     // 15. เวลา (เว้นว่างรอเบสจริง)
-            { "data": null, "defaultContent": "" },                              // 16. ลูก (จำนวนลำดับม้วนย่อยในเซต)
+            { "data": "diameter", "defaultContent": "" },                              // 16. ลูก (จำนวนลำดับม้วนย่อยในเซต)
             { "data": null, "defaultContent": "" },         // 17. Set (เอาน้ำหนักเป้าหมายมาแปะดูต่างหน้า)
             { 
               "data": "status",
@@ -207,13 +207,17 @@
                         <button class="btn btn-sm btn-light border font-weight-bold m-1" onclick="actionUnhold(${row.id})">ปลด HOLD</button>
                         <button class="btn btn-sm btn-success font-weight-bold m-1" onclick="actionSuccess(${row.id})">เสร็จสิ้น</button>
                         <button class="btn btn-sm btn-warning font-weight-bold m-1" onclick="actionReset(${row.id})">Reset</button>
-                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveUp(${row.id})"><i class="fas fa-chevron-up"></i> ขึ้น</button>
-                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveDown(${row.id})"><i class="fas fa-chevron-down"></i> ลง</button>
+                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveUp(${row.id},${row.que})"><i class="fas fa-chevron-up"></i> ขึ้น</button>
+                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveDown(${row.id},${row.que})"><i class="fas fa-chevron-down"></i> ลง</button>
                     </div>
                     `;
                 }
             }
-        ]
+        ],
+        "createdRow": function(row, data, dataIndex) {
+        $(row).attr('data-id', data.id);
+        $(row).attr('data-queue', data.que); 
+    }
     });
 
     // 🔌 ดักฟังสถานะไฟสีเขียว/แดง บนหัวตาราง
@@ -254,14 +258,56 @@
   });
 
     // 🔌 ฟังก์ชันส่งสัญญานไปหลังบ้าน (ถอดตัวแปรซ้ำซ้อนออกแล้ว)
-    function moveUp(id) {
-        console.log('ยิงคำสั่งเลื่อนขึ้นไอดี:', id);
-        socket.emit('request_move_up', id);
+    function moveUp(myId, myQueue) {
+        // 1. ค้นหาแถว <tr> ปัจจุบันของตัวเราที่มี data-id ตรงกัน
+        const currentRow = $(`#queueTable tbody tr[data-id="${myId}"]`);
+        
+        // 2. ใช้ .prev() หาแถว <tr> ด้านบนที่กำลังแสดงผลอยู่จริง
+        const upperRow = currentRow.prev('tr');
+
+        if (upperRow.length === 0 || !upperRow.data('id')) {
+            alert('งานนี้อยู่บนสุดของตารางที่แสดงผลอยู่ตอนนี้แล้ว ขยับขึ้นไม่ได้!');
+            return;
+        }
+
+        const aboveId = upperRow.data('id');
+        const aboveQueue = upperRow.data('queue');
+
+        console.log(`🔼 [Client Request] สลับขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
+
+        // 3. ยิงข้อมูลคู่กรณีส่งไปหลังบ้านผ่าน Socket หรือ API ของกัปตันได้เลย
+        // socket.emit('move_order_up', {
+        //     orderId: myId,
+        //     current_que: myQueue,
+        //     aboveOrderId: aboveId,
+        //     above_que: aboveQueue
+        // });
     }
 
-    function moveDown(id) {
-        console.log('ยิงคำสั่งเลื่อนลงไอดี:', id);
-        socket.emit('request_move_down', id);
+    function moveDown(myId, myQueue) {
+        // 1. ค้นหาแถว <tr> ปัจจุบันของเรา
+        const currentRow = $(`#queueTable tbody tr[data-id="${myId}"]`);
+        
+        // 2. ใช้ .next() หาแถว <tr> ด้านล่างที่กำลังแสดงผลอยู่จริง
+        const lowerRow = currentRow.next('tr');
+
+        if (lowerRow.length === 0 || !lowerRow.data('id')) {
+            alert('งานนี้อยู่ล่างสุดของตารางที่แสดงผลอยู่ตอนนี้แล้ว ขยับลงไม่ได้!');
+            return;
+        }
+
+        const belowId = lowerRow.data('id');
+        const belowQueue = lowerRow.data('queue');
+
+        console.log(`🔽 [Client Request] สลับลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+
+        // 3. ยิงส่งไปหลังบ้าน (ใช้ API ตัวสลับค่าชุดเดิมที่ประมวลผลการ Swap คู่กรณี)
+        // socket.emit('move_order_up', {
+        //     orderId: myId,
+        //     current_que: myQueue,
+        //     aboveOrderId: belowId,
+        //     above_que: belowQueue
+        // });
     }
 
     

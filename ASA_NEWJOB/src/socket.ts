@@ -23,10 +23,10 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
     waitCutNamespace.on('connection', (socket: Socket) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
 
-        socket.on('request_move_up', async (orderId: number) => {
-            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId}`);
+        socket.on('request_move_up', async (orderId: number ,que_now:number) => {
+            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId} และ ${que_now}`);
             try {
-                const updatedQueue = await WaitCutModel.moveOrderUp(orderId);
+                const updatedQueue = await WaitCutModel.moveOrderUp(orderId,que_now);
                 // 🎯 เปลี่ยนจาก io.emit เป็น waitCutNamespace.emit เพื่อให้เด้งเฉพาะหน้ารอตัด
                 waitCutNamespace.emit('update_queue_table', updatedQueue);
             } catch (error) {
@@ -34,10 +34,10 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
             }
         });
 
-        socket.on('request_move_down', async (orderId: number) => {
+        socket.on('request_move_down', async (orderId: number,que_now:number) => {
             console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนลงของไอดี: ${orderId}`);
             try {
-                const updatedQueue = await WaitCutModel.moveOrderDown(orderId);
+                const updatedQueue = await WaitCutModel.moveOrderDown(orderId,que_now);
                 // 🎯 เปลี่ยนจาก io.emit เป็น waitCutNamespace.emit เพื่อให้เด้งเฉพาะหน้ารอตัด
                 waitCutNamespace.emit('update_queue_table', updatedQueue);
             } catch (error) {
