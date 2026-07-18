@@ -80,15 +80,22 @@ let mockOrdersDatabase: OrderQueue[] = [
 ];
 
 export class WaitCutModel {
-    static async getAllWaitingAndWeighing(status: any = null, order_no: string = "0350/2026"): Promise<any[]> {
-        let conn;
+    static async getAllWaitingAndWeighing(Conn: any = null, status: any = null, order_no: string = "0350/2026"): Promise<any[]> {
+        let conn: any;
+        let isLocalConn = false; // 🎯 Flag สำคัญ: ตัวเช็กว่าท่อนี้เปิดขึ้นเองในฟังก์ชันนี้หรือไม่
+
         try {
-            conn = await getConnection();
+            if (Conn) {
+                conn = Conn; // ถ้ายืมท่อจากฟังก์ชันอื่นมา (isLocalConn จะเป็น false เหมือนเดิม)
+            } else {
+                conn = await getConnection();
+                isLocalConn = true; // 🚨 เปิดท่อใหม่ซิง ๆ ในนี้ (ทำเครื่องหมายว่าต้องปิดเอง)
+            }
 
             // 1. ระบุชื่อคอลัมน์ที่ต้องการจาก View ให้ชัดเจน (เจาะจง ไม่ใช้ *)
             const query = `
               SELECT 
-                pl_order_id,pl_order_detail_id,order_no, order_item, qty, status,
+                pl_order_id, pl_order_detail_id, order_no, order_item, qty, status,
                 grade_name_1, grade_name_2, grade_name_3, grade_name_4,
                 blad1, blad2, blad3, blad4,
                 size_1, size_2, size_3, size_4,
@@ -99,7 +106,7 @@ export class WaitCutModel {
             `;
 
             // 2. บังคับให้ผลลัพธ์ออกมาเป็น Array ของ Object เพื่อให้ใช้ Key ในการ Loop ได้
-            const result = await conn.execute<any>(query, [order_no], {
+            const result = await conn.execute(query, [order_no], {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });
 
@@ -108,8 +115,6 @@ export class WaitCutModel {
             if (result.rows) {
                 for (const row of result.rows) {
                     i++;
-                    // Now you can loop or access directly by KEY!
-                    // ย้ำ: Oracle จะแปลงชื่อคอลัมน์เป็นตัวพิมพ์ใหญ่ (Uppercase) เสมอในระดับฐานข้อมูล
                     dataList.push({
                         number: i,
                         id: row.PL_ORDER_DETAIL_ID,
@@ -147,7 +152,10 @@ export class WaitCutModel {
             console.error("🔴 Model พลั้งพลาดตอนดึงข้อมูลเจาะจงคอลัมน์:", error);
             throw error;
         } finally {
-            if (conn) {
+            // 🚨 🔒 ปิดประตูบั๊ก NJS-003
+            // จะสั่ง conn.close() เฉพาะตอนที่ฟังก์ชันนี้เป็นคนคิวรีเปิดท่อขึ้นมาเองเท่านั้น (isLocalConn === true)
+            // ถ้าเป็นท่อที่ส่งต่อมาจาก moveOrderUp บล็อกนี้จะปล่อยผ่าน เพื่อให้ตัวแม่เป็นคนปิดในขั้นตอนสุดท้ายตัวคนเดียว
+            if (conn && isLocalConn) {
                 await conn.close();
             }
         }
@@ -158,110 +166,55 @@ export class WaitCutModel {
         return a;
     }
 
-    static async moveOrderUp(orderId: number, que_now: number): Promise<any> {
+    static async swapQueue(orderId: any, que_now: any, targetOrderId: any, target_que: any): Promise<any> {
         let conn;
         try {
-            conn = await getConnection();
-
-            // 🚨 กัปตันสั่งการ: ดักกรณีที่เป็นคิวที่ 1 อยู่แล้ว จะขยับขึ้นอีกไม่ได้
-            if (que_now <= 1) {
-                console.log("⚠️ งานนี้อยู่คิวแรกสุดแล้ว ไม่สามารถขยับขึ้นได้อีก");
-                return { success: false, message: "Already at the top queue" };
-            }
-
-            const target_que = que_now - 1; // คิวเป้าหมายที่เราจะขยับขึ้นไปแทนที่
-
-            // --- เริ่มต้นทำการอัปเดตสลับค่าคิว (Swap Logic) ---
-
-            // 1. ผลักแถวบนสุด (คู่กรณี) ให้ถอยลงมาอยู่ที่คิวปัจจุบันของเราก่อน
-            const updateUpperRow = `
-                UPDATE PL_ORDER_DETAIL 
-                SET QUEUE_NO = :que_now 
-                WHERE QUEUE_NO = :target_que
-            `;
-            await conn.execute(updateUpperRow, { que_now: que_now, target_que: target_que });
-
-            // 2. ดันตัวงานของเรา (orderId) ขึ้นไปเสียบแทนที่คิวบนนั้น
-            const updateCurrentRow = `
-                UPDATE PL_ORDER_DETAIL 
-                SET QUEUE_NO = :target_que 
-                WHERE ID = :orderId
-            `;
-            await conn.execute(updateCurrentRow, { target_que: target_que, orderId: orderId });
-
-            // 3. ทำการ Commit ข้อมูลเพื่อให้การสลับคิวมีผลถาวรในฐานข้อมูลพร้อมกัน
-            await conn.commit();
-
-            console.log(`✅ ขยับ ID: ${orderId} ขึ้นไปคิวที่ ${target_que} สำเร็จ!`);
-            return { success: true, swappedId: orderId, newQueue: target_que };
-        } catch (error) {
-            // หากเกิดข้อผิดพลาดกลางคัน ให้สั่ง Rollback เพื่อไม่ให้ระบบคิวพังหรือซ้ำซ้อนกัน
-            if (conn) {
-                await conn.rollback();
-            }
-            console.error("🔴 เกิดข้อผิดพลาดใน moveOrderUp:", error);
-            throw error;
-        } finally {
-            if (conn) {
-                await conn.close();
-            }
-        }
-    }
-
-    static async moveOrderDown(orderId: any, que_now: any): Promise<any> {
-        let conn;
-        try {
-            // 🚨 เพิ่มจุดนี้: บังคับแปลงค่าที่รับเข้ามาให้เป็น Number เสมอ เพื่อตัดปัญหา NJS-105 (NaN)
+            // 1. เคลียร์ประเภทข้อมูลและดักจับ NaN ทันที ป้องกันเบสพัง
             const id = Number(orderId);
-            const current_que = Number(que_now);
+            const my_que = Number(que_now);
+            const t_id = Number(targetOrderId);
+            const t_que = Number(target_que);
 
-            // ดักเช็กเผื่อหน้าบ้านส่งค่าพังๆ หรือ undefined หลุดมา
-            if (isNaN(id) || isNaN(current_que)) {
-                console.error("⚠️ [Error] ข้อมูลที่ส่งเข้ามาใน moveOrderUp ไม่ใช่ตัวเลข (NaN Detected!)");
-                return { success: false, message: "Invalid data format: orderId or que_now is NaN" };
+            console.log(`🔍 [Backend Model - Swap Mode] เริ่มการสลับคิวคู่กรณี: ID ${id} (คิว ${my_que}) <-> ID ${t_id} (คิว ${t_que})`);
+
+            if (isNaN(id) || isNaN(my_que) || isNaN(t_id) || isNaN(t_que)) {
+                console.error("⚠️ [Error] พบข้อมูลไม่ใช่ตัวเลข (NaN Detected) ใน swapQueue");
+                return { success: false, message: "Invalid format: NaN detected" };
             }
 
             conn = await getConnection();
 
-            // 🚨 กัปตันสั่งการ: ดักกรณีที่เป็นคิวที่ 1 อยู่แล้ว จะขยับขึ้นอีกไม่ได้
-            if (current_que <= 1) {
-                console.log("⚠️ งานนี้อยู่คิวแรกสุดแล้ว ไม่สามารถขยับขึ้นได้อีก");
-                return { success: false, message: "Already at the top queue" };
-            }
-
-            const target_que = current_que - 1; // คิวเป้าหมายที่เราจะขยับขึ้นไปแทนที่
-
-            // --- เริ่มต้นทำการอัปเดตสลับค่าคิว (Swap Logic) ---
-
-            // 1. ผลักแถวบนสุด (คู่กรณี) ให้ถอยลงมาอยู่ที่คิวปัจจุบันของเราก่อน
-            const updateUpperRow = `
-                UPDATE PL_ORDER_DETAIL 
-                SET QUEUE_NO = :current_que 
-                WHERE QUEUE_NO = :target_que
-            `;
-            // ใช้ตัวแปรที่แปลงเป็น Number แล้วส่งเข้าไป
-            await conn.execute(updateUpperRow, { current_que: current_que, target_que: target_que });
-
-            // 2. ดันตัวงานของเรา (orderId) ขึ้นไปเสียบแทนที่คิวบนนั้น
+            // 2. ลอจิกการอัปเดตสลับค่าคิว (Direct Swap) ในระดับ Database
             const updateCurrentRow = `
                 UPDATE PL_ORDER_DETAIL 
                 SET QUEUE_NO = :target_que 
                 WHERE ID = :id
             `;
-            // ใช้ตัวแปรที่แปลงเป็น Number แล้วส่งเข้าไป
-            await conn.execute(updateCurrentRow, { target_que: target_que, id: id });
+            await conn.execute(updateCurrentRow, { target_que: t_que, id: id });
 
-            // 3. ทำการ Commit ข้อมูลเพื่อให้การสลับคิวมีผลถาวรในฐานข้อมูลพร้อมกัน
+            const updateTargetRow = `
+                UPDATE PL_ORDER_DETAIL 
+                SET QUEUE_NO = :my_que 
+                WHERE ID = :target_id
+            `;
+            await conn.execute(updateTargetRow, { my_que: my_que, target_id: t_id });
+
+            // 3. ทำการ Commit ข้อมูลให้บันทึกถาวรพร้อมกันแบบไร้รอยต่อ
             await conn.commit();
 
-            console.log(`✅ ขยับ ID: ${id} ขึ้นไปคิวที่ ${target_que} สำเร็จ!`);
-            return { success: true, swappedId: id, newQueue: target_que };
+            console.log(`✅ สลับคิวใน Database สำเร็จ! (ID ${id} -> คิว ${t_que}) และ (ID ${t_id} -> คิว ${my_que})`);
+
+            // 4. ดึงก้อนข้อมูลชุดใหม่ทั้งหมดหลังสลับคิว (ส่ง conn ตัวเดิมพ่วงไปเพื่อประสิทธิภาพและความปลอดภัย)
+            const updatedRawData = await WaitCutModel.getAllWaitingAndWeighing(conn);
+            return {
+                success: true,
+                data: updatedRawData,
+            };
         } catch (error) {
-            // หากเกิดข้อผิดพลาดกลางคัน ให้สั่ง Rollback เพื่อไม่ให้ระบบคิวพังหรือซ้ำซ้อนกัน
             if (conn) {
                 await conn.rollback();
             }
-            console.error("🔴 เกิดข้อผิดพลาดใน moveOrderUp:", error);
+            console.error("🔴 เกิดข้อผิดพลาดในฟังก์ชัน swapQueue:", error);
             throw error;
         } finally {
             if (conn) {

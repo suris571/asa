@@ -230,15 +230,24 @@
     });
 
 
-    // socket.on('update_queue_table', function(newQueueArray) {
-    //     console.log('🔄 ได้รับข้อมูลคิวอัปเดตใหม่จากหลังบ้าน:', newQueueArray);
-        
-    //     // ท่าไม้ตายเคลียร์ตารางและวาดใหม่ของ DataTables
-    //     queueTable
-    //     .clear()                 // 1. สลัดข้อมูลชุดเก่าทิ้งไปจากตาราง
-    //     .rows.add(newQueueArray) // 2. ยัดก้อนอาร์เรย์ใหม่ที่สลับตำแหน่งแล้วเข้าไปแทนที่
-    //     .draw(false);            // 3. สั่งวาดหน้าตาตารางใหม่ (ใส่ false เพื่อล็อกตำแหน่งหน้าเดิมของพนักงานไว้ ไม่ให้เด้งกลับไปหน้า 1)
-    // });
+    socket.on('update_queue_table', function(res) {
+    console.log("📥 [RenderMoveQue] อัปเดตข้อมูลยกล็อตด้วยวิธีล้างและแอดใหม่ (ล็อกสถานะ)");
+    if (!res || !res.success || !res.data) return;
+
+    const newQueueArray = res.data;
+
+    // 1. ล้างข้อมูลเก่าออกจากหน่วยความจำของตารางชั่วคราว
+    queueTable.clear();
+
+    // 2. เติมข้อมูล Array ชุดใหม่ที่เรียงลำดับมาจากหลังบ้านอย่างถูกต้องเข้าไป (1, 2, 3...)
+    queueTable.rows.add(newQueueArray);
+
+    // 3. 🚀 สั่งวาดตารางใหม่ทันที 
+    // ใส่ false เพื่อบังคับล็อกหน้าเพจ (Pagination) และคงคำค้นหา (Search Filter) ของพนักงานไว้เหมือนเดิมเป๊ะ!
+    queueTable.draw(false);
+    
+    console.log("✨ วาดโครงสร้างตารางใหม่ยกล็อตสำเร็จ แถวเรียง 1 2 3 ตรงตามฐานข้อมูล 100%!");
+});
 
 
     $('[data-widget="pushmenu"]').on('click', function() {
@@ -257,59 +266,65 @@
 
   });
 
-    // 🔌 ฟังก์ชันส่งสัญญานไปหลังบ้าน (ถอดตัวแปรซ้ำซ้อนออกแล้ว)
+  
     function moveUp(myId, myQueue) {
-        // 1. ค้นหาแถว <tr> ปัจจุบันของตัวเราที่มี data-id ตรงกัน
-        const currentRow = $(`#queueTable tbody tr[data-id="${myId}"]`);
-        
-        // 2. ใช้ .prev() หาแถว <tr> ด้านบนที่กำลังแสดงผลอยู่จริง
-        const upperRow = currentRow.prev('tr');
+        // 1. ดึงข้อมูลทั้งหมดที่จัดเรียงอยู่ ณ ปัจจุบันออกมาจาก DataTable เป็น Array ดิบ
+        // (ใช้คำสั่ง .rows({ order: 'applied' }).data() เพื่อให้ได้ลำดับตามที่ตาเห็นจริงในระบบ)
+        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
 
-        if (upperRow.length === 0 || !upperRow.data('id')) {
-            alert('งานนี้อยู่บนสุดของตารางที่แสดงผลอยู่ตอนนี้แล้ว ขยับขึ้นไม่ได้!');
+        // 2. ค้นหาดัชนี (Index) ของตัวเราเองใน Array นั้น
+        const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
+
+        // 3. 🚨 เช็กดักกรณีเป็นตัวแรกสุดของตารางทั้งหมดจริง ๆ (คิวที่ 1 ของหน้า 1)
+        if (myIndex === 0) {
+            alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
             return;
         }
 
-        const aboveId = upperRow.data('id');
-        const aboveQueue = upperRow.data('queue');
+        // 4. 🎯 ทีเด็ดอยู่ตรงนี้: หาคู่กรณีตัวบนโดยถอย Index ไป 1 ตำแหน่ง 
+        // ต่อให้ตัวบนจะอยู่อีกหน้าเพจหนึ่ง มันก็จะเจอตัวอย่างแม่นยำ 100% เพราะค้นจาก Array ข้อมูล
+        const upperRowData = allData[myIndex - 1];
 
-        console.log(`🔼 [Client Request] สลับขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
+        const aboveId = upperRowData.id;
+        const aboveQueue = upperRowData.number; // หรือฟิลด์คิวที่กัปตันใช้เก็บเลขคิว
 
-        // 3. ยิงข้อมูลคู่กรณีส่งไปหลังบ้านผ่าน Socket หรือ API ของกัปตันได้เลย
-        // socket.emit('move_order_up', {
-        //     orderId: myId,
-        //     current_que: myQueue,
-        //     aboveOrderId: aboveId,
-        //     above_que: aboveQueue
-        // });
+        console.log(`🔼 [Client Request - Array Mode] สลับข้ามหน้า: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
+
+        // 5. ยิงข้อมูลคู่กรณีที่แท้จริงส่งไปหลังบ้านผ่านท่อ Socket ตัวเดิม
+        socket.emit('swapQueue', {
+            orderId: myId,
+            current_que: myQueue,
+            aboveOrderId: aboveId,
+            above_que: aboveQueue
+        });
     }
 
     function moveDown(myId, myQueue) {
-        // 1. ค้นหาแถว <tr> ปัจจุบันของเรา
-        const currentRow = $(`#queueTable tbody tr[data-id="${myId}"]`);
-        
-        // 2. ใช้ .next() หาแถว <tr> ด้านล่างที่กำลังแสดงผลอยู่จริง
-        const lowerRow = currentRow.next('tr');
+        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+        const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
 
-        if (lowerRow.length === 0 || !lowerRow.data('id')) {
-            alert('งานนี้อยู่ล่างสุดของตารางที่แสดงผลอยู่ตอนนี้แล้ว ขยับลงไม่ได้!');
+        // ดักกรณีอยู่แถวสุดท้ายของรายการทั้งหมด (หน้าสุดท้าย แถวสุดท้าย)
+        if (myIndex === allData.length - 1) {
+            alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
             return;
         }
 
-        const belowId = lowerRow.data('id');
-        const belowQueue = lowerRow.data('queue');
+        // หาคู่กรณีตัวล่างโดยบวก Index ไป 1 ตำแหน่ง (ทะลุหน้าเพจได้สบายมาก)
+        const lowerRowData = allData[myIndex + 1];
 
-        console.log(`🔽 [Client Request] สลับลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+        const belowId = lowerRowData.id;
+        const belowQueue = lowerRowData.number;
 
-        // 3. ยิงส่งไปหลังบ้าน (ใช้ API ตัวสลับค่าชุดเดิมที่ประมวลผลการ Swap คู่กรณี)
-        // socket.emit('move_order_up', {
-        //     orderId: myId,
-        //     current_que: myQueue,
-        //     aboveOrderId: belowId,
-        //     above_que: belowQueue
-        // });
+        console.log(`🔽 [Client Request - Array Mode] สลับข้ามหน้าลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+
+        // ส่งไปหลังบ้าน (เรียกใช้ลอจิกคู่กรณีเดียวกับขาขึ้น แต่อลับฝั่งตัวแปรส่ง)
+        socket.emit('swapQueue', {
+            orderId: myId,
+            current_que: myQueue,
+            aboveOrderId: belowId,
+            above_que: belowQueue
+        });
     }
-
     
 
   // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ให้ไม่เกิด error ตอนพนักงานกดเล่นค่ะ

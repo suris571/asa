@@ -16,26 +16,15 @@ const initSocket = (httpServer) => {
     const waitCutNamespace = io.of('/socket/wait-cut');
     waitCutNamespace.on('connection', (socket) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
-        socket.on('request_move_up', async (orderId, que_now) => {
-            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId} และ ${que_now}`);
+        socket.on('swapQueue', async (data) => {
+            const { orderId, current_que, aboveOrderId, above_que } = data;
+            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId} และ ${current_que}`);
             try {
-                const updatedQueue = await wait_cut_model_1.WaitCutModel.moveOrderUp(orderId, que_now);
-                // 🎯 เปลี่ยนจาก io.emit เป็น waitCutNamespace.emit เพื่อให้เด้งเฉพาะหน้ารอตัด
+                const updatedQueue = await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
                 waitCutNamespace.emit('update_queue_table', updatedQueue);
             }
             catch (error) {
                 console.error("เกิดข้อผิดพลาดในการสลับคิวขาขึ้น:", error);
-            }
-        });
-        socket.on('request_move_down', async (orderId, que_now) => {
-            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนลงของไอดี: ${orderId}`);
-            try {
-                const updatedQueue = await wait_cut_model_1.WaitCutModel.moveOrderDown(orderId, que_now);
-                // 🎯 เปลี่ยนจาก io.emit เป็น waitCutNamespace.emit เพื่อให้เด้งเฉพาะหน้ารอตัด
-                waitCutNamespace.emit('update_queue_table', updatedQueue);
-            }
-            catch (error) {
-                console.error("เกิดข้อผิดพลาดในการสลับคิวขาลง:", error);
             }
         });
         socket.on('disconnect', () => {
