@@ -23,15 +23,26 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
     waitCutNamespace.on('connection', (socket: Socket) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
 
+        socket.on('get_filtered_queue', async (payload) => {
+            try {
+                const { status, orderNo, startDate, endDate } = payload;
+                const data = await WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
+                
+                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
+            } catch (error:any) {
+                socket.emit('update_queue_table', { success: false, error: error.message });
+            }
+        });
+
         socket.on('swapQueue', async (data: { orderId: any, current_que: any, aboveOrderId: any, above_que: any }) => {
             const { orderId, current_que, aboveOrderId, above_que } = data;
-            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId} และ ${current_que}`);
+            console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
             try {
-                const updatedQueue = await WaitCutModel.swapQueue(orderId,current_que,aboveOrderId,above_que);
+                await WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
+                waitCutNamespace.emit('queue_structure_changed', { success: true });
 
-                waitCutNamespace.emit('update_queue_table', updatedQueue);
             } catch (error) {
-                console.error("เกิดข้อผิดพลาดในการสลับคิวขาขึ้น:", error);
+                console.error("เกิดข้อผิดพลาดในการสลับคิว:", error);
             }
         });
 
@@ -73,40 +84,8 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
     });
 
-    // 📢 เริ่มต้นตัวจำลองข้อมูลไหลเข้าออโต้ (ปรับให้ส่งเฉพาะในห้อง wait-cut)
-    startQueueSimulation();
-
     return io;
 };
-
-/**
- * 📢 ฟังก์ชันจำลองการส่งข้อมูลใบงานใหม่ไหลเข้าตารางออโต้ ทุกๆ 10 วินาที
- */
-function startQueueSimulation() {
-    setInterval(async () => {
-        if (!io) return;
-        
-        try {
-            const currentQueue = await WaitCutModel.getAllOrders();
-            
-            currentQueue.push({
-                    id: 1,
-                    jobNo: 'JOB-001',
-                    rollNo: 'R260621-01',
-                    setIndex: 1,
-                    rollIndexInSet: 1,
-                    targetWeight: 50,
-                    actualWeight: 2,
-                    status: 'รอสั่งตัด',
-                    queue_no: 1
-            });
-            
-            io.of('/socket/wait-cut').emit('update_queue_table', currentQueue);
-        } catch (error) {
-            console.error("Simulation พัง:", error);
-        }
-    }, 10000);
-}
 
 
 export const broadcastNextRollToWeighingStation = (nextRollData: any): void => {

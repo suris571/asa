@@ -4,7 +4,6 @@ import { WaitCutModel } from './wait-cut.model';
 export const getWaitCutPage = async (req: Request, res: Response) => {
     try {
       const queueData = await WaitCutModel.getAllWaitingAndWeighing();
-      console.log(queueData[0])
       res.render('wait-cut/index', { orders: queueData});
     } catch (error) {
       console.error('🔴 Controller พังจังหวะเรนเดอร์หน้าเว็บ:', error);

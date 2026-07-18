@@ -7,79 +7,55 @@ exports.WaitCutModel = void 0;
 // src/models/wait-cut.model.ts
 const database_1 = require("../../database");
 const oracledb_1 = __importDefault(require("oracledb"));
-let mockOrdersDatabase = [
-    {
-        id: 1,
-        priority_seq: 1,
-        order_no: "0065/2026",
-        item: 1,
-        grade: "KA185",
-        set_qty: 6,
-        blade: [1855, 1855, null, null],
-        size: [72, 72, null, null],
-        finish_date: "xx/xx/xxx",
-        finish_time: "xx:xx:xx",
-        total_rolls: 12,
-        current_set: 6,
-        status: "รอส่งงาน",
-    },
-    {
-        id: 2,
-        priority_seq: 2,
-        order_no: "0065/2026",
-        item: 2,
-        grade: "KA185",
-        set_qty: 12,
-        blade: [1960, 1755, null, null],
-        size: [76, 68, null, null],
-        finish_date: "xx/xx/xxx",
-        finish_time: "xx:xx:xx",
-        total_rolls: 24,
-        current_set: 12,
-        status: "HOLD",
-    },
-    {
-        id: 3,
-        priority_seq: 3,
-        order_no: "0065/2026",
-        item: 3,
-        grade: "KA185",
-        set_qty: 57,
-        blade: [2055, 1655, null, null],
-        size: [80, 64, null, null],
-        finish_date: "xx/xx/xxx",
-        finish_time: "xx:xx:xx",
-        total_rolls: 12,
-        current_set: 6,
-        status: "เสร็จสิ้น",
-    },
-];
 class WaitCutModel {
-    static async getAllWaitingAndWeighing(Conn = null, status = null, order_no = "0350/2026") {
+    static async getAllWaitingAndWeighing(Conn = null, status = null, order_no = null, startDate = null, endDate = null) {
         let conn;
-        let isLocalConn = false; // 🎯 Flag สำคัญ: ตัวเช็กว่าท่อนี้เปิดขึ้นเองในฟังก์ชันนี้หรือไม่
+        let isLocalConn = false;
         try {
             if (Conn) {
-                conn = Conn; // ถ้ายืมท่อจากฟังก์ชันอื่นมา (isLocalConn จะเป็น false เหมือนเดิม)
+                conn = Conn;
             }
             else {
                 conn = await (0, database_1.getConnection)();
-                isLocalConn = true; // 🚨 เปิดท่อใหม่ซิง ๆ ในนี้ (ทำเครื่องหมายว่าต้องปิดเอง)
+                isLocalConn = true;
             }
-            // 1. ระบุชื่อคอลัมน์ที่ต้องการจาก View ให้ชัดเจน (เจาะจง ไม่ใช้ *)
-            const query = `
-              SELECT 
+            // 🎯 [ดักจับหน้าประตู] ปริ้นต์ดูค่าที่ Model ได้รับจริง ๆ ก่อนประมวลผล
+            console.log("🔍 [Model Receive Data] ค่าที่หลุดมาถึง Model:", { status, order_no, startDate, endDate });
+            let query = `
+            SELECT 
                 pl_order_id, pl_order_detail_id, order_no, order_item, qty, status,
-                grade_name_1, grade_name_2, grade_name_3, grade_name_4,
+                grade_name_1,
                 blad1, blad2, blad3, blad4,
                 size_1, size_2, size_3, size_4,
                 finish_date, finish_time, diameter, queue_no
-              FROM pl_order_view
-              WHERE order_no = :orderNo
-              ORDER BY queue_no ASC
+            FROM pl_order_view
+            WHERE 1=1
             `;
-            // 2. บังคับให้ผลลัพธ์ออกมาเป็น Array ของ Object เพื่อให้ใช้ Key ในการ Loop ได้
-            const result = await conn.execute(query, [order_no], {
+            const bindParams = {};
+            if (order_no && typeof order_no === "string" && order_no.trim() !== "" && order_no !== "null") {
+                query += ` AND order_no LIKE :orderNo `;
+                bindParams.orderNo = `%${order_no.trim()}%`;
+            }
+            if (status && typeof status === "string" && status.trim() !== "" && status !== "null") {
+                query += ` AND status = :status `;
+                bindParams.status = status.trim();
+            }
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            // ⚡ เงื่อนไขที่ 3: วันที่เริ่มต้น (เอา TO_CHAR ออก ชนตรงๆ)
+            if (startDate && typeof startDate === 'string' && dateRegex.test(startDate.trim())) {
+                query += ` AND finish_date >= :startDate `;
+                bindParams.startDate = startDate.trim();
+            }
+            // ⚡ เงื่อนไขที่ 4: วันที่สิ้นสุด (เอา TO_CHAR ออก ชนตรงๆ)
+            if (endDate && typeof endDate === 'string' && dateRegex.test(endDate.trim())) {
+                query += ` AND finish_date <= :endDate `;
+                bindParams.endDate = endDate.trim();
+            }
+            query += ` ORDER BY queue_no ASC FETCH NEXT 50 ROWS ONLY `;
+            // 🎯 [ดักจับก่อนยิง] ปริ้นต์ดู SQL และ bindParams สุดท้ายที่จะส่งให้ Oracle
+            console.log("🚀 [Executing SQL]:", query);
+            console.log("📦 [Bind Params]:", bindParams);
+            const result = await conn.execute(query, bindParams, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const dataList = [];
@@ -96,9 +72,6 @@ class WaitCutModel {
                         qty: row.QTY,
                         status: row.STATUS,
                         grade1: row.GRADE_NAME_1,
-                        grade2: row.GRADE_NAME_2,
-                        grade3: row.GRADE_NAME_3,
-                        grade4: row.GRADE_NAME_4,
                         blad1: row.BLAD1,
                         blad2: row.BLAD2,
                         blad3: row.BLAD3,
@@ -114,6 +87,7 @@ class WaitCutModel {
                     });
                 }
             }
+            console.log("============================================================================");
             return dataList;
         }
         catch (error) {
@@ -121,9 +95,6 @@ class WaitCutModel {
             throw error;
         }
         finally {
-            // 🚨 🔒 ปิดประตูบั๊ก NJS-003
-            // จะสั่ง conn.close() เฉพาะตอนที่ฟังก์ชันนี้เป็นคนคิวรีเปิดท่อขึ้นมาเองเท่านั้น (isLocalConn === true)
-            // ถ้าเป็นท่อที่ส่งต่อมาจาก moveOrderUp บล็อกนี้จะปล่อยผ่าน เพื่อให้ตัวแม่เป็นคนปิดในขั้นตอนสุดท้ายตัวคนเดียว
             if (conn && isLocalConn) {
                 await conn.close();
             }
@@ -163,12 +134,6 @@ class WaitCutModel {
             // 3. ทำการ Commit ข้อมูลให้บันทึกถาวรพร้อมกันแบบไร้รอยต่อ
             await conn.commit();
             console.log(`✅ สลับคิวใน Database สำเร็จ! (ID ${id} -> คิว ${t_que}) และ (ID ${t_id} -> คิว ${my_que})`);
-            // 4. ดึงก้อนข้อมูลชุดใหม่ทั้งหมดหลังสลับคิว (ส่ง conn ตัวเดิมพ่วงไปเพื่อประสิทธิภาพและความปลอดภัย)
-            const updatedRawData = await WaitCutModel.getAllWaitingAndWeighing(conn);
-            return {
-                success: true,
-                data: updatedRawData,
-            };
         }
         catch (error) {
             if (conn) {

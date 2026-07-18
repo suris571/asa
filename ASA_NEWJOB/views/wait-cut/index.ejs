@@ -88,6 +88,53 @@
       outline: 0;
       box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
   }
+
+  #queueTable td:last-child {
+        white-space: nowrap !important;
+        width: 1% !important; /* ไม้ตาย: บังคับให้ขยายตามขนาด Content จริงข้างใน */
+    }
+
+  .custom-filter-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-bottom: 15px;
+      padding: 12px;
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 0.25rem;
+      align-items: center;
+  }
+  .custom-filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+  }
+  .custom-filter-item label {
+      margin: 0;
+      font-weight: bold;
+      color: #495057;
+      white-space: nowrap;
+      font-size: 0.875rem;
+  }
+  .custom-filter-item input, .custom-filter-item select {
+      height: 31px;
+      padding: 4px 8px;
+      font-size: 0.875rem;
+      border-radius: 0.25rem;
+      border: 1px solid #ced4da;
+  }
+    .custom-filter-item input.date-picker {
+        width: 150px;
+    }
+    .custom-filter-item input[type="text"], .custom-filter-item select {
+        width: 180px;
+    }
+    .custom-filter-item input:focus, .custom-filter-item select:focus {
+        border-color: #80bdff;
+        outline: 0;
+    }
+  
 </style>
 
 <div class="content-wrapper">
@@ -112,6 +159,46 @@
             </div>
         </div>
         <div class="card-body p-2" style="overflow-x: auto;">
+
+            <div class="custom-filter-container">
+            <!-- 1. ช่วงวันที่ผลิตเสร็จ -->
+                <div class="custom-filter-item">
+                    <label>📅 วันที่ผลิตเสร็จ:</label>
+                    <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
+                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <label>ถึง</label>
+                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                </div>
+                
+                <!-- 2. สถานะ -->
+                <div class="custom-filter-item">
+                    <label for="searchStatus">🚦 สถานะ:</label>
+                    <select id="searchStatus">
+                        <option value="">-- ทั้งหมด --</option>
+                        <option value="ดำเนินการ">ดำเนินการ</option>
+                        <option value="รอตัด">รอตัด</option>
+                        <option value="HOLD">HOLD</option>
+                        <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                    </select>
+                </div>
+
+                <!-- 3. เลขที่ใบสั่งผลิต -->
+                <div class="custom-filter-item">
+                    <label for="searchOrderNo">🔍 เลขที่ใบสั่งผลิต:</label>
+                    <input type="text" id="searchOrderNo" placeholder="พิมพ์เลขที่ใบสั่งผลิต...">
+                </div>
+
+                <!-- ปุ่มกดสั่งการ -->
+                <div class="custom-filter-item ml-auto">
+                    <button type="button" class="btn btn-sm btn-primary font-weight-bold" id="btnDoQuery">
+                        <i class="fas fa-search"></i> ค้นหาข้อมูล
+                    </button>
+                    <button type="button" class="btn btn-sm btn-default border font-weight-bold" id="btnClearQuery">
+                        ล้างคำค้น
+                    </button>
+                </div>
+            </div>
+
             <table id="queueTable" class="table table-bordered table-hover text-nowrap text-center align-middle">
             <thead class="bg-light">
                 <tr>
@@ -148,17 +235,79 @@
 
 <script src="/plugins/datatables/jquery.dataTables.min.js"></script>
 <script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script src="/socket.io/socket.io.js"></script>
+
 <script>
-  // ประกาศตัวแปรจองตารางไว้เป็น Global ด้านบนสุดเพื่อให้ฟังก์ชันอื่นเรียกใช้ได้ค่ะ
+  // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
-  const socket = io('/socket/wait-cut'); // เปิดสาย Socket ค้างไว้ตัวเดียวในหน้าเว็บ
+  const socket = io('/socket/wait-cut'); 
+
+  // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
+  socket.off('connect');
+  socket.off('disconnect');
+  socket.off('update_queue_table');
+  socket.off('queue_structure_changed');
 
   $(function () {
-    // 1. ดึงข้อมูลที่หลังบ้านพ่นมาผ่าน EJS
+    // 2. ตั้งค่าการควบคุม DateRangePicker ให้ล็อกฟอร์แมต ค.ศ.
+    $('.date-picker').daterangepicker({
+        singleDatePicker: true,
+        showDropdowns: true,
+        autoUpdateInput: false,
+        autoApply: false, // เปิดแถบปุ่มไว้เพื่อให้มีปุ่ม "ล้างค่า"
+        locale: {
+            format: 'YYYY-MM-DD',
+            cancelLabel: 'ล้างค่า', 
+            daysOfWeek: ['อา','จ','อ','พ','พฤ','ศ','ส'],
+            monthNames: ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'],
+            firstDay: 1
+        }
+    });
+
+    $('.date-picker').on('apply.daterangepicker', function(ev, picker) {
+        $(this).val(picker.startDate.format('YYYY-MM-DD'));
+        $(this).data('daterangepicker').hide(); // เลือกวันปุ๊บ สั่งซ่อนหน้าต่างทันที ไม่ต้องกดปุ่มตกลง
+    });
+
+    $('.date-picker').on('cancel.daterangepicker', function(ev, picker) {
+        $(this).val(''); // เคลียร์กล่องข้อความอย่างเดียวตามสั่ง ไม่ยิง Query
+    });
+
+    // 3. จัดระเบียบสายสัญญาณ Socket Listeners ให้อยู่ในจังหวะที่ DOM พร้อมใช้งานอย่างปลอดภัย
+    socket.on('connect', function() {
+      $('#socketStatus').removeClass('bg-warning bg-danger').addClass('bg-success text-white').text('🟢 เชื่อมต่อเรียลไทม์ปกติ');
+    });
+
+    socket.on('disconnect', function() {
+      $('#socketStatus').removeClass('bg-success bg-warning').addClass('bg-danger text-white').text('🔴 การเชื่อมต่อหลุด (ข้อมูลอาจไม่อัปเดต)');
+    });
+
+    socket.on('update_queue_table', function(res) {
+        console.log("📥 [RenderMoveQue] อัปเดตข้อมูลยกล็อตด้วยวิธีล้างและแอดใหม่ (ล็อกสถานะ)");
+        if (!res || !res.success || !res.data) return;
+
+        // ดักเช็กความพร้อมของตัวแปรตารางก่อนลุยงาน
+        if (queueTable) {
+            queueTable.clear();
+            queueTable.rows.add(res.data);
+            queueTable.draw(false); // ใส่ false เพื่อล็อกหน้าเพจ (Pagination) เดิมของพนักงานไว้ ไม่ให้เด้งกลับหน้าแรก
+            console.log("✨ วาดโครงสร้างตารางใหม่ยกล็อตสำเร็จ แถวเรียงตรงตามฐานข้อมูล 100%!");
+        }
+    });
+
+    socket.on('queue_structure_changed', function(res) {
+        console.log("🔔 สัญญาณเตือนภัยคิวเปลี่ยน: ทำการสั่งดาวน์โหลดข้อมูลตามฟิลเตอร์ปัจจุบันของตัวเองทันที!");
+        if (res && res.success) {
+            fetchFilteredQueue(); 
+        }
+    });
+
+    // 4. ดึงข้อมูลชุดแรกจาก Server มาเรนเดอร์ตารางตอนเปิดหน้าเว็บ
     const serverData = <%- JSON.stringify(orders) %>;
 
-    // 2. สั่งให้ DataTables ทำงานรอบเดียวตอนเปิดหน้าเว็บสำเร็จ
     queueTable = $('#queueTable').DataTable({
         "paging": true,
         "pageLength": 25,
@@ -166,25 +315,23 @@
         "ordering": false,
         "data": serverData,
         "columns": [
-            { "data": "number" },                                    // 1. ลำดับคิว (ย้ายมาโชว์ช่องแรกสุดตามการอัปเกรด)
-            { "data": "orderNo" },                                       // 2. เลขที่ใบสั่งผลิต
-            { "data": "orderItem" },                                      // 3. ITEM (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
-            { "data": "grade1" },                                      // 4. Grade (เอารหัสม้วนย่อยมาวางแทนชั่วคราว)
-            { "data": null , "defaultContent": "-" },                                    // 5. Set
-
-            // 🔒 ช่องตั้งค่าใบมีด 1-4 และ Size นิ้ว 1-4 (ไม่มีข้อมูลจริงในเบสเทส สั่งให้ขึ้นช่องว่างเคลนๆ ตามคำสั่งกัปตัน)
-            { "data": "blad1", "defaultContent": "" },                    // 6. ใบมีด 1
-            { "data": "blad2", "defaultContent": "" },                    // 7. ใบมีด 2
-            { "data": "blad3", "defaultContent": "" },                    // 8. ใบมีด 3
-            { "data": "blad4", "defaultContent": "" },                    // 9. ใบมีด 4
-            { "data": "size1", "defaultContent": "" },                    // 10. Size 1
-            { "data": "size2", "defaultContent": "" },                    // 11. Size 2
-            { "data": "size3", "defaultContent": "" },                    // 12. Size 3
-            { "data": "size4", "defaultContent": "" },                    // 13. Size 4
-            { "data": "finishDate", "defaultContent": "" },                    // 14. วันที่เสร็จ (เว้นว่างรอเบสจริง)
-            { "data": "finishTime", "defaultContent": "" },     // 15. เวลา (เว้นว่างรอเบสจริง)
-            { "data": "diameter", "defaultContent": "" },                              // 16. ลูก (จำนวนลำดับม้วนย่อยในเซต)
-            { "data": null, "defaultContent": "" },         // 17. Set (เอาน้ำหนักเป้าหมายมาแปะดูต่างหน้า)
+            { "data": "number" },
+            { "data": "orderNo" },
+            { "data": "orderItem" },
+            { "data": "grade1" },
+            { "data": null , "defaultContent": "-" },
+            { "data": "blad1", "defaultContent": "" },
+            { "data": "blad2", "defaultContent": "" },
+            { "data": "blad3", "defaultContent": "" },
+            { "data": "blad4", "defaultContent": "" },
+            { "data": "size1", "defaultContent": "" },
+            { "data": "size2", "defaultContent": "" },
+            { "data": "size3", "defaultContent": "" },
+            { "data": "size4", "defaultContent": "" },
+            { "data": "finishDate", "defaultContent": "" },
+            { "data": "finishTime", "defaultContent": "" },
+            { "data": "diameter", "defaultContent": "" },
+            { "data": null, "defaultContent": "" },
             { 
               "data": "status",
               "render": function(data) {
@@ -195,139 +342,141 @@
               }
             },
             {
-                "data": null,
-                "render": function(data, type, row) {
-                    if (row.status === 'เสร็จสิ้น') {
-                      return `<button class="btn btn-sm btn-outline-secondary m-1" disabled>สิ้นสุดกระบวนการ</button>`;
-                    }
-                    return `
-                    <div class="d-flex flex-wrap justify-content-center">
-                        <button class="btn btn-sm btn-primary font-weight-bold m-1" onclick="actionCut(${row.id})">สั่งตัด</button>
-                        <button class="btn btn-sm btn-secondary font-weight-bold text-white m-1" onclick="actionHold(${row.id})">HOLD</button>
-                        <button class="btn btn-sm btn-light border font-weight-bold m-1" onclick="actionUnhold(${row.id})">ปลด HOLD</button>
-                        <button class="btn btn-sm btn-success font-weight-bold m-1" onclick="actionSuccess(${row.id})">เสร็จสิ้น</button>
-                        <button class="btn btn-sm btn-warning font-weight-bold m-1" onclick="actionReset(${row.id})">Reset</button>
-                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveUp(${row.id},${row.que})"><i class="fas fa-chevron-up"></i> ขึ้น</button>
-                        <button class="btn btn-sm btn-default border font-weight-bold m-1" onclick="moveDown(${row.id},${row.que})"><i class="fas fa-chevron-down"></i> ลง</button>
-                    </div>
-                    `;
-                }
-            }
+    "data": null,
+    "render": function(data, type, row) {
+        if (row.status === 'เสร็จสิ้น') {
+          return `<button class="btn btn-sm btn-outline-secondary" disabled>สิ้นสุดกระบวนการ</button>`;
+        }
+
+        // กำหนดสไตล์สีตามแบบฉบับคุมโทน
+        const styleCut = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
+        const styleQueue = 'background-color: #f1f3f5 !important; border-color: #ced4da !important; color: #343a40 !important;';
+
+        return `
+        <div class="d-flex flex-nowrap align-items-center justify-content-center">
+            
+            <!-- 1. ปุ่มหลัก: สั่งตัด -->
+            <button class="btn btn-sm font-weight-bold mr-2" style="${styleCut}" onclick="actionCut(${row.id})">สั่งตัด</button>
+            
+            <!-- 2. ปุ่มจัดการงาน (Dropdown): ย้ายมาไว้อันดับสองตามสั่ง -->
+            <div class="dropdown d-inline-block mr-2">
+                <button class="btn btn-sm btn-default border dropdown-toggle font-weight-bold" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    จัดการงาน
+                </button>
+                <div class="dropdown-menu dropdown-menu-right shadow">
+                    <a class="dropdown-menu-item p-2 d-block text-secondary font-weight-bold" href="#" onclick="actionHold(${row.id}); return false;"><i class="fas fa-pause mr-2 text-muted"></i> HOLD งาน</a>
+                    <a class="dropdown-menu-item p-2 d-block text-dark font-weight-bold" href="#" onclick="actionUnhold(${row.id}); return false;"><i class="fas fa-unlock mr-2 text-muted"></i> ปลด HOLD</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-menu-item p-2 d-block text-success font-weight-bold" href="#" onclick="actionSuccess(${row.id}); return false;"><i class="fas fa-check mr-2"></i> งานเสร็จสิ้น</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-menu-item p-2 d-block text-danger font-weight-bold" href="#" onclick="actionReset(${row.id}); return false;"><i class="fas fa-undo mr-2"></i> Reset ระบบ</a>
+                </div>
+            </div>
+
+            <!-- 3. ปุ่มขยับคิว: ย้ายไปอยู่ท้ายสุดเป็นระเบียบเรียบร้อย -->
+            <div class="btn-group">
+                <button class="btn btn-sm" style="${styleQueue}" onclick="moveUp(${row.id},${row.que})" title="เลื่อนคิวขึ้น"><i class="fas fa-chevron-up"></i></button>
+                <button class="btn btn-sm" style="${styleQueue}" onclick="moveDown(${row.id},${row.que})" title="เลื่อนคิวลง"><i class="fas fa-chevron-down"></i></button>
+            </div>
+
+        </div>
+        `;
+    }
+}
         ],
         "createdRow": function(row, data, dataIndex) {
-        $(row).attr('data-id', data.id);
-        $(row).attr('data-queue', data.que); 
-    }
+            $(row).attr('data-id', data.id);
+            $(row).attr('data-queue', data.que); 
+        }
     });
 
-    // 🔌 ดักฟังสถานะไฟสีเขียว/แดง บนหัวตาราง
-    socket.on('connect', function() {
-      $('#socketStatus').removeClass('bg-warning bg-danger').addClass('bg-success text-white').text('🟢 เชื่อมต่อเรียลไทม์ปกติ');
-    });
-
-    socket.on('disconnect', function() {
-      $('#socketStatus').removeClass('bg-success bg-warning').addClass('bg-danger text-white').text('🔴 การเชื่อมต่อหลุด (ข้อมูลอาจไม่อัปเดต)');
-    });
-
-
-    socket.on('update_queue_table', function(res) {
-    console.log("📥 [RenderMoveQue] อัปเดตข้อมูลยกล็อตด้วยวิธีล้างและแอดใหม่ (ล็อกสถานะ)");
-    if (!res || !res.success || !res.data) return;
-
-    const newQueueArray = res.data;
-
-    // 1. ล้างข้อมูลเก่าออกจากหน่วยความจำของตารางชั่วคราว
-    queueTable.clear();
-
-    // 2. เติมข้อมูล Array ชุดใหม่ที่เรียงลำดับมาจากหลังบ้านอย่างถูกต้องเข้าไป (1, 2, 3...)
-    queueTable.rows.add(newQueueArray);
-
-    // 3. 🚀 สั่งวาดตารางใหม่ทันที 
-    // ใส่ false เพื่อบังคับล็อกหน้าเพจ (Pagination) และคงคำค้นหา (Search Filter) ของพนักงานไว้เหมือนเดิมเป๊ะ!
-    queueTable.draw(false);
-    
-    console.log("✨ วาดโครงสร้างตารางใหม่ยกล็อตสำเร็จ แถวเรียง 1 2 3 ตรงตามฐานข้อมูล 100%!");
-});
-
-
+    // ปรับสัดส่วนตารางเมื่อกดปุ่มย่อ/ขยายแถบเมนูด้านซ้าย
     $('[data-widget="pushmenu"]').on('click', function() {
-        console.log("💥 ปุ่มสามขีดโดนกดแล้ว กำลังรอระเบิดแอนิเมชัน Sidebar...");
-
-        // ⏳ หน่วงเวลา 350ms รอให้หน้าจอขยับเปลี่ยนขนาดเสร็จสิ้นก่อน
         setTimeout(function() {
-            // ตรวจเช็กว่าตัวแปรตารางพร้อมรบไหม ถ้าพร้อมสั่งลุยยืดขนาดทันที!
             if (queueTable) {
-                console.log("🚀 ลั่นไกตรงผ่านตัวแปร queueTable ให้คำนวณสัดส่วนใหม่!");
                 queueTable.columns.adjust().draw(false);
             }
         }, 350);
     });
 
+    // ผูกคำสั่งกับปุ่มกดค้นหาหลักของระบบ
+    $('#btnDoQuery').on('click', function() {
+        fetchFilteredQueue();
+    });
 
+    // ผูกคำสั่งกับปุ่มล้างคำค้น
+    $('#btnClearQuery').on('click', function() {
+        $('#filterMinDate').val('');
+        $('#filterMaxDate').val('');
+        $('#searchStatus').val('');
+        $('#searchOrderNo').val('');
+        fetchFilteredQueue(); 
+    });
   });
 
-  
-    function moveUp(myId, myQueue) {
-        // 1. ดึงข้อมูลทั้งหมดที่จัดเรียงอยู่ ณ ปัจจุบันออกมาจาก DataTable เป็น Array ดิบ
-        // (ใช้คำสั่ง .rows({ order: 'applied' }).data() เพื่อให้ได้ลำดับตามที่ตาเห็นจริงในระบบ)
-        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+  // 5. โดดออกมาสร้างฟังก์ชันหลักนอก Ready block เพื่อให้โครงสร้างปุ่มกด (onclick) ดึงไปทำงานได้แม่นยำ
+  function moveUp(myId, myQueue) {
+      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+      const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
 
-        // 2. ค้นหาดัชนี (Index) ของตัวเราเองใน Array นั้น
-        const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
+      if (myIndex === 0) {
+          alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
+          return;
+      }
 
-        // 3. 🚨 เช็กดักกรณีเป็นตัวแรกสุดของตารางทั้งหมดจริง ๆ (คิวที่ 1 ของหน้า 1)
-        if (myIndex === 0) {
-            alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
-            return;
-        }
+      const upperRowData = allData[myIndex - 1];
+      const aboveId = upperRowData.id;
+      const aboveQueue = upperRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
 
-        // 4. 🎯 ทีเด็ดอยู่ตรงนี้: หาคู่กรณีตัวบนโดยถอย Index ไป 1 ตำแหน่ง 
-        // ต่อให้ตัวบนจะอยู่อีกหน้าเพจหนึ่ง มันก็จะเจอตัวอย่างแม่นยำ 100% เพราะค้นจาก Array ข้อมูล
-        const upperRowData = allData[myIndex - 1];
+      console.log(`🔼 [Client Request Mode] สลับคิวขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
 
-        const aboveId = upperRowData.id;
-        const aboveQueue = upperRowData.number; // หรือฟิลด์คิวที่กัปตันใช้เก็บเลขคิว
+      socket.emit('swapQueue', {
+          orderId: myId,
+          current_que: myQueue,
+          aboveOrderId: aboveId,
+          above_que: aboveQueue
+      });
+  }
 
-        console.log(`🔼 [Client Request - Array Mode] สลับข้ามหน้า: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
+  function moveDown(myId, myQueue) {
+      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+      const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
 
-        // 5. ยิงข้อมูลคู่กรณีที่แท้จริงส่งไปหลังบ้านผ่านท่อ Socket ตัวเดิม
-        socket.emit('swapQueue', {
-            orderId: myId,
-            current_que: myQueue,
-            aboveOrderId: aboveId,
-            above_que: aboveQueue
-        });
-    }
+      if (myIndex === allData.length - 1) {
+          alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
+          return;
+      }
 
-    function moveDown(myId, myQueue) {
-        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
-        const myIndex = allData.findIndex(row => Number(row.id) === Number(myId));
+      const lowerRowData = allData[myIndex + 1];
+      const belowId = lowerRowData.id;
+      const belowQueue = lowerRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
 
-        // ดักกรณีอยู่แถวสุดท้ายของรายการทั้งหมด (หน้าสุดท้าย แถวสุดท้าย)
-        if (myIndex === allData.length - 1) {
-            alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
-            return;
-        }
+      console.log(`🔽 [Client Request Mode] สลับคิวลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
 
-        // หาคู่กรณีตัวล่างโดยบวก Index ไป 1 ตำแหน่ง (ทะลุหน้าเพจได้สบายมาก)
-        const lowerRowData = allData[myIndex + 1];
+      socket.emit('swapQueue', {
+          orderId: myId,
+          current_que: myQueue,
+          aboveOrderId: belowId,
+          above_que: belowQueue
+      });
+  }
 
-        const belowId = lowerRowData.id;
-        const belowQueue = lowerRowData.number;
+  function fetchFilteredQueue() {
+      const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
+      const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
 
-        console.log(`🔽 [Client Request - Array Mode] สลับข้ามหน้าลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+      const filterParams = {
+          startDate: rawStartDate !== '' ? rawStartDate : null,
+          endDate: rawEndDate !== '' ? rawEndDate : null,
+          status: $('#searchStatus').val() || null,
+          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null
+      };
 
-        // ส่งไปหลังบ้าน (เรียกใช้ลอจิกคู่กรณีเดียวกับขาขึ้น แต่อลับฝั่งตัวแปรส่ง)
-        socket.emit('swapQueue', {
-            orderId: myId,
-            current_que: myQueue,
-            aboveOrderId: belowId,
-            above_que: belowQueue
-        });
-    }
-    
+      console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
+      socket.emit('get_filtered_queue', filterParams);
+  }
 
-  // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ให้ไม่เกิด error ตอนพนักงานกดเล่นค่ะ
+  // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
   function actionCut(id) { console.log('สั่งตัด:', id); }
   function actionHold(id) { console.log('HOLD:', id); }
   function actionUnhold(id) { console.log('ปลด HOLD:', id); }

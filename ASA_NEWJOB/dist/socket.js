@@ -16,15 +16,25 @@ const initSocket = (httpServer) => {
     const waitCutNamespace = io.of('/socket/wait-cut');
     waitCutNamespace.on('connection', (socket) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
-        socket.on('swapQueue', async (data) => {
-            const { orderId, current_que, aboveOrderId, above_que } = data;
-            console.log(`⚡️ หลังบ้านได้รับคำสั่งเลื่อนขึ้นของไอดี: ${orderId} และ ${current_que}`);
+        socket.on('get_filtered_queue', async (payload) => {
             try {
-                const updatedQueue = await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
-                waitCutNamespace.emit('update_queue_table', updatedQueue);
+                const { status, orderNo, startDate, endDate } = payload;
+                const data = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
+                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
             }
             catch (error) {
-                console.error("เกิดข้อผิดพลาดในการสลับคิวขาขึ้น:", error);
+                socket.emit('update_queue_table', { success: false, error: error.message });
+            }
+        });
+        socket.on('swapQueue', async (data) => {
+            const { orderId, current_que, aboveOrderId, above_que } = data;
+            console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
+            try {
+                await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
+                waitCutNamespace.emit('queue_structure_changed', { success: true });
+            }
+            catch (error) {
+                console.error("เกิดข้อผิดพลาดในการสลับคิว:", error);
             }
         });
         socket.on('disconnect', () => {
@@ -55,38 +65,9 @@ const initSocket = (httpServer) => {
             console.log('🔴 พนักงานปิดหน้าจอชั่งน้ำหนัก ID:', socket.id);
         });
     });
-    // 📢 เริ่มต้นตัวจำลองข้อมูลไหลเข้าออโต้ (ปรับให้ส่งเฉพาะในห้อง wait-cut)
-    startQueueSimulation();
     return io;
 };
 exports.initSocket = initSocket;
-/**
- * 📢 ฟังก์ชันจำลองการส่งข้อมูลใบงานใหม่ไหลเข้าตารางออโต้ ทุกๆ 10 วินาที
- */
-function startQueueSimulation() {
-    setInterval(async () => {
-        if (!io)
-            return;
-        try {
-            const currentQueue = await wait_cut_model_1.WaitCutModel.getAllOrders();
-            currentQueue.push({
-                id: 1,
-                jobNo: 'JOB-001',
-                rollNo: 'R260621-01',
-                setIndex: 1,
-                rollIndexInSet: 1,
-                targetWeight: 50,
-                actualWeight: 2,
-                status: 'รอสั่งตัด',
-                queue_no: 1
-            });
-            io.of('/socket/wait-cut').emit('update_queue_table', currentQueue);
-        }
-        catch (error) {
-            console.error("Simulation พัง:", error);
-        }
-    }, 10000);
-}
 const broadcastNextRollToWeighingStation = (nextRollData) => {
     if (!io) {
         console.error("⚠️ ไม่สามารถปล่อยสัญญาณได้เนื่องจากระบบ Socket ยังไม่ถูกเปิดใช้งานค่ะกัปตัน!");
