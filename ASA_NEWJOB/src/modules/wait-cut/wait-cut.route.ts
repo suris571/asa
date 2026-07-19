@@ -1,9 +1,19 @@
 import { Router } from 'express';
-import { getWaitCutPage } from './wait-cut.controller';
+import { getWaitCutPage, startProduction } from './wait-cut.controller';
 
 const router = Router();
 
-// เมื่อพนักงานเข้าเว็บลิงก์ /wait-cut จะวิ่งไปหาคอนโทรลเลอร์ด้านบน
+/**
+ * 💻 Route สำหรับหน้าจอ (Web Interface)
+ * เมื่อพนักงานเข้าลิงก์: GET /wait-cut/
+ */
 router.get('/', getWaitCutPage);
+
+/**
+ * 📡 Route สำหรับ API สั่งตัดแยกเซ็ต (Action Endpoint)
+ * เมื่อหน้าบ้านยิงคำสั่ง: POST /wait-cut/start-production
+ * 🎯 แก้ไข: เปลี่ยนจาก .get เป็น .post และลบช่องว่าง (Space) ท้าย String ออกเรียบร้อย
+ */
+router.post('/start-production', startProduction);
 
 export default router;
