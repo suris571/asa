@@ -193,27 +193,6 @@
         <div class="card-body p-2" style="overflow-x: auto;">
 
             <div class="custom-filter-container">
-            <!-- 1. ช่วงวันที่ผลิตเสร็จ -->
-                <div class="custom-filter-item">
-                    <label>📅 วันที่ผลิตเสร็จ:</label>
-                    <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
-                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
-                    <label>ถึง</label>
-                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
-                </div>
-                
-                <!-- 2. สถานะ -->
-                <div class="custom-filter-item">
-                    <label for="searchStatus">🚦 สถานะ:</label>
-                    <select id="searchStatus" class="form-control form-control-sm">
-                        <option value="">-- ทั้งหมด --</option>
-                        <% if (typeof statusList !== 'undefined' && statusList.length > 0) { %>
-                            <% statusList.forEach(function(item) { %>
-                                <option value="<%= item.id %>"><%= item.status %></option>
-                            <% }); %>
-                        <% } %>
-                    </select>
-                </div>
 
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
@@ -232,31 +211,35 @@
                 </div>
             </div>
 
-            <table id="queueTable" class="table table-bordered table-hover text-nowrap text-center align-middle">
-            <thead class="bg-light">
-                <tr>
-                <th rowspan="2" class="align-middle">ลำดับ</th>
-                <th rowspan="2" class="align-middle">เลขที่ใบสั่งผลิต</th>
-                <th rowspan="2" class="align-middle">ITEM</th>
-                <th colspan="4" class="text-center bg-gray-light">GRADE</th>
-                <!-- <th rowspan="2" class="align-middle">Set</th> -->
-                <th colspan="4" class="text-center bg-gray-light">ตั้งค่าใบมีด</th>
-                <th colspan="4" class="text-center bg-gray-light">Size นิ้ว</th>
-                <th rowspan="2" class="align-middle">วันที่เสร็จ</th>
-                <th rowspan="2" class="align-middle">เวลา</th>
-                <th rowspan="2" class="align-middle">ลูก</th>
-                <th rowspan="2" class="align-middle">Set</th>
-                <th rowspan="2" class="align-middle">สถานะ</th>
-                <th rowspan="2" class="align-middle bg-navy">ปุ่มกดจัดการคิวงาน</th>
-                </tr>
-                <tr>
-                <th>1</th><th>2</th><th>3</th><th>4</th>
-                <th>1</th><th>2</th><th>3</th><th>4</th>
-                <th>1</th><th>2</th><th>3</th><th>4</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
+            <table id="splitSetTable" class="table table-bordered table-hover text-nowrap text-center align-middle w-100">
+                <thead class="bg-light">
+                    <tr>
+                        <th rowspan="2" class="align-middle">เลขที่ใบสั่งผลิต</th>
+                        <th rowspan="2" class="align-middle">ITEM</th>
+                        <th colspan="4" class="text-center bg-gray-light">GRADE</th>
+                        <th rowspan="2" class="align-middle">Set</th>
+                        <th colspan="4" class="text-center bg-gray-light">ตั้งค่าใบมีด</th>
+                        <th colspan="4" class="text-center bg-gray-light">Size นิ้ว</th>
+                        <th rowspan="2" class="align-middle">ความยาว</th>
+                        <th colspan="4" class="text-center bg-navy">ปุ่มกด</th>
+                    </tr>
+                    <tr>
+                        <!-- grade -->
+                        <th>1</th><th>2</th><th>3</th><th>4</th>
+                        <!-- ตั้งค่าใบมีด -->
+                        <th>1</th><th>2</th><th>3</th><th>4</th>
+                        <!-- Size นิ้ว -->
+                        <th>1</th><th>2</th><th>3</th><th>4</th>
+                        <!-- ปุ่มกด -->
+                        <th class="bg-light text-dark">เสร็จสิ้น</th>
+                        <th class="bg-light text-dark">HOLD</th>
+                        <th class="bg-light text-dark">ปลด HOLD</th>
+                        <th class="bg-light text-dark">Reset</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                </tbody>
             </table>
         </div>
         </div>
@@ -278,7 +261,7 @@
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
   let updateTimeout = null;
-  const socket = io('/socket/wait-cut'); 
+  const socket = io('/socket/wait-cut/split-cut-set'); 
 
   // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
   socket.off('connect');
@@ -352,108 +335,83 @@
 
     // 4. ดึงข้อมูลชุดแรกจาก Server มาเรนเดอร์ตารางตอนเปิดหน้าเว็บ
     const serverData = <%- JSON.stringify(orders) %>;
-
-    queueTable = $('#queueTable').DataTable({
+    queueTable = $('#splitSetTable').DataTable({
         "paging": true,
         "pageLength": 25,
         "searching": true,
         "ordering": false,
-        "data": serverData,
+        "data": serverData, // ข้อมูล Array ที่ยิงมาจาก View หลังบ้าน
         "columns": [
-            { "data": "number" },
-            { "data": "orderNo" },
-            { "data": "orderItem" },
+            { "data": "order_no" },          // เลขที่ใบสั่งผลิต (เช่น 0065/2026)
+            { "data": "orderItem" },        // ITEM (เช่น 1, 2)
+            
             { "data": "grade1" },
             { "data": "grade2" },
             { "data": "grade3" },
             { "data": "grade4" },
-            // { "data": "qty" , "defaultContent": "-" },
+            { 
+                "data": "set",            // 🎯 คอลัมน์ set_no จาก pl_cut_split_set (เช่น 1/6, 2/6)
+                "render": function(data) {
+                    return `<span class="font-weight-bold text-primary">${data || '-'}</span>`;
+                }
+            },
+            // --- ตั้งค่าใบมีด ---
             { "data": "blad1", "defaultContent": "" },
             { "data": "blad2", "defaultContent": "" },
             { "data": "blad3", "defaultContent": "" },
             { "data": "blad4", "defaultContent": "" },
+            // --- Size นิ้ว ---
             { "data": "size1", "defaultContent": "" },
             { "data": "size2", "defaultContent": "" },
             { "data": "size3", "defaultContent": "" },
             { "data": "size4", "defaultContent": "" },
-            { "data": "finishDate", "defaultContent": "" },
-            { "data": "finishTime", "defaultContent": "" },
-            { "data": "diameter", "defaultContent": "" },
-            { "data": "qty", "defaultContent": "" },
+            // --- ความยาว ---
             { 
-                // 🎯 1. เปลี่ยนการผูก Data มาจับฟิลด์ใหม่ระบบเรา
-                "data": "cut_status_id", 
-                // 🎯 2. ใช้ row เพื่อสามารถเข้าถึงฟิลด์ทั้งหมดในแถวนั้นได้ (เผื่อกรณีต้องการเช็กข้อมูลอื่นประกอบ)
+                "data": "lenght",        // 🎯 ความยาวสั่งตัดจาก pl_cut_split_set
+                "render": function(data) {
+                    return data ? Number(data).toLocaleString() : '';
+                }
+            },
+            // --- คอลัมน์ปุ่มกดจัดการรายการเซ็ตย่อย ---
+            {
+                "data": null,
                 "render": function(data, type, row) {
-                    // 🧠 ลอจิกแปลง ID เป็นชื่อภาษาไทยตามที่กัปตันสั่งการ
-                    let statusName = '';
-                    let badgeClass = '';
-                    // ดักจับเคส: ค่าว่าง (ข้อมูลใหม่) หรือเลข 1 => ให้เป็น "รอสั่งตัด"
-                    if (data === null || data === undefined || parseInt(data) === 1) {
-                        statusName = 'รอสั่งตัด';
-                        badgeClass = 'bg-warning text-dark'; // สีเหลืองเด่น ให้รู้ว่างานใหม่เข้ามารอสั่งการ
-                    } else {
-                        switch(parseInt(data)) {
-                            case 2:
-                                statusName = 'รอตัด';
-                                badgeClass = 'bg-primary'; // สีน้ำเงิน กำลังเดินกระบวนการ
-                                break;
-                            case 3:
-                                statusName = 'ตัดไม่ครบ';
-                                badgeClass = 'bg-danger'; // สีแดงแจ้งเตือน มีปัญหาหน้างาน
-                                break;
-                            case 4:
-                                statusName = 'HOLD';
-                                badgeClass = 'bg-secondary'; // สีเทาหม่น หยุดชั่วคราวตามเดิม
-                                break;
-                            case 5:
-                                statusName = 'เสร็จสิ้น';
-                                badgeClass = 'bg-success'; // สีเขียว จบงานสมบูรณ์
-                                break;
-                            default:
-                                statusName = 'ไม่ทราบสถานะ';
-                                badgeClass = 'bg-dark';
-                        }
-                    }
-                    // 🚀 ส่งชิ้นส่วน HTML Badge สวยๆ ออกไปเรนเดอร์บนหน้าจอ
-                    return `<span class="badge ${badgeClass} p-2 font-weight-bold" style="font-size: 85%;">${statusName}</span>`;
+                    // ปุ่มเสร็จสิ้น
+                    return `<button class="btn btn-sm btn-success font-weight-bold btn-block" 
+                            onclick="actionSetSuccess(${row.split_set_id},${row.pl_order_id},${row.pl_order_detail_id})">เสร็จสิ้น</button>`;
                 }
             },
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    if (row.status === 'เสร็จสิ้น') {
-                    return `<button class="btn btn-sm btn-outline-secondary m-1" disabled>สิ้นสุดกระบวนการ</button>`;
-                    }
-
-                    // 🎨 พาเลทสีแบบซอฟต์ ทึบ นุ่มตา แยกประเภทชัดเจนตามที่กัปตันสรุปเลือกไว้
-                    const styleCut     = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
-                    const styleHold    = 'background-color: #6c757d !important; border-color: #6c757d !important; color: #fff !important;';
-                    const styleUnhold  = 'background-color: #e2e6ea !important; border-color: #dae0e5 !important; color: #495057 !important;';
-                    const styleSuccess = 'background-color: #2b8a3e !important; border-color: #2b8a3e !important; color: #fff !important;';
-                    const styleReset   = 'background-color: #e67e22 !important; border-color: #e67e22 !important; color: #fff !important;';
-                    const styleQueue   = 'background-color: #f1f3f5 !important; border-color: #ced4da !important; color: #343a40 !important;';
-
-                    return `
-                    <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleCut}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty})">สั่งตัด</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleHold}" onclick="actionHold(${row.pl_order_detail_id}, ${row.pl_order_id})">HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleUnhold}" onclick="actionUnhold(${row.pl_order_detail_id}, ${row.pl_order_id})">ปลด HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleSuccess}" onclick="actionSuccess(${row.pl_order_detail_id}, ${row.pl_order_id})">เสร็จสิ้น</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionReset(${row.pl_order_detail_id}, ${row.pl_order_id})">Reset</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveDown(${row.pl_order_detail_id}, ${row.que})">ลง</button>
-                    </div>
-                    `;
+                    // ปุ่ม HOLD
+                    return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" 
+                            onclick="actionSetHold(${row.split_set_id})">HOLD</button>`;
+                }
+            },
+            {
+                "data": null,
+                "render": function(data, type, row) {
+                    // ปุ่ม ปลด HOLD
+                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block" 
+                            onclick="actionSetUnhold(${row.split_set_id})">ปลด HOLD</button>`;
+                }
+            },
+            {
+                "data": null,
+                "render": function(data, type, row) {
+                    // ปุ่ม Reset
+                    return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" 
+                            onclick="actionSetReset(${row.split_set_id})">Reset</button>`;
                 }
             }
-            ],
+        ],
         "createdRow": function(row, data, dataIndex) {
-            $(row).attr('data-id', data.pl_order_detail_id);
-            $(row).attr('data-queue', data.que); 
+            // ผูก Primary Key ของตาราง pl_cut_split_set ไว้ที่แถว
+            $(row).attr('data-split-id', data.splitSetId);
         }
     });
-
+    
     // ปรับสัดส่วนตารางเมื่อกดปุ่มย่อ/ขยายแถบเมนูด้านซ้าย
     $('[data-widget="pushmenu"]').on('click', function() {
         setTimeout(function() {
@@ -477,97 +435,40 @@
         fetchFilteredQueue(); 
     });
   });
-
-  // 5. โดดออกมาสร้างฟังก์ชันหลักนอก Ready block เพื่อให้โครงสร้างปุ่มกด (onclick) ดึงไปทำงานได้แม่นยำ
-  function moveUp(myId, myQueue) {
-      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
-      const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
-
-      if (myIndex === 0) {
-          alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
-          return;
-      }
-
-    showLoader();
-      const upperRowData = allData[myIndex - 1];
-      console.log(upperRowData)
-      const aboveId = upperRowData.pl_order_detail_id;
-      const aboveQueue = upperRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
-
-      console.log(`🔼 [Client Request Mode] สลับคิวขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
-
-      socket.emit('swapQueue', {
-          orderId: myId,
-          current_que: myQueue,
-          aboveOrderId: aboveId,
-          above_que: aboveQueue
-      });
-  }
-
-  function moveDown(myId, myQueue) {
-      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
-      const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
-
-      if (myIndex === allData.length - 1) {
-          alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
-          return;
-      }
-
-    showLoader();
-      const lowerRowData = allData[myIndex + 1];
-      const belowId = lowerRowData.pl_order_detail_id;
-      const belowQueue = lowerRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
-
-      console.log(`🔽 [Client Request Mode] สลับคิวลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
-
-      socket.emit('swapQueue', {
-          orderId: myId,
-          current_que: myQueue,
-          aboveOrderId: belowId,
-          above_que: belowQueue
-      });
-  }
-
+  
   function fetchFilteredQueue() {
-      const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
-      const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
-
       const filterParams = {
-          startDate: rawStartDate !== '' ? rawStartDate : null,
-          endDate: rawEndDate !== '' ? rawEndDate : null,
-          status: $('#searchStatus').val() || null,
           orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null
       };
-
       console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
       socket.emit('get_filtered_queue', filterParams);
   }
 
   // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionCut(pl_order_detail_id,pl_order_id,qty) { 
+  function actionSetSuccess(split_set_id,pl_order_id,pl_order_detail_id) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
     showLoader(); 
 
-    console.log(`🚀 [Client REST Request] ส่งคำสั่งเริ่มตัดงานสำหรับ Detail ID: ${pl_order_detail_id}, Qty: ${qty} เซ็ต`);
+    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
 
     // 2. ยิง HTTP POST API ไปหลังบ้าน
-    fetch('/wait-cut/start-production', {
+    fetch('/wait-cut/start-weighing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            orderId: pl_order_id,
-            orderDetailId: pl_order_detail_id,
-            qty: parseInt(qty)
+            split_set_id: split_set_id,
+            pl_order_id: pl_order_id,
+            pl_order_detail_id: pl_order_detail_id,
         })
     })
     .then(response => response.json())
     .then(res => {
         if (res.success) {
             // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
-            console.log('✅ หลังบ้านบันทึกการผลิตสำเร็จ รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
+            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
         } else {
             hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'ไม่สามารถสั่งตัดได้'}`);
+            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'สร้าง record ได้'}`);
         }
     })
     .catch(error => {

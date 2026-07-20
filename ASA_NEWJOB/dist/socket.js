@@ -108,6 +108,37 @@ const initSocket = (httpServer) => {
             console.log('🔴 พนักงานปิดหน้าจอชั่งน้ำหนัก ID:', socket.id);
         });
     });
+    // ==========================================================================
+    // 🪓 ห้องที่ 3: [/socket/wait-cut/split-cut-set] สำหรับหน้ารอตัดแยก set
+    // ==========================================================================
+    const waitCutSplitSet = io.of('/socket/wait-cut/split-cut-set');
+    waitCutSplitSet.on('connection', (socket) => {
+        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+        socket.on('get_filtered_queue', async (payload) => {
+            try {
+                const { orderNo } = payload;
+                const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo);
+                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
+            }
+            catch (error) {
+                socket.emit('update_queue_table', { success: false, error: error.message });
+            }
+        });
+        socket.on('swapQueue', async (data) => {
+            const { orderId, current_que, aboveOrderId, above_que } = data;
+            console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
+            try {
+                await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
+                waitCutNamespace.emit('queue_structure_changed', { success: true });
+            }
+            catch (error) {
+                console.error("เกิดข้อผิดพลาดในการสลับคิว:", error);
+            }
+        });
+        socket.on('disconnect', () => {
+            console.log('🔴 พนักงานปิดหน้ารอตัด ID:', socket.id);
+        });
+    });
     return io;
 };
 exports.initSocket = initSocket;

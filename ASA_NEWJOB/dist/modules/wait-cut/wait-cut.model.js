@@ -62,7 +62,7 @@ class WaitCutModel {
             let query = `
                 SELECT 
                     pl_order_id, pl_order_detail_id, order_no, order_item, qty, status,
-                    grade_name_1,
+                    grade1_name,grade2_name,grade3_name,grade4_name,
                     blad1, blad2, blad3, blad4,
                     size_1, size_2, size_3, size_4,
                     finish_date, finish_time, diameter, queue_no, cut_status_id
@@ -124,7 +124,10 @@ class WaitCutModel {
                         orderItem: row.ORDER_ITEM,
                         qty: row.QTY,
                         status: row.STATUS,
-                        grade1: row.GRADE_NAME_1,
+                        grade1: row.GRADE1_NAME,
+                        grade2: row.GRADE2_NAME,
+                        grade3: row.GRADE3_NAME,
+                        grade4: row.GRADE4_NAME,
                         blad1: row.BLAD1,
                         blad2: row.BLAD2,
                         blad3: row.BLAD3,
@@ -235,6 +238,140 @@ class WaitCutModel {
                     setNo: setNoStr // 🎯 ส่ง String เศษส่วนเข้าไปเก็บในฐานข้อมูลโดยตรง
                 });
             }
+            // ยืนยันกระบวนการ Transaction ทั้งหมด (Atomic Commit)
+            await conn.commit();
+            return true;
+        }
+        catch (error) {
+            if (conn) {
+                try {
+                    await conn.rollback();
+                }
+                catch (rbErr) {
+                    console.error("⚠️ Rollback ล้มเหลว:", rbErr);
+                }
+            }
+            console.error("❌ เกิดข้อผิดพลาดในระดับ Model [createOrderSplitSet]:", error);
+            throw error;
+        }
+        finally {
+            if (conn) {
+                try {
+                    await conn.close();
+                }
+                catch (closeError) {
+                    console.error("⚠️ ไม่สามารถปิด Database Connection ได้:", closeError);
+                }
+            }
+        }
+    }
+    static async getSplitSetQueueData(orderNo) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🎯 Query ข้อมูลจาก View รวม 3 ตาราง
+            let sql = `
+                SELECT 
+                    split_set_id        AS SPLIT_SET_ID,
+                    pl_order_id         AS PL_ORDER_ID,
+                    pl_order_detail_id  AS PL_ORDER_DETAIL_ID,
+                    order_no            AS ORDER_NO,
+                    order_item          AS ORDER_ITEM,
+                    grade1_name         AS GRADE1_NAME,
+                    grade2_name         AS GRADE2_NAME,
+                    grade3_name         AS GRADE3_NAME,
+                    grade4_name         AS GRADE4_NAME,
+                    set_no              AS SET_NO,
+                    blad1               AS BLAD1,
+                    blad2               AS BLAD2,
+                    blad3               AS BLAD3,
+                    blad4               AS BLAD4,
+                    size_1              AS SIZE_1,
+                    size_2              AS SIZE_2,
+                    size_3              AS SIZE_3,
+                    size_4              AS SIZE_4,
+                    cut_length          AS CUT_LENGTH,
+                    split_status_id     AS CUT_STATUS_ID,
+                    queue_no            AS QUEUE_NO,
+                    order_item
+                FROM pl_cut_split_set_view
+                WHERE 1=1
+                `;
+            const binds = {};
+            // 🔍 รับและกรองเฉพาะ orderNo ตัวเดียวตามคำสั่งกัปตัน
+            if (orderNo && orderNo.trim() !== '') {
+                sql += ` AND UPPER(order_no) LIKE :orderNo`;
+                binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
+            }
+            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย (1/6, 2/6, ...)
+            sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            const result = await conn.execute(sql, binds, {
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+            });
+            const dataList = [];
+            let i = 0;
+            if (result.rows) {
+                for (const row of result.rows) {
+                    i++;
+                    dataList.push({
+                        number: i,
+                        order_no: row.ORDER_NO,
+                        orderItem: row.ORDER_ITEM,
+                        grade1: row.GRADE1_NAME,
+                        grade2: row.GRADE2_NAME,
+                        grade3: row.GRADE3_NAME,
+                        grade4: row.GRADE4_NAME,
+                        set: row.SET_NO,
+                        blad1: row.BLAD1,
+                        blad2: row.BLAD2,
+                        blad3: row.BLAD3,
+                        blad4: row.BLAD4,
+                        size1: row.SIZE_1,
+                        size2: row.SIZE_2,
+                        size3: row.SIZE_3,
+                        size4: row.SIZE_4,
+                        lenght: row.CUT_LENGHT,
+                        status: row.STATUS,
+                        que: row.QUEUE_NO,
+                        cut_status_id: row.CUT_STATUS_ID,
+                        pl_order_id: row.PL_ORDER_ID,
+                        pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
+                        split_set_id: row.SPLIT_SET_ID,
+                    });
+                }
+            }
+            console.log("============================================================================");
+            return dataList;
+        }
+        catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [getSplitSetQueueData]:", error);
+            throw error;
+        }
+        finally {
+            if (conn) {
+                try {
+                    await conn.close();
+                }
+                catch (closeErr) {
+                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                }
+            }
+        }
+    }
+    static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🔒 ขั้นตอนที่ 2: เตรียม Query สำหรับกระจายชุดย่อย (เพิ่มฟิลด์ set_no เข้าไปในคำสั่ง SQL)
+            const insertSplitQuery = `
+                INSERT INTO pl_wait_weighing (pl_order_id, pl_order_detail_id,split_set_id,model, weigh, status, note)
+                VALUES (:pl_order_id, :pl_order_detail_id, :split_set_id, null, null,null,null)
+            `;
+            await conn.execute(insertSplitQuery, {
+                pl_order_id,
+                pl_order_detail_id,
+                split_set_id
+            });
             // ยืนยันกระบวนการ Transaction ทั้งหมด (Atomic Commit)
             await conn.commit();
             return true;

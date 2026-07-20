@@ -8,10 +8,7 @@ const router = (0, express_1.Router)();
  * เมื่อพนักงานเข้าลิงก์: GET /wait-cut/
  */
 router.get('/', wait_cut_controller_1.getWaitCutPage);
-/**
- * 📡 Route สำหรับ API สั่งตัดแยกเซ็ต (Action Endpoint)
- * เมื่อหน้าบ้านยิงคำสั่ง: POST /wait-cut/start-production
- * 🎯 แก้ไข: เปลี่ยนจาก .get เป็น .post และลบช่องว่าง (Space) ท้าย String ออกเรียบร้อย
- */
+router.get('/split-cut-set', wait_cut_controller_1.getWaitCutSplitSet);
 router.post('/start-production', wait_cut_controller_1.startProduction);
+router.post('/start-weighing', wait_cut_controller_1.startWeighing);
 exports.default = router;
