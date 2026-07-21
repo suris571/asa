@@ -19,13 +19,13 @@
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">วันที่ผลิต</label>
-        <input type="text" class="form-control form-control-sm bg-light" id="prodDate" value="18/06/2026" readonly>
+        <input type="text" class="form-control form-control-sm bg-light" name="createdAt" id="createdAt" value="<%= (nextData && nextData.createdAt) ? new Date(nextData.createdAt).toLocaleDateString('en-GB') : '' %>" readonly>
       </div>
     </div>
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">กะการทำงาน</label>
-        <input type="text" class="form-control form-control-sm bg-light" id="shift" value="กะ A" readonly>
+        <input type="text" class="form-control form-control-sm bg-light" name="shift" id="shift" value="กะ A" readonly>
       </div>
     </div>
   </div>
@@ -34,13 +34,13 @@
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">เกรด (Grade)</label>
-        <input type="text" class="form-control form-control-sm bg-white" id="grade" placeholder="เช่น KA185">
+        <input type="text" class="form-control form-control-sm bg-white" name="gradeName" id="grade" value="<%= (nextData && nextData.gradeName) ? nextData.gradeName : '' %>">
       </div>
     </div>
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">รุ่น (Version)</label>
-        <input type="text" class="form-control form-control-sm bg-white" id="version" placeholder="เช่น รุ่น A">
+        <input type="text" class="form-control form-control-sm bg-white" name="model" id="model" value="<%= (nextData && nextData.model) ? nextData.model : '' %>">
       </div>
     </div>
   </div>
@@ -49,13 +49,13 @@
     <div class="col-6">
       <div class="form-group mb-0">
         <label class="mb-0 text-muted font-weight-bold">ขนาด (Size)</label>
-        <input type="text" class="form-control form-control-sm bg-white" id="size" placeholder="เช่น 72 นิ้ว">
+        <input type="text" class="form-control form-control-sm bg-white" name="size" id="size" value="<%= (nextData && nextData.sizeName) ? nextData.sizeName : '' %>">
       </div>
     </div>
     <div class="col-6">
       <div class="form-group mb-0">
         <label class="mb-0 text-muted font-weight-bold">Diameter</label>
-        <input type="text" class="form-control form-control-sm bg-white" id="diameter" placeholder="ระบุค่า...">
+        <input type="text" class="form-control form-control-sm bg-white" name="diameter" id="diameter" value="<%= (nextData && nextData.diameter) ? nextData.diameter : '' %>">
       </div>
     </div>
   </div>

@@ -9,8 +9,8 @@ import { SerialService } from './serial-service.js';
 import { PrintService } from './print-service.js';
 
 import bwipjs from 'bwip-js';
-import pt from 'pdf-to-printer';
 import { generateLabelPdf } from './services/pdf-service.js';
+import fs from 'fs/promises';
 
 // 1. ฟังก์ชันเสกบาร์โค้ดสากล
 async function generateBarcode(text:string) {
@@ -56,54 +56,53 @@ io.on('connection', (socket) => {
   });
 });
 
-// 🖨️ 3. เปิดประตูรับ HTTP POST (เดี๋ยวเราจะเอาตรรกะสั่งพิมพ์ PDF/A4 มาฝังตรงนี้)
-app.post('/api/print-report', async (req, res) => {
-  try {
-    const jobData = req.body;
-    console.log('📥 ได้รับคำสั่งยิงพิมพ์รายงาน A4 พร้อม Payload ข้อมูล:', jobData);
-    
-    // 🚀 ปลุกกระบอกสูบสั่งวาดกระดาษและส่งออกเครื่องปริ้นเตอร์ทันที
-    await PrintService.generateAndPrintA4(jobData);
-    
-    res.status(200).json({ success: true, message: 'Agent สั่งพิมพ์รายงาน A4 ออกเครื่องพิมพ์สำเร็จแล้วครับกัปตัน' });
-  } catch (error: any) {
-    console.error('🔴 ฝั่ง Agent พังจังหวะรับงานพิมพ์:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-
-app.get('/preview-label', async (req, res) => {
+app.post('/preview-label', async (req, res) => {
 
   let mode = "view1";
+  const {
+    createdAt,
+    shift,
+    gradeName,
+    model,
+    size1,
+    diameter1,
+    reelno,
+    weight1,
+    status,
+    remark
+  } = req.body;
+
+  let savedPdfPath
 
   if(mode != "view"){
     try {
         // const { rollNo, grade, size, weight, diameter, date } = req.body;
-        const rollNo = "226002624";
-        const grade = "CF150F";
-        const size = "84";
-        const weight = "1,768";
-        const diameter = "48";
-        const date = "11/01/2026";
+        const rollNo = reelno;
+        const grade = gradeName;
+        const size = size1;
+        const weight = weight1;
+        const diameter = diameter1;
+        const date = createdAt;
         
         // 1. เจนบาร์โค้ดสตริงก่อน
         const barcodeString = await generateBarcode(rollNo);
 
         // 2. สั่งผลิต PDF ลงดิสก์เครื่องจักรดื้อๆ เลยค่ะ
-        const savedPdfPath = await generateLabelPdf({
+        savedPdfPath = await generateLabelPdf({
             rollNo, grade, size, weight, diameter, date,
             barcodeImg: barcodeString
         });
 
-        // await pt.print(savedPdfPath, {
-        //     // 🛡️ คอนฟิกเสริมดักทางความเพี้ยน:
-        //     // หากหน้างานต้องการล็อกชื่อเครื่องปริ้นต์เจาะจง ให้เปิดคอมเมนต์บรรทัดด้านล่างนี้แล้วใส่ชื่อลงไปค่ะ
-        //     // printer: "ชื่อเครื่องพิมพ์_Asia_Kraft", 
-            
-        //     // สั่งให้พิมพ์ขนาดจริง ห้ามย่อ/ขยายสเกลตารางเด็ดขาด เพื่อความคมชัดของบาร์โค้ด
-        //     scale: "fit" 
-        // } as any);
+        await PrintService.printPdfFile(savedPdfPath);
+
+        try {
+        await fs.unlink(savedPdfPath);
+          console.log(`🗑️ [Cleanup] ลบไฟล์ชั่วคราวเรียบร้อย: ${savedPdfPath}`);
+        } catch (removeErr) {
+            // ดักจับไว้เพื่อไม่ให้กระทบ Flow หลัก กรณีไฟล์โดน lock หรือหาไม่เจอ
+            console.warn(`⚠️ ไม่สามารถลบไฟล์ชั่วคราวได้ (${savedPdfPath}):`, removeErr);
+        }
 
         // ตอบกลับบอกเว็บหลักพอร์ต 3000 ว่าเซฟไฟล์คาเครื่องเรียบร้อยแล้ว
         return res.status(200).json({
@@ -117,17 +116,17 @@ app.get('/preview-label', async (req, res) => {
       return res.status(500).json({ success: false, error: 'กระบวนการปั๊ม PDF ล่ม' });
     }
   }else{
-    const rollNo = "226002624"; // เลขม้วนจริงจาก Oracle
+    const rollNo = reelno; // เลขม้วนจริงจาก Oracle
       
       // ⚓ 1. สั่งรันฟังก์ชันเสกบาร์โค้ด (อย่าลืม await เพราะมันเป็น async)
       const barcodeString = await generateBarcode(rollNo);
       res.render('./../views/label-preview.ejs',{
           rollNo: rollNo,
-          grade: 'CF150F',
-          size: '84',
-          weight: '1,768',
-          diameter: '48',
-          date: '11/01/2026',
+          grade:gradeName,
+          size:size1,
+          weight:weight1,
+          diameter:diameter1,
+          date:createdAt,
           barcodeImg: barcodeString // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg 
       });
   }

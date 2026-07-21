@@ -5,6 +5,7 @@ const weighing_controller_1 = require("./weighing.controller");
 const router = (0, express_1.Router)();
 // วิ่งเข้าสเปกหน้าหลักการชั่งน้ำหนัก
 router.get('/', weighing_controller_1.getWeighingPage);
+router.post('/save', weighing_controller_1.saveWeighingController);
 router.get('/api/fetch-sub-rolls', async (req, res) => {
     try {
         // 1. แกะเลขใบสั่งผลิตที่หน้าบ้านส่งมาพร้อมกับ URL

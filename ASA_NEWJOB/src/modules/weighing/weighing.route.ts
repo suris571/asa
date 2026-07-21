@@ -1,11 +1,13 @@
 import { Request, Response, Router } from 'express';
 
-import { getWeighingPage } from './weighing.controller';
+import { getWeighingPage , saveWeighingController } from './weighing.controller';
 
 const router = Router();
 
 // วิ่งเข้าสเปกหน้าหลักการชั่งน้ำหนัก
 router.get('/', getWeighingPage);
+
+router.post('/save', saveWeighingController);
 
 router.get('/api/fetch-sub-rolls', async (req: Request, res: Response) => {
     try {

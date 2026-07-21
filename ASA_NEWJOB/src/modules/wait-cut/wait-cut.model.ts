@@ -415,27 +415,92 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
-            // 🔒 ขั้นตอนที่ 2: เตรียม Query สำหรับกระจายชุดย่อย (เพิ่มฟิลด์ set_no เข้าไปในคำสั่ง SQL)
-            const insertSplitQuery = `
-                INSERT INTO pl_wait_weighing (pl_order_id, pl_order_detail_id,split_set_id,model, weigh, status, note)
-                VALUES (:pl_order_id, :pl_order_detail_id, :split_set_id, null, null,null,null)
-            `; 
-            
-            await conn.execute(insertSplitQuery, { 
-                pl_order_id, 
-                pl_order_detail_id,
-                split_set_id
+            // 🔍 1. ดึงค่าใบมีด (over_size 1-4), ID ไซซ์ (size 1-4) และ ID เกรด (grade 1-4)
+            const queryDetail = `
+                SELECT 
+                    over_size1 AS BLAD1, over_size2 AS BLAD2, over_size3 AS BLAD3, over_size4 AS BLAD4,
+                    size1_id   AS SIZE1_ID, size2_id AS SIZE2_ID, size3_id AS SIZE3_ID, size4_id AS SIZE4_ID,
+                    grade1_id  AS GRADE1_ID, grade2_id AS GRADE2_ID, grade3_id AS GRADE3_ID, grade4_id AS GRADE4_ID
+                FROM pl_order_detail
+                WHERE id = :pl_order_detail_id
+            `;
+
+            const result = await conn.execute(queryDetail, { pl_order_detail_id }, {
+                outFormat: oracledb.OUT_FORMAT_OBJECT
             });
 
-            // ยืนยันกระบวนการ Transaction ทั้งหมด (Atomic Commit)
+            if (!result.rows || result.rows.length === 0) {
+                throw new Error(`ไม่พบข้อมูลรายละเอียดออเดอร์ ID: ${pl_order_detail_id}`);
+            }
+
+            const row: any = result.rows[0];
+
+            // 📦 2. จัดกลุ่มคู่ข้อมูลประจำแต่ละลูก (เก็บเป็น ID ทั้งหมด)
+            const rollsToInsert = [];
+
+            if (Number(row.BLAD1) > 0) {
+                rollsToInsert.push({ rollNo: 1, bladeSize: row.BLAD1, sizeId: row.SIZE1_ID, gradeId: row.GRADE1_ID });
+            }
+            if (Number(row.BLAD2) > 0) {
+                rollsToInsert.push({ rollNo: 2, bladeSize: row.BLAD2, sizeId: row.SIZE2_ID, gradeId: row.GRADE2_ID });
+            }
+            if (Number(row.BLAD3) > 0) {
+                rollsToInsert.push({ rollNo: 3, bladeSize: row.BLAD3, sizeId: row.SIZE3_ID, gradeId: row.GRADE3_ID });
+            }
+            if (Number(row.BLAD4) > 0) {
+                rollsToInsert.push({ rollNo: 4, bladeSize: row.BLAD4, sizeId: row.SIZE4_ID, gradeId: row.GRADE4_ID });
+            }
+
+            // 🛡️ ดักเซฟตี้กรณีไม่มีค่าใบมีด
+            if (rollsToInsert.length === 0) {
+                rollsToInsert.push({ rollNo: 1, bladeSize: null, sizeId: null, gradeId: null });
+            }
+
+            // 🔒 3. Prepared Statement บันทึกข้อมูลลง pl_wait_weighing
+            const insertQuery = `
+                INSERT INTO pl_wait_weighing (
+                    pl_order_id, 
+                    pl_order_detail_id, 
+                    split_set_id, 
+                    roll_no,
+                    blade_size, 
+                    size_id, 
+                    grade_id,
+                    model, weigh, status, note
+                ) VALUES (
+                    :pl_order_id, 
+                    :pl_order_detail_id, 
+                    :split_set_id, 
+                    :rollNo,
+                    :bladeSize, 
+                    :sizeId, 
+                    :gradeId,
+                    NULL, NULL, NULL, NULL
+                )
+            `; 
+
+            // 🚀 4. วนลูป INSERT รายลูก
+            for (const roll of rollsToInsert) {
+                await conn.execute(insertQuery, { 
+                    pl_order_id, 
+                    pl_order_detail_id,
+                    split_set_id,
+                    rollNo: roll.rollNo,
+                    bladeSize: roll.bladeSize,
+                    sizeId: roll.sizeId,
+                    gradeId: roll.gradeId
+                });
+            }
+
             await conn.commit();
+            console.log(`✅ บันทึกคิวรอชั่งน้ำหนักสำเร็จ: แตกออกมาทั้งหมด ${rollsToInsert.length} ลูก (เก็บค่า grade_id & size_id)`);
             return true;
 
         } catch (error) {
             if (conn) {
                 try { await conn.rollback(); } catch (rbErr) { console.error("⚠️ Rollback ล้มเหลว:", rbErr); }
             }
-            console.error("❌ เกิดข้อผิดพลาดในระดับ Model [createOrderSplitSet]:", error);
+            console.error("❌ เกิดข้อผิดพลาดในระดับ Model [createOrderWeighing]:", error);
             throw error;
         } finally {
             if (conn) {

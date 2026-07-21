@@ -102,13 +102,13 @@ export class SerialService {
                 }
             }
             const finalWeight = parseFloat(simulatedWeight.toFixed(2));
-            console.log(`🤖 [Mock ส่งออก] ตัวเลขจำลองหน้าร้าน: ${finalWeight} kg`);
+            // console.log(`🤖 [Mock ส่งออก] ตัวเลขจำลองหน้าร้าน: ${finalWeight} kg`);
             // พ่นออกท่อ Socket ชื่อเดียวกันเป๊ะๆ เพื่อให้หน้าเว็บแยกไม่ออกว่านี่คือของจริงหรือของปลอม!
             this.ioInstance.emit('weight_stream', {
                 weight: finalWeight,
                 stable: finalWeight > 0 && Math.random() > 0.7 // สุ่มสถานะนิ่งนิ่ง
             });
-        }, 500); // พ่นรัวๆ ทุก 0.5 วินาทีสะใจสายสตรีม
+        }, 5000); // พ่นรัวๆ ทุก 0.5 วินาทีสะใจสายสตรีม
     }
 }
 //# sourceMappingURL=serial-service.js.map

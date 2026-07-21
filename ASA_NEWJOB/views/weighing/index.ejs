@@ -89,6 +89,7 @@
       <div class="card card-primary card-outline shadow-sm">
         <div class="card-body p-3">
           <form id="weighingForm">
+            <input type="hidden" id="id" name="id" value="<%= (nextData && nextData.id) ? nextData.id : '' %>">
             <div class="row">
               <%- include('components/step1-order') %>
               <%- include('components/step2-weight') %>
@@ -153,7 +154,7 @@
         $('#weighingForm').on('submit', async function(e) {
             e.preventDefault()
 
-            const selectedStatus = $('input[name="qualityStatus"]:checked').val();
+            const selectedStatus = $('input[name="status"]:checked').val();
             const remarkInput = $('#remark'); // ดึง Object ช่องหมายเหตุมาถือไว้
             const remarkValue = remarkInput.val().trim();
             if (selectedStatus === 'HOLD' && remarkValue === '') {
@@ -176,8 +177,31 @@
             $(this).serializeArray().forEach(item => {
                 formData[item.name] = item.value;
             });
+            
+            try {
+                // 3. ยิงไปบันทึก Database ที่ Backend หลัก (พอร์ต 3000)
+                const response = await $.ajax({
+                    url: '/weighing/save',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(formData)
+                });
 
-            let saveDB = await sendDataToPrint({ url: '/preview-label', body: formData });
+                if (response.success) {
+                    console.log("✅ บันทึก DB เรียบร้อยแล้ว!");
+                    
+                    // 💡 ตรงนี้รอเอาลอจิกยิงหาพอร์ต 4000 (Agent Print) มาเสียบต่อในขั้นตอนถัดไป
+                    alert("บันทึกข้อมูลเรียบร้อยแล้ว!");
+                } else {
+                    alert("❌ เกิดข้อผิดพลาด: " + response.message);
+                }
+
+            } catch (err) {
+                console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
+                alert("เกิดข้อผิดพลาด ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+            }
+
+            let saveDB = await sendDataToPrint({ url: 'http://localhost:4000/preview-label', body: formData });
 
         });
 
@@ -289,28 +313,56 @@
 
 
 
-        socket.on('next_roll_ready_for_weighing', function(nextRoll) {//รับค่าจาก sever ม้วนถัดไป
-            console.log("⚡ [เรียลไทม์]: เครื่องตัดส่งสัญญาณม้วนใหม่มาจ่อเครื่องชั่ง!", nextRoll);
-            if (nextRoll) {
-                $('#orderNo').val(nextRoll.order_no);
-                $('#formRollNo').val(nextRoll.roll_no);
-                $('#grade').val(nextRoll.grade);
-                $('#version').val(nextRoll.version);
-                $('#size').val(nextRoll.size);
-                $('#diameter').val(nextRoll.diameter || '-');
+        // socket.on('next_roll_ready_for_weighing', function(nextRoll) {//รับค่าจาก sever ม้วนถัดไป
+        //     console.log("⚡ [เรียลไทม์]: เครื่องตัดส่งสัญญาณม้วนใหม่มาจ่อเครื่องชั่ง!", nextRoll);
+        //     if (nextRoll) {
+        //         $('#orderNo').val(nextRoll.order_no);
+        //         $('#formRollNo').val(nextRoll.roll_no);
+        //         $('#grade').val(nextRoll.grade);
+        //         $('#version').val(nextRoll.version);
+        //         $('#size').val(nextRoll.size);
+        //         $('#diameter').val(nextRoll.diameter || '-');
                 
-                // แอบแจ้งเตือนพนักงานที่หน้าจอเล็กน้อยว่าข้อมูลเปลี่ยนแล้ว
-                console.log(`🔔 เปลี่ยนหน้าฟอร์มเป็นม้วนย่อย: ${nextRoll.roll_no} อัตโนมัติ`);
-            }
-        });
+        //         // แอบแจ้งเตือนพนักงานที่หน้าจอเล็กน้อยว่าข้อมูลเปลี่ยนแล้ว
+        //         console.log(`🔔 เปลี่ยนหน้าฟอร์มเป็นม้วนย่อย: ${nextRoll.roll_no} อัตโนมัติ`);
+        //     }
+        // });
 
 
         // =========================================================
         // 📡 ฝั่งที่ 2: ดักจับสตรีมน้ำหนักดิจิทัลจาก Agent (พอร์ต 4000)
         // =========================================================
+        
+        socket.on('queue_updated', function(response) {
+            console.log("⚡ ได้รับข้อมูลคิวถัดไปจาก Socket:", response);
+
+            if (response && response.data) {
+                // 🎯 มีคิวถัดไป ➔ นำข้อมูลจาก Socket ยัดใส่ Input ทันที (0 HTTP Request)
+                const nextData = response.data;
+
+                $('#weighingId').val(nextData.id);
+                $('#orderNoInput').val(nextData.orderNo);
+                $('#rollNoInput').val(nextData.rollNo);
+                $('#gradeInput').val(nextData.gradeName);
+                $('#sizeInput').val(nextData.sizeName);
+                $('#cutLengthInput').val(nextData.cutLength);
+                
+                // ล้างช่องกรอกรอชั่งลูกใหม่
+                $('#weightInput').val('');
+                $('#remark').val('');
+                
+                // คืนค่า CSS ให้ช่อง Remark (กรณีโดนกรอบแดงค้างไว้)
+                $('#remark').css({ 'border-color': '', 'background-color': '', 'box-shadow': '' });
+
+            } else {
+                // 🛑 ไม่มีคิวเหลือในระบบแล้ว
+                alert('🎉 ชั่งน้ำหนักครบทุกคิวในระบบแล้วครับ!');
+                resetFormToEmpty();
+            }
+        });
+        
         socketScale.on('connect', function() {
             console.log('🟢 ท่อหน้าเว็บจิ้มสตรีมน้ำหนักจาก Agent สำเร็จ!');
-            // เผื่อกัปตันอยากเอาข้อความไปโชว์ที่หัวการ์ดเพิ่มเติมเพื่อความชัวร์ของพนักงานได้ค่ะ
         });
 
         // 🧠 หัวใจสำคัญ: ดักรับเหตการณ์น้ำหนักวิ่งไหลมาจากเครื่องชั่งผ่านสาย Socket

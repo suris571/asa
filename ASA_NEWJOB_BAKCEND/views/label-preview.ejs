@@ -78,17 +78,17 @@
       <table class="data-table">
         <tr>
           <td class="col-label" >GRADE</td>
-          <td class="col-value">CF150F</td>
+          <td class="col-value"><%= (grade) ? grade : '' %></td>
           <td class="col-unit">GSM.</td>
         </tr>
         <tr>
           <td class="col-label">SIZE</td>
-          <td class="col-value">84</td>
+          <td class="col-value"><%= (size) ? size : '' %></td>
           <td class="col-unit">IN.</td>
         </tr>
         <tr>
           <td class="col-label">WEIGHT</td>
-          <td class="col-value">1,768</td>
+          <td class="col-value"><%= (weight) ? weight : '' %></td>
           <td class="col-unit">KG.</td>
         </tr>
         <tr>
@@ -96,10 +96,10 @@
             <table style="width: 100%; border-collapse: collapse; border: none;">
               <tr>
                 <td class="col-label" style="border: none; border-right: 1px solid #000; width: 50%; padding: 8px;">
-                  DIAMETER <span style="font-size: 28px; float: right;">48</span>
+                  DIAMETER <span style="font-size: 28px; float: right;"><%= (diameter) ? diameter : '' %></span>
                 </td>
                 <td class="col-label" style="border: none; padding: 8px;">
-                  DATE <span style="font-size: 24px; float: right;">11/01/2026</span>
+                  DATE <span style="font-size: 24px; float: right;"><%= (date) ? date : '' %></span>
                 </td>
               </tr>
             </table>

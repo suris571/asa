@@ -10,7 +10,6 @@ const __dirname = path.dirname(__filename);
 export async function generateLabelPdf(data) {
     let browser;
     try {
-        // 3. ท่อนนี้จะกลับมาทำงานได้ฉลุยทันทีเพราะตอนนี้คอมพิวเตอร์รู้จัก __dirname แล้วค่ะกัปตัน!
         const outputDir = path.join(__dirname, '../../c_labels');
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
@@ -18,19 +17,23 @@ export async function generateLabelPdf(data) {
         const templatePath = path.join(__dirname, '../../views/label-preview.ejs');
         const htmlContent = await ejs.renderFile(templatePath, data);
         console.log(`⏳ [Agent] กำลังติดเครื่องยนต์บราวเซอร์จำลองเพื่อเรนเดอร์ PDF...`);
+        // 🎯 1. ซ่อน Window ของ Process ทั้งหมด
         process.env.ELECTRON_HIDE_INTERNAL_WINDOWS = "true";
+        // 🎯 2. ปรับค่า puppeteer.launch ซ่อน Console / Command Window เบื้องหลัง
         browser = await puppeteer.launch({
-            headless: true,
-            pipe: true, // 👈 ใช้คู่คอมโบ Pipe ตัวเดิมเพื่อเปลี่ยนท่อสัญญาณความเร็วสูง
+            headless: 'shell', // 👈 เปลี่ยนจาก true เป็น 'shell' (โหมดประมวลผลเบื้องหลังเบาลงและไม่สร้าง GUI Window)
+            // pipe: true,       // 👈 แนะนำให้ปิด pipe ไว้ก่อน เพราะ pipe บน Windows บางครั้งบังคับเปิด console
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--no-first-run',
-                '--disable-extensions'
+                '--disable-extensions',
+                '--hide-scrollbars',
+                '--mute-audio',
+                '--background-color=#ffffff'
             ]
         });
         const page = await browser.newPage();
-        // 🟢 ใช้ท่าคอมโบพรีวิวแบบไม่มีวันแดงกะ TypeScript (จากช็อตที่แล้ว)
         const htmlDataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`;
         await page.goto(htmlDataUrl, { waitUntil: 'networkidle0' });
         const pdfPath = path.join(outputDir, `LABEL_${data.rollNo}.pdf`);
