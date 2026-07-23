@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getIO = exports.broadcastNextRollToWeighingStation = exports.initSocket = void 0;
+exports.getIO = exports.broadcastNextRollToWeighingStation = exports.FnNextCutSplitSet = exports.FnNextRoll = exports.initSocket = void 0;
 const socket_io_1 = require("socket.io");
 const wait_cut_model_1 = require("./modules/wait-cut/wait-cut.model");
 const weighing_model_1 = require("./modules/weighing/weighing.model");
@@ -74,6 +74,9 @@ const initSocket = (httpServer) => {
             console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
             try {
                 await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
+                await (0, exports.FnNextCutSplitSet)();
+                await (0, exports.FnNextRoll)();
+                console.log("ddddddddddddddddddddddddddddddd");
                 waitCutNamespace.emit('queue_structure_changed', { success: true });
             }
             catch (error) {
@@ -90,20 +93,10 @@ const initSocket = (httpServer) => {
     const weighingNamespace = io.of('/socket/weighing');
     weighingNamespace.on('connection', async (socket) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้าชั่งน้ำหนัก] เชื่อมต่อเข้ามา ID:', socket.id);
-        try {
-            // 📡 ปล่อยของ: ดึงค่าม้วนล่าสุดมาพ่นออกท่อทันทีเมื่อพนักงานเปิดจอนี้ขึ้นมา
-            // (คืนนี้เราจำลอง Object ตัวแปรส่งไปเทสก่อนค่ะ)
-            const latestRoll = await weighing_model_1.WeighingModel.getLatestReadySubRoll();
-            latestRoll.roll_no = latestRoll.roll_no + 1;
-            if (latestRoll) {
-                // ส่งตรงเจาะจงไปที่เบราว์เซอร์เครื่องที่เพิ่งต่อเข้ามาตัวเดียว
-                socket.emit('next_roll_ready_for_weighing', latestRoll);
-                console.log(`📡 [Socket ห้องชั่ง]: พ่นข้อมูลม้วนล่าสุด [${latestRoll.roll_no}] ไปรอที่หน้าฟอร์มแล้ว`);
-            }
-        }
-        catch (err) {
-            console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูลส่งให้หน้าชั่งน้ำหนัก:', err);
-        }
+        socket.on('get_next_roll', async () => {
+            console.log('socket');
+            (0, exports.FnNextRoll)();
+        });
         socket.on('disconnect', () => {
             console.log('🔴 พนักงานปิดหน้าจอชั่งน้ำหนัก ID:', socket.id);
         });
@@ -124,17 +117,6 @@ const initSocket = (httpServer) => {
                 socket.emit('update_queue_table', { success: false, error: error.message });
             }
         });
-        socket.on('swapQueue', async (data) => {
-            const { orderId, current_que, aboveOrderId, above_que } = data;
-            console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
-            try {
-                await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
-                waitCutNamespace.emit('queue_structure_changed', { success: true });
-            }
-            catch (error) {
-                console.error("เกิดข้อผิดพลาดในการสลับคิว:", error);
-            }
-        });
         socket.on('disconnect', () => {
             console.log('🔴 พนักงานปิดหน้ารอตัด ID:', socket.id);
         });
@@ -142,6 +124,50 @@ const initSocket = (httpServer) => {
     return io;
 };
 exports.initSocket = initSocket;
+const FnNextRoll = async () => {
+    try {
+        const data = await weighing_model_1.WeighingModel.getNextWeighing();
+        console.log("📦 [FnNextRoll] ดึงข้อมูลม้วนถัดไปสำเร็จ:", data);
+        const io = (0, exports.getIO)();
+        if (io) {
+            // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
+            io.of('/socket/weighing').emit('queue_updated', { success: true, data: data });
+            console.log('📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย');
+        }
+        else {
+            console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');
+        }
+    }
+    catch (error) {
+        console.error("❌ [FnNextRoll Error]:", error);
+        const io = (0, exports.getIO)();
+        if (io) {
+            io.of('/socket/weighing').emit('queue_updated', { success: false, error: error.message });
+        }
+    }
+};
+exports.FnNextRoll = FnNextRoll;
+const FnNextCutSplitSet = async () => {
+    try {
+        const io = (0, exports.getIO)();
+        if (io) {
+            // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
+            io.of('/socket/wait-cut/split-cut-set').emit('queue_structure_changed', { success: true });
+            console.log('📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย');
+        }
+        else {
+            console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');
+        }
+    }
+    catch (error) {
+        console.error("❌ [FnNextRoll Error]:", error);
+        const io = (0, exports.getIO)();
+        if (io) {
+            io.of('/socket/weighing').emit('queue_updated', { success: false, error: error.message });
+        }
+    }
+};
+exports.FnNextCutSplitSet = FnNextCutSplitSet;
 const broadcastNextRollToWeighingStation = (nextRollData) => {
     if (!io) {
         console.error("⚠️ ไม่สามารถปล่อยสัญญาณได้เนื่องจากระบบ Socket ยังไม่ถูกเปิดใช้งานค่ะกัปตัน!");

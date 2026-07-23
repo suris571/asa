@@ -159,6 +159,21 @@
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     text-align: center;
 }
+
+#qcReelTable tbody tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+#qcReelTable tbody tr:hover {
+    background-color: #e2e8f0 !important; /* สีเทาอ่อนเวลาเมาส์ชี้ */
+}
+
+/* สีไฮไลต์แถวที่ถูกกดเลือกแล้ว */
+#qcReelTable tbody tr.selected-row {
+    background-color: #ffeba8 !important; /* สีเหลืองไฮไลต์ */
+    font-weight: bold;
+}
 </style>
 
 <div id="pageLoader" class="loading-overlay" style="display: none;">
@@ -185,7 +200,7 @@
       
         <div class="card">
         <div class="card-header bg-navy">
-            <h3 class="card-title font-weight-bold">📋 ระบบจัดการคิวงานสั่งตัดและตั้งค่าใบมีด</h3>
+            <h3 class="card-title font-weight-bold">📋 QC ปิด Reel</h3>
             <div class="card-tools">
             <span id="socketStatus" class="badge bg-warning text-dark">🟡 กำลังเตรียมเชื่อมต่อ...</span>
             </div>
@@ -221,7 +236,11 @@
                         <th colspan="4" class="text-center bg-gray-light">ตั้งค่าใบมีด</th>
                         <th colspan="4" class="text-center bg-gray-light">Size นิ้ว</th>
                         <th rowspan="2" class="align-middle">ความยาว</th>
-                        <th colspan="4" class="text-center bg-navy">ปุ่มกด</th>
+                        <th rowspan="2" class="align-middle">วันที่เสร็จ</th>
+                        <th rowspan="2" class="align-middle">เวลา</th>
+                        <th rowspan="2" class="align-middle">reel</th>
+                        <th rowspan="2" class="align-middle">ปุ่มกด</th>
+                        <th rowspan="2" class="align-middle">หมายเหตุ</th>
                     </tr>
                     <tr>
                         <!-- grade -->
@@ -230,24 +249,25 @@
                         <th>1</th><th>2</th><th>3</th><th>4</th>
                         <!-- Size นิ้ว -->
                         <th>1</th><th>2</th><th>3</th><th>4</th>
-                        <!-- ปุ่มกด -->
-                        <th class="bg-light text-dark">เสร็จสิ้น</th>
-                        <th class="bg-light text-dark">HOLD</th>
-                        <th class="bg-light text-dark">ปลด HOLD</th>
-                        <th class="bg-light text-dark">Reset</th>
                     </tr>
                 </thead>
                 <tbody>
                     
                 </tbody>
             </table>
+
+            <div class="mt-3 text-right">
+                <button type="button" class="btn btn-success font-weight-bold px-4" id="btnSaveAllRemark">
+                    <i class="fas fa-save mr-1"></i> บันทึก
+                </button>
+            </div>
         </div>
         </div>
 
     </div>
   </section>
 </div>
-
+<%- include('./modal_qc') %>
 <%- include('../partials/footer') %>
 
 <script src="/plugins/datatables/jquery.dataTables.min.js"></script>
@@ -261,7 +281,7 @@
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
   let updateTimeout = null;
-  const socket = io('/socket/wait-cut/split-cut-set'); 
+  const socket = io('/socket/wait-cut/qc-close-reel'); 
 
   // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
   socket.off('connect');
@@ -351,45 +371,35 @@
                     return data ? Number(data).toLocaleString() : '';
                 }
             },
-            // --- คอลัมน์ปุ่มกดจัดการรายการเซ็ตย่อย ---
-            {
-                "data": null,
-                "render": function(data, type, row) {
-                    // 🔍 ถ้า status เป็น 5 (เสร็จสิ้นแล้ว) ไม่ต้องแสดงปุ่ม
-                    if (row.cut_status_id == 5) {
-                        return `<span class="badge badge-success btn-sm">เสร็จสิ้น</span>`; 
-                        // 💡 หรือถ้าไม่อยากแสดงอะไรเลย ให้ return "" ลอยๆ ได้เลยครับ
-                    }
-
-                    // 🟢 ถ้ายังไม่เสร็จ แสดงปุ่มกดปกติ
-                    return `<button class="btn btn-sm btn-success font-weight-bold btn-block" 
-                                onclick="actionSetSuccess(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
-                                เสร็จสิ้น
-                            </button>`;
-                }
-            },
-            {
-                "data": null,
-                "render": function(data, type, row) {
-                    // ปุ่ม HOLD
-                    return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" 
-                            onclick="actionSetHold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">HOLD</button>`;
-                }
-            },
-            {
-                "data": null,
-                "render": function(data, type, row) {
-                    // ปุ่ม ปลด HOLD
-                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block" 
-                            onclick="actionSetUnhold(${row.split_set_id})">ปลด HOLD</button>`;
-                }
-            },
+            
+            { "data": "date", "defaultContent": "" },
+            { "data": "time", "defaultContent": "" },
+            { "data": "reel_no", "defaultContent": "" },
             {
                 "data": null,
                 "render": function(data, type, row) {
                     // ปุ่ม Reset
                     return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" 
-                            onclick="actionSetReset(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">Reset</button>`;
+                            onclick="actionQC(${row.split_set_id})">QC</button>`;
+                }
+            },
+            {
+                data: "remark",
+                defaultContent: "",
+                render: function (data, type, row) {
+                    // 🎯 ถ้าเป็นการ Render เพื่อแสดงผลในตาราง (type === 'display')
+                    if (type === 'display') {
+                        const remarkValue = data ? data : '';
+                        
+                        // 🎯 คาย <input type="text"> ออกมา พร้อมใส่ value และ data-id (ดึงจาก row.id)
+                        return `<input type="text" 
+                                    class="form-control form-control-sm remark-input" 
+                                    data-id="${row.split_set_id}" 
+                                    value="${remarkValue}" 
+                                    placeholder="ระบุหมายเหตุ...">`;
+                    }
+                    // ถ้าเป็นประเภทอื่น (เช่น sort, filter) ให้คายค่า data ปกติออกไป
+                    return data;
                 }
             }
         ],
@@ -431,7 +441,59 @@
         $('#searchOrderNo').val('');
         fetchFilteredQueue(); 
     });
-  });
+
+
+    $('#btnSaveAllRemark').on('click', async function() {
+        const payloadList = [];
+
+        // 🎯 1. วนลูปตรวจทุกช่อง .remark-input ในตาราง (รวมถึงหน้าที่โดน Pagination ซ่อนอยู่ถ้าใช้ DataTables)
+        $('.remark-input').each(function() {
+            const input = $(this);
+            const id = input.data('id');
+            const remarkVal = input.val().trim();
+
+            // 🎯 2. กรองเอาเฉพาะแถวที่มีการกรอกข้อความ (ไม่เป็นค่าว่าง)
+            if (remarkVal !== '') {
+                payloadList.push({
+                    id: id,
+                    remark: remarkVal
+                });
+            }
+        });
+
+        console.log("📤 รายการที่จะส่งไปอัปเดต:", payloadList);
+        if (payloadList.length === 0) {
+            alert('กรุณากรอกหมายเหตุอย่างน้อย 1 รายการก่อนกดบันทึกครับ');
+            return;
+        }
+        try {
+            // 🎯 4. ส่ง Array ก้อนนี้ไปหา Backend (พอร์ต 3000)
+            const response = await $.ajax({
+                url: '/wait-cut/qc-close-reel/save-remark',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ items: payloadList })
+            });
+
+            if (response.success) {
+                alert(`✅ บันทึกหมายเหตุสำเร็จ ${payloadList.length} รายการ!`);
+                // โหลดตารางใหม่ หรืออัปเดตสถานะหน้าจอ
+            } else {
+                alert('❌ เกิดข้อผิดพลาด: ' + response.message);
+            }
+
+        } catch (err) {
+            console.error("💥 ยิงอัปเดต Remark ล้มเหลว:", err);
+            alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+        }
+    });
+
+
+
+
+
+
+  }); //ready function
   
   function fetchFilteredQueue() {
       const filterParams = {
@@ -442,109 +504,18 @@
   }
 
   // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionSetSuccess(split_set_id,pl_order_id,pl_order_detail_id) { 
-    // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
-    showLoader(); 
+  function actionQC(split_set_id) {
+        console.log("ddddddddddddd")
+        currentTargetId = split_set_id;
+        selectedRowData = null;
+        $('#btnModalConfirm').prop('disabled', true); // ปิดปุ่มตกลงไว้ก่อนจนกว่าจะเลือกแถว
+        
+        // โหลดข้อมูล Reel ครั้งแรกใส่ Modal
+        // loadQcReelData();
 
-    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
-
-    // 2. ยิง HTTP POST API ไปหลังบ้าน
-    fetch('/wait-cut/start-weighing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            split_set_id: split_set_id,
-            pl_order_id: pl_order_id,
-            pl_order_detail_id: pl_order_detail_id,
-        })
-    })
-    .then(response => response.json())
-    .then(res => {
-        if (res.success) {
-            // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
-            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
-        } else {
-            hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'สร้าง record ได้'}`);
-        }
-    })
-    .catch(error => {
-        hideLoader();
-        console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
-    });
+        // เปิด Modal เด้งขึ้นมา
+        $('#qcReelModal').modal('show');
   }
-
-  function actionSetHold(split_set_id,pl_order_id,pl_order_detail_id) { 
-    // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
-    showLoader(); 
-
-    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
-
-    // 2. ยิง HTTP POST API ไปหลังบ้าน
-    fetch('/wait-cut/start-weighing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            split_set_id: split_set_id,
-            pl_order_id: pl_order_id,
-            pl_order_detail_id: pl_order_detail_id,
-            type:"hold"
-        })
-    })
-    .then(response => response.json())
-    .then(res => {
-        if (res.success) {
-            // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
-            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
-        } else {
-            hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'สร้าง record ได้'}`);
-        }
-    })
-    .catch(error => {
-        hideLoader();
-        console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
-    });
-  }
-  
-  function actionSetReset(split_set_id,pl_order_id,pl_order_detail_id) { 
-    // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
-    showLoader(); 
-
-    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
-
-    // 2. ยิง HTTP POST API ไปหลังบ้าน
-    fetch('/wait-cut/start-weighing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            split_set_id: split_set_id,
-            pl_order_id: pl_order_id,
-            pl_order_detail_id: pl_order_detail_id,
-            type:"reset"
-        })
-    })
-    .then(response => response.json())
-    .then(res => {
-        if (res.success) {
-            // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
-            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
-        } else {
-            hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว`);
-        }
-    })
-    .catch(error => {
-        hideLoader();
-        console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
-    });
-  }
-
-  
-
 
     function showLoader() {
         // ล็อกหน้าจอทันที พนักงานจะคลิกปุ่มใดๆ ในตารางซ้ำไม่ได้เลย

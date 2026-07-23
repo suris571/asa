@@ -1,5 +1,6 @@
 // src/models/wait-cut.model.ts
 import { getConnection } from "../../database";
+import { WeighingModel } from './../weighing/weighing.model';
 import oracledb from "oracledb";
 
 // ⚓ 1. อัปเดตอินเตอร์เฟสให้รองรับ queue_no จากเบสจริง
@@ -272,7 +273,7 @@ export class WaitCutModel {
             // 🔒 ขั้นตอนที่ 2: เตรียม Query สำหรับกระจายชุดย่อย (เพิ่มฟิลด์ set_no เข้าไปในคำสั่ง SQL)
             const insertSplitQuery = `
                 INSERT INTO pl_cut_split_set (pl_order_id, pl_order_detail_id, set_no, cut_length, status)
-                VALUES (:orderId, :orderDetailId, :setNo, 0, 1)
+                VALUES (:orderId, :orderDetailId, :setNo, 0, 2)
             `; 
 
             // 🚀 วนลูปยัดข้อมูลลงฐานข้อมูลตามจำนวนเซ็ต พร้อมคำนวณค่า String เศษส่วน
@@ -350,6 +351,9 @@ export class WaitCutModel {
             if (orderNo && orderNo.trim() !== '') {
                 sql += ` AND UPPER(order_no) LIKE :orderNo`;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
+                sql += ` AND split_status_id IN (2, 4, 5) `;
+            }else{
+                sql += ` AND split_status_id = 2`;
             }
 
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย (1/6, 2/6, ...)
@@ -456,7 +460,16 @@ export class WaitCutModel {
                 rollsToInsert.push({ rollNo: 1, bladeSize: null, sizeId: null, gradeId: null });
             }
 
-            // 🔒 3. Prepared Statement บันทึกข้อมูลลง pl_wait_weighing
+            // 🔄 3. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น) ก่อนสร้างคิวชั่งน้ำหนัก
+            const updateStatusQuery = `
+                UPDATE PL_CUT_SPLIT_SET 
+                SET status = 5 
+                WHERE id = :split_set_id
+            `;
+            await conn.execute(updateStatusQuery, { split_set_id });
+            console.log(`📌 [Model] อัปเดตสถานะ PL_CUT_SPLIT_SET ID: ${split_set_id} เป็น 5 เรียบร้อยแล้ว`);
+
+            // 🔒 4. Prepared Statement บันทึกข้อมูลลง pl_wait_weighing
             const insertQuery = `
                 INSERT INTO pl_wait_weighing (
                     pl_order_id, 
@@ -466,7 +479,7 @@ export class WaitCutModel {
                     blade_size, 
                     size_id, 
                     grade_id,
-                    model, weigh, status, note
+                    model, weigh, status, remark
                 ) VALUES (
                     :pl_order_id, 
                     :pl_order_detail_id, 
@@ -479,7 +492,7 @@ export class WaitCutModel {
                 )
             `; 
 
-            // 🚀 4. วนลูป INSERT รายลูก
+            // 🚀 5. วนลูป INSERT รายลูก
             for (const roll of rollsToInsert) {
                 await conn.execute(insertQuery, { 
                     pl_order_id, 
@@ -492,6 +505,7 @@ export class WaitCutModel {
                 });
             }
 
+            // 💾 Commit ทุกอย่างพร้อมกัน (ทั้ง Update Status 5 และ Insert คิวชั่ง)
             await conn.commit();
             console.log(`✅ บันทึกคิวรอชั่งน้ำหนักสำเร็จ: แตกออกมาทั้งหมด ${rollsToInsert.length} ลูก (เก็บค่า grade_id & size_id)`);
             return true;
@@ -510,6 +524,205 @@ export class WaitCutModel {
                     console.error("⚠️ ไม่สามารถปิด Database Connection ได้:", closeError);
                 }
             }
+        }
+    }
+
+    static async ResetCutSlitSet(split_set_id: number, pl_order_id: number, pl_order_detail_id: number): Promise<boolean> {
+        // 1. ตรวจสอบเงื่อนไขเบื้องต้นก่อนดึง Connection
+        const canReset: boolean = await WeighingModel.CheckResetSplitSet(split_set_id);
+
+        // ถ้าไม่อนุญาตให้ Reset (เช่น data เป็น false / null) ให้รีเทิร์นออกไปได้เลย ไม่ต้องต่อ DB
+        if (!canReset) {
+            console.log(`⚠️ [Model] ไม่สามารถ Reset ได้สำหรับ split_set_id: ${split_set_id}`);
+            return false;
+        }
+
+        let conn;
+
+        try {
+            conn = await getConnection();
+
+            const updateCurrentRow = `
+                UPDATE PL_CUT_SPLIT_SET 
+                SET status = 2 
+                WHERE ID = :id
+            `;
+
+            await conn.execute(updateCurrentRow, { id: split_set_id });
+            await conn.commit();
+
+            console.log(`✅ [Model] Reset สถานะ PL_CUT_SPLIT_SET ID: ${split_set_id} เป็น 2 สำเร็จ`);
+            return true;
+
+        } catch (error) {
+            // 🚨 ถ้าระหว่างการ Update เกิดข้อผิดพลาด ให้สั่ง Rollback ทันที
+            if (conn) {
+                try { 
+                    await conn.rollback(); 
+                } catch (rbErr) { 
+                    console.error("⚠️ Rollback ล้มเหลว:", rbErr); 
+                }
+            }
+            console.error("❌ เกิดข้อผิดพลาดในระดับ Model [ResetCutSlitSet]:", error);
+            throw error; // ส่ง Error ให้ Controller ไปจัดการต่อ
+
+        } finally {
+            // 🔒 คืน/ปิด Connection เสมอไม่ว่าจะสำเร็จหรือเกิด Error
+            if (conn) {
+                try {
+                    await conn.close();
+                } catch (closeError) {
+                    console.error("⚠️ ไม่สามารถปิด Database Connection ได้:", closeError);
+                }
+            }
+        }
+    }
+
+     static async getQcCloseReel(orderNo?: string | null): Promise<any[]> {
+        let conn;
+
+        try {
+            conn = await getConnection();
+
+            // 🎯 Query ข้อมูลจาก View รวม 3 ตาราง
+            let sql = `
+                SELECT 
+                    split_set_id        AS SPLIT_SET_ID,
+                    pl_order_id         AS PL_ORDER_ID,
+                    pl_order_detail_id  AS PL_ORDER_DETAIL_ID,
+                    order_no            AS ORDER_NO,
+                    order_item          AS ORDER_ITEM,
+                    grade1_name         AS GRADE1_NAME,
+                    grade2_name         AS GRADE2_NAME,
+                    grade3_name         AS GRADE3_NAME,
+                    grade4_name         AS GRADE4_NAME,
+                    set_no              AS SET_NO,
+                    blad1               AS BLAD1,
+                    blad2               AS BLAD2,
+                    blad3               AS BLAD3,
+                    blad4               AS BLAD4,
+                    size_1              AS SIZE_1,
+                    size_2              AS SIZE_2,
+                    size_3              AS SIZE_3,
+                    size_4              AS SIZE_4,
+                    cut_length          AS CUT_LENGTH,
+                    split_status_id     AS CUT_STATUS_ID,
+                    queue_no            AS QUEUE_NO,
+                    reel_no,
+                    remark,
+                    finish_at,
+                    TO_CHAR(finish_at, 'DD/MM/YYYY')   AS "date",
+                    TO_CHAR(finish_at, 'HH24:MI')   AS "time",
+                    order_item
+                FROM pl_cut_split_set_view
+                WHERE 1=1
+                AND split_status_id = 5
+                `;
+
+            const binds: any = {};
+
+            // 🔍 รับและกรองเฉพาะ orderNo ตัวเดียวตามคำสั่งกัปตัน
+            if (orderNo && orderNo.trim() !== '') {
+                sql += ` AND UPPER(order_no) LIKE :orderNo`;
+                binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
+            }
+
+            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย (1/6, 2/6, ...)
+            sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+
+            const result = await conn.execute(sql, binds, {
+                outFormat: oracledb.OUT_FORMAT_OBJECT,
+            });
+
+            const dataList: any[] = [];
+            let i = 0;
+            if (result.rows) {
+                for (const row of (result.rows as any[])) { 
+                    i++;
+                    dataList.push({
+                        number: i,
+                        order_no: row.ORDER_NO,
+                        orderItem: row.ORDER_ITEM,
+                        grade1: row.GRADE1_NAME,
+                        grade2: row.GRADE2_NAME,
+                        grade3: row.GRADE3_NAME,
+                        grade4: row.GRADE4_NAME,
+                        set: row.SET_NO,
+                        blad1: row.BLAD1,
+                        blad2: row.BLAD2,
+                        blad3: row.BLAD3,
+                        blad4: row.BLAD4,
+                        size1: row.SIZE_1,
+                        size2: row.SIZE_2,
+                        size3: row.SIZE_3,
+                        size4: row.SIZE_4,
+                        lenght: row.CUT_LENGHT,
+                        status: row.STATUS,
+                        que: row.QUEUE_NO,
+                        cut_status_id: row.CUT_STATUS_ID,
+                        pl_order_id: row.PL_ORDER_ID,
+                        pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
+                        split_set_id: row.SPLIT_SET_ID,
+                        date:row.DATE,
+                        time:row.TIME,
+                        remark:row.REMARK
+                    });
+                }
+            }
+            console.log("============================================================================")
+            return dataList;
+
+        } catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [getSplitSetQueueData]:", error);
+            throw error;
+        } finally {
+            if (conn) {
+                try {
+                    await conn.close();
+                } catch (closeErr) {
+                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                }
+            }
+        }
+    }
+
+    static async saveRemarks(items: Array<{ id: number | string, remark: string }>): Promise<boolean> {
+        let conn;
+        try {
+            conn = await getConnection();
+
+            // SQL Update สำหรับตาราง pl_cut_split_set
+            const sql = `
+                UPDATE pl_cut_split_set
+                SET 
+                    remark = :remark
+                WHERE id = :id
+            `;
+
+            // 🎯 แปลงข้อมูลที่ส่งมาให้อยู่ในฟอร์ม Binds สำหรับ executeMany
+            const bindDefs = items.map(item => ({
+                id: item.id,
+                remark: item.remark ? item.remark.trim() : null
+            }));
+
+            // 🎯 สั่ง Update ทุกรายการรวดเดียวแบบ Batch
+            const result = await conn.executeMany(sql, bindDefs, { autoCommit: false });
+
+            // เช็กว่ามีแถวที่ได้รับผลกระทบจากการ UPDATE หรือไม่
+            if (result.rowsAffected && result.rowsAffected > 0) {
+                await conn.commit(); // 🔒 Commit การบันทึกทั้งหมด
+                return true;
+            } else {
+                await conn.rollback();
+                return false;
+            }
+
+        } catch (error) {
+            if (conn) await conn.rollback(); // 🛡️ ยกเลิกหากเกิด Error
+            console.error("❌ เกิดข้อผิดพลาดใน Model [CutSplitSetModel.saveRemarks]:", error);
+            throw error;
+        } finally {
+            if (conn) await conn.close();
         }
     }
 }

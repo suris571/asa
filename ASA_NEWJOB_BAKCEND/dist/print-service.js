@@ -9,7 +9,9 @@ export class PrintService {
     static async printPdfFile(filePath) {
         try {
             // 🎯 สั่ง Print ไปยัง Default Printer ของเครื่อง
-            await ptp.print(filePath, { silent: true });
+            await ptp.print(filePath, {
+                silent: true
+            });
             // await ptp.print(filePath, {
             //   printer: "Microsoft Print to PDF"
             // });

@@ -1,0 +1,58 @@
+<!-- 🎯 Bootstrap Modal สำหรับเลือกลูกม้วน QC Reel -->
+<div class="modal fade" id="qcReelModal" tabindex="-1" role="dialog" aria-labelledby="qcReelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            
+            <div class="modal-header bg-navy text-white">
+                <h5 class="modal-title font-weight-bold" id="qcReelModalLabel">🔍 ค้นหาและเลือก Reel No</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 🎯 ส่วนค้นหา Reel No -->
+                <div class="row mb-3">
+                    <div class="col-md-9">
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text font-weight-bold">Reel No</span>
+                            </div>
+                            <input type="text" class="form-control" id="modalSearchReelNo" placeholder="พิมพ์ Reel No เพื่อค้นหา (เช่น 126002343)..." value="%">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-primary btn-block font-weight-bold" id="btnModalSearch">
+                            <i class="fas fa-search"></i> ค้นหา
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 🎯 ตารางรายการ Reel (ตามรูปที่ 2) -->
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover text-center table-sm w-100" id="qcReelTable">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Reel No</th>
+                                <th>Grade</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Dcs No</th>
+                                <th>Remain</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- ข้อมูลจะถูก render ใส่ที่นี่ผ่าน JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer justify-content-end">
+                <button type="button" class="btn btn-success font-weight-bold px-4" id="btnModalConfirm" disabled>ตกลง</button>
+                <button type="button" class="btn btn-secondary font-weight-bold px-4" data-dismiss="modal">ยกเลิก</button>
+            </div>
+
+        </div>
+    </div>
+</div>

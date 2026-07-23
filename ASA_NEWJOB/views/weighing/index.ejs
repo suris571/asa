@@ -112,8 +112,8 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
     let weighingTable;
-    let socket;
-    let socketScale;
+    let socket = io('/socket/weighing');
+    let socketScale = io('http://localhost:4000');
 
     async function sendDataToPrint(data) {
         $.ajax({
@@ -122,20 +122,15 @@
             contentType: 'application/json',
             data: JSON.stringify(data.body), // แปลงข้อมูลเป็น JSON สตริงก่อนวิ่งผ่านสายแลน
             success: function(response) {
-                console.log("✅ สั่งพิมพ์สำเร็จ:", response.message);
-                alert("พิมพ์ใบ Label สำเร็จแล้วค่ะ!");
             },
             error: function(xhr, status, error) {
                 console.error("💥 ท่อยิงพิมพ์ล่ม:", error);
-                alert("ระบบพิมพ์ขัดข้อง กรุณาเช็กสัญญานเครื่องพิมพ์ค่ะกัปตัน!");
             }
         });
     }
 
     $(function () {
         console.log("⚓️ หน้าจอชั่งน้ำหนักและชิ้นส่วนคอมโพเนนต์พร้อมรบ!");
-        socket = io('/socket/weighing');
-        socketScale = io('http://localhost:4000');
 
         $('#remark').on('input', function() {
             $(this).css({
@@ -179,6 +174,7 @@
             });
             
             try {
+                let saveDB = sendDataToPrint({ url: 'http://localhost:4000/preview-label', body: formData });
                 // 3. ยิงไปบันทึก Database ที่ Backend หลัก (พอร์ต 3000)
                 const response = await $.ajax({
                     url: '/weighing/save',
@@ -188,20 +184,18 @@
                 });
 
                 if (response.success) {
-                    console.log("✅ บันทึก DB เรียบร้อยแล้ว!");
                     
-                    // 💡 ตรงนี้รอเอาลอจิกยิงหาพอร์ต 4000 (Agent Print) มาเสียบต่อในขั้นตอนถัดไป
-                    alert("บันทึกข้อมูลเรียบร้อยแล้ว!");
+                    resetWeighingForm()
+                    fetchFilteredQueue()
                 } else {
-                    alert("❌ เกิดข้อผิดพลาด: " + response.message);
+                    console.log("❌ เกิดข้อผิดพลาด: " + response.message)
                 }
 
             } catch (err) {
                 console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
-                alert("เกิดข้อผิดพลาด ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             }
 
-            let saveDB = await sendDataToPrint({ url: 'http://localhost:4000/preview-label', body: formData });
+            
 
         });
 
@@ -311,44 +305,21 @@
             ]
         });
 
-
-
-        // socket.on('next_roll_ready_for_weighing', function(nextRoll) {//รับค่าจาก sever ม้วนถัดไป
-        //     console.log("⚡ [เรียลไทม์]: เครื่องตัดส่งสัญญาณม้วนใหม่มาจ่อเครื่องชั่ง!", nextRoll);
-        //     if (nextRoll) {
-        //         $('#orderNo').val(nextRoll.order_no);
-        //         $('#formRollNo').val(nextRoll.roll_no);
-        //         $('#grade').val(nextRoll.grade);
-        //         $('#version').val(nextRoll.version);
-        //         $('#size').val(nextRoll.size);
-        //         $('#diameter').val(nextRoll.diameter || '-');
-                
-        //         // แอบแจ้งเตือนพนักงานที่หน้าจอเล็กน้อยว่าข้อมูลเปลี่ยนแล้ว
-        //         console.log(`🔔 เปลี่ยนหน้าฟอร์มเป็นม้วนย่อย: ${nextRoll.roll_no} อัตโนมัติ`);
-        //     }
-        // });
-
-
-        // =========================================================
-        // 📡 ฝั่งที่ 2: ดักจับสตรีมน้ำหนักดิจิทัลจาก Agent (พอร์ต 4000)
-        // =========================================================
         
         socket.on('queue_updated', function(response) {
             console.log("⚡ ได้รับข้อมูลคิวถัดไปจาก Socket:", response);
-
-            if (response && response.data) {
+            if (response && response.data && $('#id').val() != response.data.id) {
                 // 🎯 มีคิวถัดไป ➔ นำข้อมูลจาก Socket ยัดใส่ Input ทันที (0 HTTP Request)
                 const nextData = response.data;
-
-                $('#weighingId').val(nextData.id);
-                $('#orderNoInput').val(nextData.orderNo);
-                $('#rollNoInput').val(nextData.rollNo);
-                $('#gradeInput').val(nextData.gradeName);
-                $('#sizeInput').val(nextData.sizeName);
-                $('#cutLengthInput').val(nextData.cutLength);
+                $('#id').val(nextData.id);
+                $('#createdAt').val(nextData.createdAt);
+                $('#reelno').val(nextData.reel_no);
+                $('#grade').val(nextData.gradeName);
+                $('#size').val(nextData.sizeName);
+                $('#model').val(nextData.model);
+                $('#diameter').val(nextData.diameter);
                 
                 // ล้างช่องกรอกรอชั่งลูกใหม่
-                $('#weightInput').val('');
                 $('#remark').val('');
                 
                 // คืนค่า CSS ให้ช่อง Remark (กรณีโดนกรอบแดงค้างไว้)
@@ -356,8 +327,11 @@
 
             } else {
                 // 🛑 ไม่มีคิวเหลือในระบบแล้ว
-                alert('🎉 ชั่งน้ำหนักครบทุกคิวในระบบแล้วครับ!');
-                resetFormToEmpty();
+                if(response && response.data && $('#id').val() == response.data.id){
+                    return
+                }
+                resetWeighingForm()
+                // alert('🎉 รายการรอชั่งน้ำหนักไม่มีในรายการแล้ว!');
             }
         });
         
@@ -368,7 +342,7 @@
         // 🧠 หัวใจสำคัญ: ดักรับเหตการณ์น้ำหนักวิ่งไหลมาจากเครื่องชั่งผ่านสาย Socket
         socketScale.on('weight_stream', function(data) {
             // data ประกอบด้วย { weight: ทศนิยม, stable: boolean }
-            console.log(`📥 ค่าน้ำหนักสตรีมโชว์บนหน้าเว็บ: ${data.stable} kg`);
+            // console.log(`📥 ค่าน้ำหนักสตรีมโชว์บนหน้าเว็บ: ${data.stable} kg`);
 
             $("#weight").val(data.weight.toFixed(2));
 
@@ -396,8 +370,30 @@
             }
         });
 
+        function resetWeighingForm() {
+            // 1. ล้างค่าใน Input/Radio/Textarea ทั้งหมด
+            $('#weighingForm')[0].reset();
 
+            // 2. ล้างค่า Hidden ID เพื่อให้ฟอร์มว่างแบบ 100%
+            $('#id').val('');
+            $('#createdAt').val('');
+            $('#reelno').val('');
+            $('#grade').val('');
+            $('#size').val('');
+            $('#model').val('');
+            $('#diameter').val('');
+            
+            // ล้างช่องกรอกรอชั่งลูกใหม่
+            $('#remark').val('');
+
+            // 3. (Optional) คืนค่า CSS ขอบแดงช่อง Remark เผื่อมีค้างไว้
+            $('#remark').css({ 'border-color': '', 'background-color': '', 'box-shadow': '' });
+        }
 
     });
   // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
+    function fetchFilteredQueue() {
+        console.log("get_next_roll")
+        socket.emit('get_next_roll');
+    }
 </script>

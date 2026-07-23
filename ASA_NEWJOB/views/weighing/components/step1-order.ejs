@@ -19,7 +19,7 @@
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">วันที่ผลิต</label>
-        <input type="text" class="form-control form-control-sm bg-light" name="createdAt" id="createdAt" value="<%= (nextData && nextData.createdAt) ? new Date(nextData.createdAt).toLocaleDateString('en-GB') : '' %>" readonly>
+        <input type="text" class="form-control form-control-sm bg-light" name="createdAt" id="createdAt" value="<%= (nextData && nextData.createdAt) ? nextData.createdAt : '' %>" readonly>
       </div>
     </div>
     <div class="col-6">

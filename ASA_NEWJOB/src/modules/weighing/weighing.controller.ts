@@ -27,7 +27,7 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             id: Number(id),
             weigh: parseFloat(weight) || 0,
             status: status || 'PASS',
-            note: remark && remark.trim() !== '' ? remark.trim() : null,
+            remark: remark && remark.trim() !== '' ? remark.trim() : null,
             model: model && model.trim() !== '' ? model.trim() : null
         };
 
