@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
+exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
 const wait_cut_model_1 = require("./wait-cut.model");
 const socket_1 = require("../../socket");
 const getWaitCutPage = async (req, res) => {
@@ -59,7 +59,6 @@ const startWeighing = async (req, res) => {
         try {
             let data = await wait_cut_model_1.WaitCutModel.ResetCutSlitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
             const io = (0, socket_1.getIO)();
-            console.log("resettttttttttt");
             io.of('/socket/wait-cut/split-cut-set').emit('queue_structure_changed', { success: true });
             await (0, socket_1.FnNextRoll)();
             return res.status(200).json({ success: data, message: 'บันทึกคำสั่งและสร้างรายการเซ็ตย่อยสำเร็จ' });
@@ -92,8 +91,7 @@ exports.startWeighing = startWeighing;
 const qcCloseReel = async (req, res) => {
     try {
         const queueData = await wait_cut_model_1.WaitCutModel.getQcCloseReel();
-        const statusList = await wait_cut_model_1.WaitCutModel.getAllCutStatuses();
-        res.render('wait-cut/index_qc_close_reel', { orders: queueData, statusList });
+        res.render('wait-cut/index_qc_close_reel', { orders: queueData });
     }
     catch (error) {
         console.error('🔴 Controller พังจังหวะเรนเดอร์หน้าเว็บ:', error);
@@ -145,3 +143,62 @@ const saveRemarkController = async (req, res) => {
     }
 };
 exports.saveRemarkController = saveRemarkController;
+const getQcReelListController = async (req, res) => {
+    try {
+        const search = req.query.search ? String(req.query.search).trim() : '%';
+        const data = await wait_cut_model_1.WaitCutModel.getReelList(search);
+        return res.json({
+            success: true,
+            data: data
+        });
+    }
+    catch (error) {
+        console.error("❌ Controller Error [getQcReelListController]:", error);
+        return res.status(500).json({
+            success: false,
+            message: "เกิดข้อผิดพลาดในการดึงข้อมูลรายการ Reel",
+            error: error.message
+        });
+    }
+};
+exports.getQcReelListController = getQcReelListController;
+const saveQcCloseReelController = async (req, res) => {
+    try {
+        const { splitSetId, reelId } = req.body;
+        // ตรวจสอบค่าที่ส่งมา
+        if (!splitSetId || !reelId) {
+            return res.status(400).json({
+                success: false,
+                message: "ข้อมูลไม่ครบถ้วน กรุณาระบุ splitSetId และ reelId"
+            });
+        }
+        // ยิงไปอัปเดต REEL_ID
+        const result = await wait_cut_model_1.WaitCutModel.updateCloseReel(splitSetId, reelId);
+        await (0, socket_1.FnNextQcCloseReel)();
+        if (result.rowsAffected && result.rowsAffected > 0) {
+            return res.json({
+                success: true,
+                message: "บันทึก REEL_ID เรียบร้อยแล้ว",
+                data: {
+                    splitSetId: splitSetId,
+                    reelId: reelId
+                }
+            });
+        }
+        else {
+            return res.status(404).json({
+                success: false,
+                message: `ไม่พบรายการ PL_CUT_SPLIT_SET ที่มี ID: ${splitSetId}`
+            });
+        }
+    }
+    catch (error) {
+        console.error("❌ Controller Error [saveQcCloseReelController]:", error);
+        return res.status(500).json({
+            success: false,
+            message: "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
+            error: error.message
+        });
+    }
+};
+exports.saveQcCloseReelController = saveQcCloseReelController;

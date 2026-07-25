@@ -2,78 +2,86 @@
 <%- include('../partials/sidebar') %>
 <style>
   /* 1. บังคับแผงควบคุมชั้นนอกสุดให้เรียงตัวเป็นแนวขวางบรรทัดเดียว ไม่ให้หักหล่น */
-  .dataTables_wrapper .row:first-child {
-      display: flex !important;
-      flex-direction: row !important;
-      flex-wrap: nowrap !important; /* 🔒 ล็อกห้ามขึ้นบรรทัดใหม่เด็ดขาด */
-      justify-content: space-between !important;
-      align-items: center !important;
-      width: 100% !important;
-      margin: 0 0 12px 0 !important;
-      padding: 0 !important;
-  }
+    .dataTables_wrapper .row:first-child {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important; /* 🔒 ล็อกห้ามขึ้นบรรทัดใหม่เด็ดขาด */
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0 0 12px 0 !important;
+        padding: 0 !important;
+    }
 
-  /* 2. ดักล้างค่าความกว้างดีฟอลต์ของระบบเก่าที่แอบบีบพื้นที่ */
-  .dataTables_wrapper .row:first-child > div {
-      flex: 0 0 auto !important;
-      max-width: auto !important;
-      width: auto !important;
-      padding: 0 !important;
-  }
+    /* 2. ดักล้างค่าความกว้างดีฟอลต์ของระบบเก่าที่แอบบีบพื้นที่ */
+    .dataTables_wrapper .row:first-child > div {
+        flex: 0 0 auto !important;
+        max-width: auto !important;
+        width: auto !important;
+        padding: 0 !important;
+    }
 
-  /* 3. จัดการฝั่งซ้าย (Dropdown เลือกจำนวนหน้า) */
-  .dataTables_length {
-      display: block !important;
-      text-align: left !important;
-      float: none !important; /* ล้างค่า Float ตั้งต้น */
-  }
-  .dataTables_length label {
-      display: inline-flex !important;
-      align-items: center !important;
-      white-space: nowrap !important;
-      font-weight: bold;
-      color: #495057;
-      margin: 0 !important;
-  }
-  .dataTables_length select {
-      width: 75px !important;
-      height: 31px !important;
-      margin: 0 8px !important;
-      padding: 2px 6px !important;
-      font-size: 0.875rem;
-      border-radius: 0.25rem;
-      border: 1px solid #ced4da;
-  }
+    /* 3. จัดการฝั่งซ้าย (Dropdown เลือกจำนวนหน้า) */
+    .dataTables_length {
+        display: block !important;
+        text-align: left !important;
+        float: none !important; /* ล้างค่า Float ตั้งต้น */
+    }
+    .dataTables_length label {
+        display: inline-flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        font-weight: bold;
+        color: #495057;
+        margin: 0 !important;
+    }
+    .dataTables_length select {
+        width: 75px !important;
+        height: 31px !important;
+        margin: 0 8px !important;
+        padding: 2px 6px !important;
+        font-size: 0.875rem;
+        border-radius: 0.25rem;
+        border: 1px solid #ced4da;
+    }
 
-  /* 4. จัดการฝั่งขวา (ช่องค้นหาบาร์โค้ด) */
-  .dataTables_filter {
-      display: block !important;
-      text-align: right !important;
-      float: none !important; /* ล้างค่า Float ตั้งต้น */
-      margin: 0 !important; /* ดึงมาร์จินออกป้องกันมันดีดตัวสไลด์ลง */
-  }
-  .dataTables_filter label {
-      display: inline-flex !important;
-      align-items: center !important;
-      white-space: nowrap !important;
-      font-weight: bold;
-      color: #495057;
-      margin: 0 !important;
-  }
-  .dataTables_filter input {
-      width: 250px !important;
-      height: 31px !important;
-      margin-left: 8px !important;
-      padding: 4px 8px !important;
-      font-size: 0.875rem;
-      border-radius: 0.25rem;
-      border: 1px solid #ced4da;
-  }
-  .dataTables_filter input:focus {
-      border-color: #80bdff;
-      outline: 0;
-      box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
-  }
+    /* 4. จัดการฝั่งขวา (ช่องค้นหาบาร์โค้ด) */
+    .dataTables_filter {
+        display: block !important;
+        text-align: right !important;
+        float: none !important; /* ล้างค่า Float ตั้งต้น */
+        margin: 0 !important; /* ดึงมาร์จินออกป้องกันมันดีดตัวสไลด์ลง */
+    }
+    .dataTables_filter label {
+        display: inline-flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        font-weight: bold;
+        color: #495057;
+        margin: 0 !important;
+    }
+    .dataTables_filter input {
+        width: 250px !important;
+        height: 31px !important;
+        margin-left: 8px !important;
+        padding: 4px 8px !important;
+        font-size: 0.875rem;
+        border-radius: 0.25rem;
+        border: 1px solid #ced4da;
+    }
+    .dataTables_filter input:focus {
+        border-color: #80bdff;
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+    #modalOrderTable tbody tr {
+        cursor: pointer;
+        transition: background-color 0.15s ease-in-out;
+    }
+
+    #modalOrderTable tbody tr:hover {
+        background-color: #e2f0ff !important; /* สีฟ้าอ่อนสบายตาตอน Hover */
+    }
 </style>
 
 <div class="content-wrapper">
@@ -112,6 +120,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
     let weighingTable;
+    let modalOrderTable;
     let socket = io('/socket/weighing');
     let socketScale = io('http://localhost:4000');
 
@@ -199,12 +208,38 @@
 
         });
 
-        let modalTable = $('#modalOrderTable').DataTable({
-            "paging": true,
-            "searching": false, // ปิดช่องเสิร์ชในป็อปอัปเพราะสโคปเฉพาะใบงานนั้นแล้ว
-            "lengthChange": false,
-            "info": false,
-            "autoWidth": false
+        modalOrderTable = $('#modalOrderTable').DataTable({
+            data: [], // ตั้งค่าเริ่มต้นเป็น Array ว่างเปล่า
+            paging: true,
+            pageLength: 5,
+            lengthChange: false,
+            searching: false,
+            ordering: false,
+            info: false,
+            autoWidth: false,
+            responsive: true,
+            columns: [
+                { "data": "orderNo", "defaultContent": "-" },                     // 1. เลขใบสั่งผลิต
+                { "data": "createdAt", "defaultContent": "-" },                   // 2. วันที่
+                { "data": "rollNo", "defaultContent": "-" },                      // 3. roll Item
+                { "data": "gradeName", "defaultContent": "-" },                   // 4. เกรด
+                { "data": "model", "defaultContent": "-" },                       // 5. รุ่น
+                { "data": "sizeName", "defaultContent": "-" },                    // 6. ขนาด
+                { "data": "blad", "defaultContent": "-" },                        // 7. ตั้งค่าใบมีด
+                { "data": "total", "defaultContent": "0" },                       // 8. จำนวนสั่ง
+                { 
+                    "data": "remaining",                                          // 9. คงเหลือ
+                    "defaultContent": "0",
+                    "render": function(data) {
+                        return `<span class="badge badge-warning text-dark font-weight-bold px-2 py-1">${data}</span>`;
+                    }
+                }
+            ],
+            createdRow: function(row, data) {
+                $(row).attr('data-id', data.id || '');
+                $(row).attr('data-order-id', data.orderId || '');
+                $(row).attr('data-split-set-id', data.splitSetId || '');
+            }
         });
 
         $('#btnFetchOrder').on('click', function() {
@@ -212,11 +247,11 @@
             const orderNo = $('#orderNo').val().trim();
 
             if (!orderNo) {
-                alert('❌ กรุณาระบุเลขใบสั่งผลิตก่อนกดดึงคิวค่ะกัปตัน!');
+                alert('❌ กรุณาระบุเลขใบสั่งผลิตก่อน!');
                 return false;
             }
 
-            // 💾 1. เก็บสเปกหน้าตาและข้อความดั้งเดิมของปุ่มเอาไว้ในตัวแปรอย่างปลอดภัย
+            // 💾 1. เก็บสเปกหน้าตาและข้อความดั้งเดิมของปุ่ม
             const originalHtml = btn.html();
 
             // 🔒 2. ล็อกปุ่ม และเปลี่ยนข้อความเป็น Spinner หมุนๆ
@@ -225,47 +260,42 @@
 
             console.log(`📡 [AJAX]: กำลังวิ่งไปดึงลูกม้วนย่อยของใบงาน: ${orderNo}`);
 
-            $.ajax({
-                url: `/weighing/api/fetch-sub-rolls?order_no=${encodeURIComponent(orderNo)}`,
+                $.ajax({
+                url: `/weighing/fetch-sub-rolls?order_no=${encodeURIComponent(orderNo)}`,
                 method: 'GET',
                 dataType: 'json',
                 success: function(response) {
-                    modalTable.clear();
+                if (response.success && response.data) {
+                    // 💡 ป้องกัน Error: เช็กว่าเป็น Array หรือ Object รายการเดียว
+                    const tableData = Array.isArray(response.data) ? response.data : [response.data];
 
-                    if (response.success && response.data.length > 0) {
-                        response.data.forEach(function(row) {
-                            modalTable.row.add([
-                                `<button type="button" class="btn btn-primary btn-xs font-weight-bold btn-select-order" 
-                                    data-roll="${row.roll_no}" data-rell="${row.rell_no}" data-order="${row.order_no}" 
-                                    data-grade="${row.grade}" data-version="${row.version}" data-size="${row.size}" data-diameter="${row.diameter}">เลือก</button>`,
-                                row.order_no,
-                                row.rell_no,
-                                row.grade,
-                                row.version,
-                                row.size,
-                                `<span class="badge badge-warning">${row.status || 'รอชั่งน้ำหนัก'}</span>`
-                            ]);
-                        });
-                        modalTable.draw();
+                    if (tableData.length > 0) {
+                        // 🎯 3. ยัดข้อมูล Array ของ JSON เข้า DataTables แล้วสั่งวาดตารางใหม่ทันที
+                        modalOrderTable.clear().rows.add(tableData).draw(false);
 
                         // เปิด Popup Modal
                         $('#orderQueueModal').modal('show');
                     } else {
+                        modalOrderTable.clear().draw(false);
                         alert(`⚠️ ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: ${orderNo}`);
                     }
+                } else {
+                    modalOrderTable.clear().draw(false);
+                    alert(`⚠️ ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: ${orderNo}`);
+                }
                 },
                 error: function(xhr, status, error) {
-                    console.error("ยิง API พัง:", error);
+                    console.error("❌ ยิง API พัง:", error);
+                    modalOrderTable.clear().draw(false);
                     alert("❌ เกิดข้อผิดพลาดทางเทคนิค ไม่สามารถดึงข้อมูลได้");
                 },
                 complete: function() {
-                    // 🔓 3. คืนค่าอิสระ: สั่งเอา HTML ดั้งเดิมที่จำไว้ในแรมเทคืนกลับไปที่ปุ่มทันที
+                    // 🔓 4. คืนค่าปุ่มกลับเป็นปกติ
                     btn.prop('disabled', false);
                     btn.html(originalHtml);
                 }
             });
         });
-
 
         $('#modalOrderTable').on('click', '.btn-select-order', function() {
             $('#orderNo').val($(this).data('order'));
@@ -390,7 +420,45 @@
             $('#remark').css({ 'border-color': '', 'background-color': '', 'box-shadow': '' });
         }
 
-    });
+
+        $('#modalOrderTable').on('shown.bs.modal', function () {
+            if (qcModalTable) {
+                // 🎯 บังคับคำนวณความกว้างคอลัมน์ใหม่ให้เป๊ะทันทีที่ Modal แสดงผล
+                modalOrderTable.columns.adjust().draw();
+            }
+        });
+
+        $('#modalOrderTable tbody').on('click', 'tr', function () {
+            // 1. ดึง Object ข้อมูลทั้งหมดของแถวที่กด
+            const rowData = modalOrderTable.row(this).data();
+
+            // ดักกรณีคลิกแถวที่ไม่มีข้อมูล
+            if (!rowData || !rowData.id) {
+                return;
+            }
+
+            console.log("👆 เลือกรายการ:", rowData);
+
+            // 2. หยอดข้อมูลลงใน Form (#weighingForm) ทันที
+            $('#id').val(rowData.id || '');                             // Hidden ID
+            $('#orderNo').val(rowData.orderNo || '');                   // เลขใบสั่งผลิต
+            $('#createdAt').val(rowData.createdAt || '');               // วันที่ผลิต
+            $('#grade').val(rowData.gradeName || '');                   // เกรด
+            $('#model').val(rowData.model || '');                       // รุ่น
+            $('#size').val(rowData.sizeName || '');                     // ขนาด
+            $('#diameter').val(rowData.diameter || '');                 // Diameter
+            $('#reelno').val(rowData.reel_no || '');                    // รหัส Roll No.
+
+            // 3. ปิด Modal Popup
+            $('#orderQueueModal').modal('hide');
+
+            // 4. โฟกัสไปที่ช่องน้ำหนักสุทธิทันที เพื่อให้พร้อมพิมพ์/รับค่าจากเครื่องชั่ง
+            // setTimeout(function() {
+            //     $('#weight').focus().select();
+            // }, 300);
+        });
+
+    });//ready fn
   // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
     function fetchFilteredQueue() {
         console.log("get_next_roll")

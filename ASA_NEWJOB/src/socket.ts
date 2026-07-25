@@ -66,8 +66,8 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
 
         socket.on('get_filtered_queue', async (payload) => {
             try {
-                const { status, orderNo, startDate, endDate } = payload;
-                const data = await WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
+                const { startDate, endDate } = payload;
+                const data = await WaitCutModel.getQcCloseReel(null, startDate, endDate);
                 
                 socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
             } catch (error:any) {
@@ -83,7 +83,7 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
                 
                 await FnNextCutSplitSet()
                 await FnNextRoll()
-                console.log("ddddddddddddddddddddddddddddddd")
+                await FnNextQcCloseReel()
                 waitCutNamespace.emit('queue_structure_changed', { success: true });
 
             } catch (error) {
@@ -137,6 +137,31 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
     });
 
+
+    // ==========================================================================
+    // 🪓 ห้องที่ 4: [/socket/wait-cut/qc-close-reel] สำหรับหน้าQC CLOSE REEL
+    // ==========================================================================
+    const waitCutCoseReel = io.of('/socket/wait-cut/qc-close-reel');
+    waitCutCoseReel.on('connection', (socket: Socket) => {
+        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+
+        socket.on('get_filtered_queue', async (payload) => {
+            console.log(payload)
+            try {
+                const {startDate,endDate} = payload;
+                const data = await WaitCutModel.getQcCloseReel(null,startDate,endDate);
+                
+                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
+            } catch (error:any) {
+                socket.emit('update_queue_table', { success: false, error: error.message });
+            }
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('🔴 พนักงานปิดหน้ารอตัด ID:', socket.id);
+        });
+    });
+
     return io;
 };
 
@@ -172,6 +197,28 @@ export const FnNextCutSplitSet = async () => {
         if (io) {
             // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
             io.of('/socket/wait-cut/split-cut-set').emit('queue_structure_changed',{ success: true});
+            console.log('📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย');
+        } else {
+            console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');
+        }
+
+    } catch (error: any) {
+        console.error("❌ [FnNextRoll Error]:", error);
+        
+        const io = getIO();
+        if (io) {
+            io.of('/socket/weighing').emit('queue_updated', { success: false, error: error.message });
+        }
+    }
+};
+
+
+export const FnNextQcCloseReel = async () => {
+    try {
+        const io = getIO();
+        if (io) {
+            // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
+            io.of('/socket/wait-cut/qc-close-reel').emit('queue_structure_changed',{ success: true});
             console.log('📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย');
         } else {
             console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');

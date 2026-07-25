@@ -578,7 +578,11 @@ export class WaitCutModel {
         }
     }
 
-     static async getQcCloseReel(orderNo?: string | null): Promise<any[]> {
+    static async getQcCloseReel(
+        orderNo?: string | null, 
+        startDate?: string | null, 
+        endDate?: string | null
+    ): Promise<any[]> {
         let conn;
 
         try {
@@ -611,23 +615,37 @@ export class WaitCutModel {
                     reel_no,
                     remark,
                     finish_at,
-                    TO_CHAR(finish_at, 'DD/MM/YYYY')   AS "date",
-                    TO_CHAR(finish_at, 'HH24:MI')   AS "time",
-                    order_item
+                    TO_CHAR(finish_at, 'DD/MM/YYYY') AS "date",
+                    TO_CHAR(finish_at, 'HH24:MI')    AS "time"
                 FROM pl_cut_split_set_view
                 WHERE 1=1
                 AND split_status_id = 5
-                `;
-
+            `;
+            console.log(sql)
             const binds: any = {};
 
-            // 🔍 รับและกรองเฉพาะ orderNo ตัวเดียวตามคำสั่งกัปตัน
+            // 🔍 1. กรอง orderNo
             if (orderNo && orderNo.trim() !== '') {
                 sql += ` AND UPPER(order_no) LIKE :orderNo`;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
             }
 
-            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย (1/6, 2/6, ...)
+            // 📅 2. กรองช่วงวันที่ finish_at (รองรับทั้งส่งคู่ หรือส่งแค่วันใดวันหนึ่ง)
+            if (startDate && startDate.trim() !== '') {
+                sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'YYYY-MM-DD')`;
+                binds.startDate = startDate.trim();
+            }
+
+            if (endDate && endDate.trim() !== '') {
+                sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'YYYY-MM-DD')`;
+                binds.endDate = endDate.trim();
+            }
+
+            if(!endDate && !startDate){
+                sql += ` AND reel_no is null`;
+            }
+
+            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
 
             const result = await conn.execute(sql, binds, {
@@ -656,24 +674,23 @@ export class WaitCutModel {
                         size2: row.SIZE_2,
                         size3: row.SIZE_3,
                         size4: row.SIZE_4,
-                        lenght: row.CUT_LENGHT,
+                        lenght: row.CUT_LENGTH,
                         status: row.STATUS,
                         que: row.QUEUE_NO,
                         cut_status_id: row.CUT_STATUS_ID,
                         pl_order_id: row.PL_ORDER_ID,
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
-                        date:row.DATE,
-                        time:row.TIME,
-                        remark:row.REMARK
+                        date: row.date,
+                        time: row.time,
+                        remark: row.REMARK
                     });
                 }
             }
-            console.log("============================================================================")
             return dataList;
 
         } catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [getSplitSetQueueData]:", error);
+            console.error("❌ เกิดข้อผิดพลาดใน Model [getQcCloseReel]:", error);
             throw error;
         } finally {
             if (conn) {
@@ -720,6 +737,78 @@ export class WaitCutModel {
         } catch (error) {
             if (conn) await conn.rollback(); // 🛡️ ยกเลิกหากเกิด Error
             console.error("❌ เกิดข้อผิดพลาดใน Model [CutSplitSetModel.saveRemarks]:", error);
+            throw error;
+        } finally {
+            if (conn) await conn.close();
+        }
+    }
+
+    static async getReelList(keyword: string) {
+        let conn;
+        try {
+            conn = await getConnection();
+            
+            // จัดการรูปแบบคำค้นหา
+            let cleanKeyword = keyword ? String(keyword).trim() : '';
+        
+            // ถ้าส่งมาเป็น '%' หรือว่างเปล่า ให้ค้นหาทั้งหมด
+            let searchVal = '%';
+            if (cleanKeyword && cleanKeyword !== '%' && cleanKeyword !== 'null' && cleanKeyword !== 'undefined') {
+                searchVal = `%${cleanKeyword}%`;
+            }
+            const sql = `
+                SELECT 
+                    id,
+                    reel_no,
+                    grade,
+                    date_str AS "date",
+                    status,
+                    dcs_reel_no
+                FROM pl_qc_reel_view
+                WHERE reel_no LIKE :search
+            `;
+            
+            const result = await conn.execute(sql, { search: searchVal }, {
+                outFormat: oracledb.OUT_FORMAT_OBJECT
+            });
+
+            return result.rows || [];
+
+        } catch (error) {
+            console.error("❌ Model Error [getReelList]:", error);
+            throw error;
+        } finally {
+            if (conn) await conn.close();
+        }
+    }
+
+    static async updateCloseReel(splitSetId: number | string, reelId: number | string) {
+        let conn;
+        try {
+            conn = await getConnection();
+
+            // 🎯 UPDATE คอลัมน์ REEL_ID โดยตรง
+            const updateSql = `
+                UPDATE pl_cut_split_set
+                SET reel_id = :reelId
+                WHERE id = :splitSetId
+            `;
+
+            const result = await conn.execute(
+                updateSql, 
+                { 
+                    reelId: reelId, 
+                    splitSetId: splitSetId 
+                }, 
+                { autoCommit: true } // Commit ธุรกรรมลง Database ทันที
+            );
+
+            return {
+                rowsAffected: result.rowsAffected
+            };
+
+        } catch (error) {
+            console.error("❌ Model Error [updateCloseReel]:", error);
             throw error;
         } finally {
             if (conn) await conn.close();

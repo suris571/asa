@@ -16,14 +16,14 @@ export interface WeighingRecord {
 
 export class WeighingModel {
     // ดึงประวัติที่ชั่งน้ำหนักแล้วทั้งหมดมารายงานผล
-    static async getNextWeighing(): Promise<any | null> {
+    static async getNextWeighing(search: string | null = null): Promise<any> {
         let conn;
 
         try {
             conn = await getConnection();
 
-            // 🎯 Query ดึงคิวถัดไปเพียง 1 รายการ จาก View ตัวใหม่ล่าสุด
-            const sql = `
+            // 🎯 1. Query ดึงคิว
+            let sql = `
                 SELECT 
                     id                  AS "id",
                     pl_order_id         AS "orderId",
@@ -35,7 +35,7 @@ export class WeighingModel {
                     size_name           AS "sizeName",
                     model               AS "model",
                     weigh               AS "weigh",
-                    weighing_status_id  AS "status",
+                    status              AS "status",
                     remark              AS "remark",
                     created_at          AS "createdAt",
                     order_no            AS "orderNo",
@@ -45,37 +45,68 @@ export class WeighingModel {
                     queue_no            AS "queueNo",
                     diameter            AS "diameter",
                     finish_at           AS "finish_at",
-                    reel_no             AS "reel_no"
+                    reel_no             AS "reel_no",
+                    total               AS "total",
+                    already_done        AS "alreadyDone"
                 FROM pl_wait_weighing_view
-                WHERE weighing_status_id IS NULL
-                ORDER BY queue_no ASC, set_no ASC, roll_no DESC            
-                FETCH FIRST 1 ROWS ONLY
+                WHERE (status IS NULL OR TRIM(status) = '')
             `;
 
-            const result = await conn.execute(sql, [], {
+            const binds: any = {};
+            const isSearchMode = search && search.trim() !== '';
+
+            // 🔍 2. เช็ก search parameter และต่อเงื่อนไข LIKE order_no
+            if (isSearchMode) {
+                sql += ` AND UPPER(order_no) LIKE :search`;
+                binds.search = `%${search.trim().toUpperCase()}%`;
+            }
+
+            // 🎯 3. จัดเรียงคิว
+            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll_no DESC`;
+
+            // ถ้าไม่ได้ค้นหา ให้จำกัดเอาแค่ 1 รายการ
+            if (!isSearchMode) {
+                sql += ` FETCH FIRST 1 ROWS ONLY`;
+            }
+
+            const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT
             });
 
-            // ถ้ามีรายการคิวค้างอยู่ ให้ส่งออก Object รายการแรกทันที
-            if (result.rows && result.rows.length > 0) {
-                const row:any = result.rows[0];
+            const rows: any[] = result.rows || [];
 
+            // 🎯 Helper Function สำหรับแปลงวันที่ + คำนวณ remaining
+            const processRowData = (row: any) => {
+                if (!row) return row;
+
+                // 📅 1. จัด Format วันที่
                 if (row.createdAt) {
-                    // 🎯 เช็กว่าเป็น Date Object หรือยัง ถ้าใช่ให้แปลงเป็น DD/MM/YYYY ได้ทันที
                     const dateObj = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
-                    
-                    // 🎯 ตรวจสอบความถูกต้อง ป้องกันกรณีเป็น Invalid Date
                     if (!isNaN(dateObj.getTime())) {
-                        // 'en-GB' จะได้ ฟอร์แมต DD/MM/YYYY เช่น 22/07/2026
                         row.createdAt = dateObj.toLocaleDateString('en-GB', {
-                            timeZone: 'Asia/Bangkok' // 🔒 ล็อก Timezone ประเทศไทย ป้องกันปัญหา Server ตั้งเป็น UTC
+                            timeZone: 'Asia/Bangkok'
                         });
                     }
                 }
-                return row;
-            }
 
-            return null;
+                // 🧮 2. คำนวณ remaining = total - alreadyDone
+                const total = Number(row.total || 0);
+                const alreadyDone = Number(row.alreadyDone || 0);
+                
+                // ป้องกันติดลบ (ถ้ามี) ให้สลับเป็น 0 ต่ำสุด
+                row.remaining = Math.max(0, total - alreadyDone);
+
+                return row;
+            };
+
+            // 🎯 4. เงื่อนไขการ Return ข้อมูล
+            if (isSearchMode) {
+                // 🟢 กรณีมี ค้นหา (search): แปลงข้อมูลทุกแถว แล้ว Return เป็น Array
+                return rows.map(row => processRowData(row));
+            } else {
+                // 🟢 กรณีไม่ได้ค้นหา: แปลงข้อมูลเฉพาะแถวแรก แล้ว Return เป็น Object (หรือ null)
+                return rows.length > 0 ? processRowData(rows[0]) : null;
+            }
 
         } catch (error) {
             console.error("❌ เกิดข้อผิดพลาดใน Model [getNextWeighing]:", error);
@@ -96,7 +127,6 @@ export class WeighingModel {
         weigh: number,
         status: string,
         remark: string | null,
-        model?: string | null
     }): Promise<boolean> {
         let conn;
         try {
@@ -108,7 +138,6 @@ export class WeighingModel {
                     weigh = :weigh,
                     status = :status,
                     remark = :remark,
-                    model = :model
                 WHERE id = :id
             `;
 
@@ -116,7 +145,6 @@ export class WeighingModel {
                 weigh: data.weigh,
                 status: data.status,
                 remark: data.remark,
-                model: data.model || null,
                 id: data.id
             }, { autoCommit: false });
 

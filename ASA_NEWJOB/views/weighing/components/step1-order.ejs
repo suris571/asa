@@ -5,7 +5,7 @@
     <label class="col-sm-4 col-form-label font-weight-bold text-sm">เลขใบสั่งผลิต</label>
     <div class="col-sm-8">
       <div class="input-group">
-        <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" placeholder="ระบุเลขที่...">
+        <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" value="<%= (nextData && nextData.orderNo) ? nextData.orderNo : '' %>">
         <div class="input-group-append">
           <button class="btn btn-info btn-sm font-weight-bold" type="button" id="btnFetchOrder">เลือกรายการลูกม้วน</button>
         </div>

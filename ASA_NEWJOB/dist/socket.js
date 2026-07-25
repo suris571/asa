@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getIO = exports.broadcastNextRollToWeighingStation = exports.FnNextCutSplitSet = exports.FnNextRoll = exports.initSocket = void 0;
+exports.getIO = exports.broadcastNextRollToWeighingStation = exports.FnNextQcCloseReel = exports.FnNextCutSplitSet = exports.FnNextRoll = exports.initSocket = void 0;
 const socket_io_1 = require("socket.io");
 const wait_cut_model_1 = require("./modules/wait-cut/wait-cut.model");
 const weighing_model_1 = require("./modules/weighing/weighing.model");
@@ -61,8 +61,8 @@ const initSocket = (httpServer) => {
         console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
         socket.on('get_filtered_queue', async (payload) => {
             try {
-                const { status, orderNo, startDate, endDate } = payload;
-                const data = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
+                const { startDate, endDate } = payload;
+                const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(null, startDate, endDate);
                 socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
             }
             catch (error) {
@@ -76,7 +76,7 @@ const initSocket = (httpServer) => {
                 await wait_cut_model_1.WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
                 await (0, exports.FnNextCutSplitSet)();
                 await (0, exports.FnNextRoll)();
-                console.log("ddddddddddddddddddddddddddddddd");
+                await (0, exports.FnNextQcCloseReel)();
                 waitCutNamespace.emit('queue_structure_changed', { success: true });
             }
             catch (error) {
@@ -111,6 +111,27 @@ const initSocket = (httpServer) => {
             try {
                 const { orderNo } = payload;
                 const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo);
+                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
+            }
+            catch (error) {
+                socket.emit('update_queue_table', { success: false, error: error.message });
+            }
+        });
+        socket.on('disconnect', () => {
+            console.log('🔴 พนักงานปิดหน้ารอตัด ID:', socket.id);
+        });
+    });
+    // ==========================================================================
+    // 🪓 ห้องที่ 4: [/socket/wait-cut/qc-close-reel] สำหรับหน้าQC CLOSE REEL
+    // ==========================================================================
+    const waitCutCoseReel = io.of('/socket/wait-cut/qc-close-reel');
+    waitCutCoseReel.on('connection', (socket) => {
+        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+        socket.on('get_filtered_queue', async (payload) => {
+            console.log(payload);
+            try {
+                const { startDate, endDate } = payload;
+                const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(null, startDate, endDate);
                 socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
             }
             catch (error) {
@@ -168,6 +189,27 @@ const FnNextCutSplitSet = async () => {
     }
 };
 exports.FnNextCutSplitSet = FnNextCutSplitSet;
+const FnNextQcCloseReel = async () => {
+    try {
+        const io = (0, exports.getIO)();
+        if (io) {
+            // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
+            io.of('/socket/wait-cut/qc-close-reel').emit('queue_structure_changed', { success: true });
+            console.log('📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย');
+        }
+        else {
+            console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');
+        }
+    }
+    catch (error) {
+        console.error("❌ [FnNextRoll Error]:", error);
+        const io = (0, exports.getIO)();
+        if (io) {
+            io.of('/socket/weighing').emit('queue_updated', { success: false, error: error.message });
+        }
+    }
+};
+exports.FnNextQcCloseReel = FnNextQcCloseReel;
 const broadcastNextRollToWeighingStation = (nextRollData) => {
     if (!io) {
         console.error("⚠️ ไม่สามารถปล่อยสัญญาณได้เนื่องจากระบบ Socket ยังไม่ถูกเปิดใช้งานค่ะกัปตัน!");

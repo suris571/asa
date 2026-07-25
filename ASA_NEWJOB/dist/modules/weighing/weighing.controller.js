@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveWeighingController = exports.getWeighingPage = void 0;
+exports.fetchweighinglist = exports.saveWeighingController = exports.getWeighingPage = void 0;
 const weighing_model_1 = require("./weighing.model");
 const getWeighingPage = async (req, res) => {
     try {
@@ -46,3 +46,23 @@ const saveWeighingController = async (req, res) => {
     }
 };
 exports.saveWeighingController = saveWeighingController;
+const fetchweighinglist = async (req, res) => {
+    try {
+        const search = req.query.order_no ? String(req.query.order_no).trim() : '%';
+        console.log(search);
+        const data = await weighing_model_1.WeighingModel.getNextWeighing(search);
+        return res.json({
+            success: true,
+            data: data
+        });
+    }
+    catch (error) {
+        console.error("❌ Controller Error [getQcReelListController]:", error);
+        return res.status(500).json({
+            success: false,
+            message: "เกิดข้อผิดพลาดในการดึงข้อมูลรายการ Reel",
+            error: error.message
+        });
+    }
+};
+exports.fetchweighinglist = fetchweighinglist;

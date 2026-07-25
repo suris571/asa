@@ -174,6 +174,14 @@
     background-color: #ffeba8 !important; /* สีเหลืองไฮไลต์ */
     font-weight: bold;
 }
+
+#qcReelTable tbody tr {
+    cursor: pointer;
+}
+#qcReelTable tbody tr.selected-reel-row {
+    background-color: #ffe8a1 !important; /* สีเหลืองไฮไลต์ */
+    font-weight: bold;
+}
 </style>
 
 <div id="pageLoader" class="loading-overlay" style="display: none;">
@@ -211,8 +219,11 @@
 
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
-                    <label for="searchOrderNo">🔍 เลขที่ใบสั่งผลิต:</label>
-                    <input type="text" id="searchOrderNo" placeholder="พิมพ์เลขที่ใบสั่งผลิต...">
+                    <label>📅 วันที่ผลิตเสร็จ:</label>
+                    <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
+                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <label>ถึง</label>
+                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
                 </div>
 
                 <!-- ปุ่มกดสั่งการ -->
@@ -280,6 +291,7 @@
 <script>
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
+  let qcModalTable; // ตารางบน Modal (#qcReelTable)
   let updateTimeout = null;
   const socket = io('/socket/wait-cut/qc-close-reel'); 
 
@@ -326,7 +338,6 @@
 
     
     socket.on('queue_structure_changed', function(res) {
-        console.log("🔔 สัญญาณเตือนภัยคิวเปลี่ยน: ทำการสั่งดาวน์โหลดข้อมูลตามฟิลเตอร์ปัจจุบันของตัวเองทันที!");
         if (res && res.success) {
             fetchFilteredQueue(); 
         }
@@ -488,34 +499,207 @@
         }
     });
 
+    qcModalTable = $('#qcReelTable').DataTable({
+        paging: true,
+        pageLength: 10,
+        lengthChange: false,
+        searching: false,
+        ordering: false,
+        info: false,
+        autoWidth: false,
+        columns: [
+            { "data": "REEL_NO", "defaultContent": "-" },
+            { "data": "GRADE", "defaultContent": "-" },
+            { "data": "date", "defaultContent": "-" },
+            { 
+                "data": "STATUS", 
+                "defaultContent": "-",
+                "render": function(data) {
+                    return `<span class="badge badge-success">${data}</span>`;
+                }
+            },
+            { "data": "DCS_REEL_NO", "defaultContent": "-" }
+        ],
+        createdRow: function(row, data, dataIndex) {
+            // 🎯 แก้ให้คลีน เหลือแค่ data.ID
+            $(row).attr('data-id', data.ID || '');
+        }
+    });
 
 
+    $('#qcReelTable tbody').on('click', 'tr', function () {
+        const rowData = qcModalTable.row(this).data();
+        
+        if (rowData) {
+            $('#qcReelTable tbody tr').removeClass('selected-reel-row table-warning');
+            $(this).addClass('selected-reel-row table-warning');
+
+            // 🎯 ดึง ID ตัวพิมพ์ใหญ่ยัดใส่ Hidden Input
+            $('#selectedReelId').val(rowData.ID);
+
+            $('#btnModalConfirm').prop('disabled', false);
+
+            // 🎯 แก้ตรงนี้เป็น rowData.ID (ตัวพิมพ์ใหญ่) และเพิ่มแสดง REEL_NO ด้วย
+            console.log(`📌 เลือก Reel No: ${rowData.REEL_NO} (ID: ${rowData.ID}) สำหรับ SplitSetId: ${$('#selectedSplitSetId').val()}`);
+        }
+    });
 
 
+    $('#btnModalSearch').on('click', function() {
+        loadQcReelData();
+    });
+
+    // 🟢 2. เมื่อพิมพ์ในกล่องค้นหา #modalSearchReelNo แล้วกดปุ่ม Enter
+    $('#modalSearchReelNo').on('keypress', function(e) {
+        if (e.which === 13) { // 13 คือปุ่ม Enter
+            e.preventDefault(); // ป้องกันไม่ให้ Form submit หน้าเว็บใหม่
+            loadQcReelData();
+        }
+    });
+    
 
   }); //ready function
   
-  function fetchFilteredQueue() {
-      const filterParams = {
-          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null
-      };
-      console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
-      socket.emit('get_filtered_queue', filterParams);
-  }
+    function fetchFilteredQueue() {
+        const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
+        const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
 
-  // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionQC(split_set_id) {
-        console.log("ddddddddddddd")
-        currentTargetId = split_set_id;
-        selectedRowData = null;
+        const filterParams = {
+            startDate: rawStartDate !== '' ? rawStartDate : null,
+            endDate: rawEndDate !== '' ? rawEndDate : null
+        };
+
+        console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
+        socket.emit('get_filtered_queue', filterParams);
+    }
+
+    // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
+    function actionQC(split_set_id) {
+        $('#selectedSplitSetId').val(split_set_id);
+    
+        // รีเซ็ตค่าการเลือกเดิม
+        $('#selectedReelId').val('');
+        $('#selectedReelNo').val('');
         $('#btnModalConfirm').prop('disabled', true); // ปิดปุ่มตกลงไว้ก่อนจนกว่าจะเลือกแถว
         
         // โหลดข้อมูล Reel ครั้งแรกใส่ Modal
-        // loadQcReelData();
+        loadQcReelData();
 
         // เปิด Modal เด้งขึ้นมา
         $('#qcReelModal').modal('show');
-  }
+    }
+
+    $('#qcReelModal').on('shown.bs.modal', function () {
+        if (qcModalTable) {
+            // 🎯 บังคับคำนวณความกว้างคอลัมน์ใหม่ให้เป๊ะทันทีที่ Modal แสดงผล
+            qcModalTable.columns.adjust().draw();
+        }
+    });
+
+    $('#btnModalConfirm').on('click', function () {
+        saveQcReelSelection();
+    });
+
+    function loadQcReelData() {
+        // 🎯 ดึงคำค้นหาจากช่องค้นหาใน Modal (ถ้าไม่มีค่า ให้ส่ง '%' ไปดึงทั้งหมด)
+        const keyword = $('#modalSearchReelNo').val() ? $('#modalSearchReelNo').val().trim() : '%';
+        console.log("========================uuuu=ddhdddhdhhdhdhd"+keyword)
+        if(!keyword || keyword == "%"){
+            return;
+        }
+        // (Optional) เปิด Loading Overlay ถ้ามี
+        if (typeof showLoader === 'function') showLoader();
+
+        // 🚀 ยิง AJAX ไปดึงข้อมูลจาก API หลังบ้าน
+        $.ajax({
+            url: '/wait-cut/qc-close-reel/getModal-reel', // 🎯 ปรับ URL ให้ตรงกับ Route หลังบ้านของกัปตัน
+            type: 'GET',
+            data: { search: keyword },
+            dataType: 'json',
+            success: function (response) {
+                if (typeof hideLoader === 'function') hideLoader();
+
+                if (response && response.success && Array.isArray(response.data)) {
+                    
+                    // 🛑 1. ปิดปุ่ม "ตกลง" และเคลียร์ค่ารายการที่เลือกเดิมก่อน
+                    selectedReelData = null;
+                    $('#btnModalConfirm').prop('disabled', true);
+
+                    // 🎯 2. ล้างข้อมูลเก่า และนำข้อมูลใหม่ยัดใส่ DataTables บน Modal
+                    if (qcModalTable) {
+                        qcModalTable.clear().rows.add(response.data).draw();
+                    }
+
+                    console.log(`✅ โหลดข้อมูล Reel สำเร็จ: ${response.data.length} รายการ`);
+
+                } else {
+                    alert('❌ ไม่สามารถดึงข้อมูล Reel ได้: ' + (response.message || 'รูปแบบข้อมูลไม่ถูกต้อง'));
+                }
+            },
+            error: function (xhr, status, error) {
+                if (typeof hideLoader === 'function') hideLoader();
+                console.error("💥 AJAX Error [loadQcReelData]:", error);
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อดึงข้อมูล Reel ได้');
+            }
+        });
+    }
+
+
+    async function saveQcReelSelection() {
+        const splitSetId = $('#selectedSplitSetId').val();
+        const reelId = $('#selectedReelId').val();
+
+        if (!splitSetId || !reelId) {
+            alert('กรุณาเลือกรายการ Reel ก่อนกดบันทึกครับ');
+            return;
+        }
+
+        const payload = {
+            splitSetId: splitSetId,
+            reelId: reelId
+        };
+
+        if (typeof showLoader === 'function') showLoader();
+
+        try {
+            const response = await $.ajax({
+                url: '/wait-cut/qc-close-reel/save-reel',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload)
+            });
+
+            if (typeof hideLoader === 'function') hideLoader();
+
+            if (response && response.success) {
+                alert('✅ บันทึกเลือก Reel สำเร็จ!');
+                const targetRow = queueTable.row(function (idx, data, node) {
+                    return data.split_set_id == splitSetId;
+                });
+
+                if (targetRow.length) {
+                    const rowData = targetRow.data();
+                    rowData.reel_id = reelId; 
+                    
+                    if (response.reelNo) {
+                        rowData.reel_no = response.reelNo; // อัปเดตชื่อ Reel No ไว้แสดงผล
+                    }
+                    targetRow.data(rowData).draw(false);
+                }
+
+                // ปิด Modal
+                $('#qcReelModal').modal('hide');
+
+            } else {
+                alert('❌ เกิดข้อผิดพลาด: ' + (response.message || 'ไม่สามารถบันทึกข้อมูลได้'));
+            }
+
+        } catch (err) {
+            if (typeof hideLoader === 'function') hideLoader();
+            console.error("💥 Error [saveQcReelSelection]:", err);
+            alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
+        }
+    }
 
     function showLoader() {
         // ล็อกหน้าจอทันที พนักงานจะคลิกปุ่มใดๆ ในตารางซ้ำไม่ได้เลย

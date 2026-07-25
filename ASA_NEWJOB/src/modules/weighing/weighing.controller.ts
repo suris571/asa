@@ -49,3 +49,27 @@ export const saveWeighingController = async (req: Request, res: Response) => {
         return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์" });
     }
 };
+
+
+export const fetchweighinglist = async (req: Request, res: Response) => {
+    try {
+        const search = req.query.order_no ? String(req.query.order_no).trim() : '%';
+
+        console.log(search)
+
+        const data =  await WeighingModel.getNextWeighing(search);
+
+        return res.json({
+            success: true,
+            data: data
+        });
+
+    } catch (error: any) {
+        console.error("❌ Controller Error [getQcReelListController]:", error);
+        return res.status(500).json({
+            success: false,
+            message: "เกิดข้อผิดพลาดในการดึงข้อมูลรายการ Reel",
+            error: error.message
+        });
+    }
+};
