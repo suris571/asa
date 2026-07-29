@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 // src/routes/auth-routes.ts
 const express_1 = require("express");
+const auth_model_1 = require("./auth.model");
 require("express-session");
 const router = (0, express_1.Router)();
-// 👥 1. ถังข้อมูลพนักงานจำลอง (Mock DB) รอสลับพิกัดจริงของลูกค้าในอนาคต
+// 👥 1. ถังข้อมูลพนักงานจำลอง (Mock DB)
 const MOCK_USERS = [
     { username: 'admin1', password: 'password123', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
     { username: 'a', password: 'a', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
@@ -13,40 +14,50 @@ const MOCK_USERS = [
 ];
 // 🔓 หน้ากากหน้าจอ Login (GET: /login)
 router.get('/login', (req, res) => {
-    // ถ้าพนักงานล็อกอินค้างไว้อยู่แล้ว ให้ดีดไปหน้าทำคิวงานทันที ไม่ต้องกรอกซ้ำ
     if (req.session.user) {
         return res.redirect('/');
     }
     res.render('login/login', { error: null });
 });
-// 🔑 ตรวจจับรหัสผ่าน (POST: /login)
-router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    // ค้นหารายชื่อในตรรกะคลังแสงจำลองของเรา
+// 🔑 ตรวจจับรหัสผ่าน และเครื่องจักรที่เลือก (POST: /login)
+router.post('/login', async (req, res) => {
+    const { username, password, machineNo } = req.body;
+    // ค้นหารายชื่อในตรรกะคลังแสงจำลอง
     const user = MOCK_USERS.find(u => u.username === username && u.password === password);
-    console.log(user);
     if (user) {
-        // 🎯 หัวใจหลัก: ยัดสิทธิ์และชื่อลง Session คุกกี้จะถูกเซ็ตลงเครื่องคนงานออโต้ 1 ปี!
-        req.session.user = {
-            username: user.username,
-            role: user.role,
-            name: user.name
-        };
-        console.log(`🟢 ${user.name} เข้าสู่ระบบสำเร็จ (คุกกี้สแตนด์บาย 1 ปี)`);
-        return res.status(200).json({
-            "success": true,
-            "redirectUrl": "/"
-        });
+        try {
+            // 🎯 ดึง ID จริงจากตาราง PL_PRODUCTION_LINE โดยใช้ machineNo (เช่น 1 หรือ 2)
+            const productionLineId = await auth_model_1.AuthModel.getProductionLineIdByNo(Number(machineNo));
+            // 🎯 ยัดสิทธิ์, ชื่อ, และข้อมูลเครื่องจักรลง Session
+            req.session.user = {
+                username: user.username,
+                role: user.role,
+                name: user.name,
+                machineNo: Number(machineNo),
+                productionLineId: productionLineId
+            };
+            return res.status(200).json({
+                success: true,
+                redirectUrl: "/"
+            });
+        }
+        catch (dbError) {
+            console.error("❌ เกิดข้อผิดพลาดในการดึงข้อมูลเครื่องจักร:", dbError);
+            return res.status(500).json({
+                success: false,
+                error: dbError.message || 'เกิดข้อผิดพลาดภายในระบบในการดึงข้อมูลเครื่องจักร'
+            });
+        }
     }
     else {
         console.log(`🔴 [AJAX] ล็อกอินล้มเหลว: ไอดีหรือรหัสผ่านผิดพลาด (Username: ${username})`);
         return res.status(401).json({
             success: false,
-            error: '❌ รหัสผ่านไม่ถูกต้อง หรือไม่มีชื่อพนักงานท่านนี้ในระบบประจำกะ'
+            error: '❌ รหัสผ่านไม่ถูกต้องหรือชื่อผู้ใช้ไม่ถูกต้อง'
         });
     }
 });
-// 🚪 ปุ่มกดออกจากระบบ (GET: /logout) เผื่อซ่อมบำรุงเครื่อง
+// 🚪 ปุ่มกดออกจากระบบ (GET: /logout)
 router.get('/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err)

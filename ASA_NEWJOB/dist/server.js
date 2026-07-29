@@ -66,7 +66,8 @@ app.use((req, res, next) => {
         username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
         role: req.session.user?.role === 'admin' ? "หัวหน้าผู้ควบคุมงาน" : "พนักงานหน้างาน",
         pm1_pending: 5, // สถิติรอชุบชีวิตคิวรีจาก Oracle จริงในอนาคต
-        pm2_pending: 3
+        pm2_pending: 3,
+        pm_select: req.session.user?.machineNo
     };
     next();
 });

@@ -72,6 +72,14 @@
           </div>
         </div>
 
+        <div class="form-group mb-3">
+            <label for="machineSelect" class="font-weight-bold">เลือกเครื่องจักรที่ปฏิบัติงาน</label>
+            <select id="machineSelect" name="machineId" class="form-control custom-select" required>
+                <option selected value="1">🏭 เครื่องตัดที่ 1 (PM 1)</option>
+                <option value="2">🏭 เครื่องตัดที่ 2 (PM 2)</option>
+            </select>
+        </div>
+
         <div class="row">
           <div class="col-12">
             <button type="submit" class="btn btn-primary btn-block btn-lg font-weight-bold shadow-sm">
@@ -129,9 +137,10 @@
 
       const payload = {
         username: $('input[name="username"]').val(),
-        password: $('input[name="password"]').val()
+        password: $('input[name="password"]').val(),
+        machineNo: $('#machineSelect').val()
       };
-
+      console.log(payload)
       $.ajax({
         url: '/login',
         method: 'POST',

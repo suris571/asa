@@ -22,10 +22,9 @@ const startQueueMonitor = (waitCutNamespace: any) => {
             // 2. 🎯 ไม้ตายตามสั่งกัปตัน: ลอกคราบข้อมูล กรองฟิลด์ที่มีท่อตัวเองอยู่แล้วออกไปก่อนทำ Hash
             // กรองเอา 'que' (เลขคิวสลับ) และ 'status' (สถานะงาน) ออกไป เพื่อป้องกันท่อยิงซ้ำซ้อน
             const filteredDataForHash = currentRawData.map((item: any) => {
-                const { que, cut_status_id, ...restOfData } = item; 
+                const { que, ...restOfData } = item; 
                 return restOfData; // เหลือไว้เฉพาะข้อมูลเชิงโครงสร้าง เช่น orderNo, ITEM, ขนาดใบมีด
             });
-
             // 3. ทำ Hash จากข้อมูลที่กรองแล้ว
             const currentHash = crypto.createHash('md5').update(JSON.stringify(filteredDataForHash)).digest('hex');
 
@@ -66,8 +65,9 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
 
         socket.on('get_filtered_queue', async (payload) => {
             try {
-                const { startDate, endDate } = payload;
-                const data = await WaitCutModel.getQcCloseReel(null, startDate, endDate);
+                console.log(payload)
+                const { status, orderNo, startDate, endDate } = payload;
+                const data = await WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
                 
                 socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
             } catch (error:any) {
@@ -180,6 +180,7 @@ export const FnNextRoll = async () => {
             console.warn('⚠️ [Socket Warning] ไม่พบตัวแปร io');
         }
 
+        await FnNextQcCloseReel()
     } catch (error: any) {
         console.error("❌ [FnNextRoll Error]:", error);
         

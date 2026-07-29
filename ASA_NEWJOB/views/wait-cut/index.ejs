@@ -323,7 +323,8 @@
     socket.on('update_queue_table', function(res) {
         hideLoader();
         if (!res || !res.success || !res.data) return;
-        
+        console.log("=================================")
+        console.log(res.data)
         if (queueTable) {
             // เช็กว่าพนักงานกำลังเอาเมาส์ชี้เล็งปุ่มจัดการคิวงานอยู่หรือไม่
             const isUserHoveringButtons = $('.queue-action-group:hover').length > 0;
@@ -356,7 +357,7 @@
     queueTable = $('#queueTable').DataTable({
         "paging": true,
         "pageLength": 25,
-        "searching": true,
+        "searching": false,
         "ordering": false,
         "data": serverData,
         "columns": [
@@ -390,8 +391,8 @@
                     let badgeClass = '';
                     // ดักจับเคส: ค่าว่าง (ข้อมูลใหม่) หรือเลข 1 => ให้เป็น "รอสั่งตัด"
                     if (data === null || data === undefined || parseInt(data) === 1) {
-                        statusName = 'รอสั่งตัด';
-                        badgeClass = 'bg-warning text-dark'; // สีเหลืองเด่น ให้รู้ว่างานใหม่เข้ามารอสั่งการ
+                        statusName = '';
+                        badgeClass = ''; // สีเหลืองเด่น ให้รู้ว่างานใหม่เข้ามารอสั่งการ
                     } else {
                         switch(parseInt(data)) {
                             case 2:
@@ -422,11 +423,12 @@
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    if (row.status === 'เสร็จสิ้น') {
-                    return `<button class="btn btn-sm btn-outline-secondary m-1" disabled>สิ้นสุดกระบวนการ</button>`;
-                    }
+                    // 🎯 ดึงสถานะปัจจุบัน
+                    const rawStatus = row.cut_status_id;
+                    const currentCutStatus = rawStatus ? parseInt(rawStatus) : 1;
+                    const isCompleted = (row.status === 'เสร็จสิ้น' || currentCutStatus === 5);
 
-                    // 🎨 พาเลทสีแบบซอฟต์ ทึบ นุ่มตา แยกประเภทชัดเจนตามที่กัปตันสรุปเลือกไว้
+                    // 🎨 พาเลทสี
                     const styleCut     = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
                     const styleHold    = 'background-color: #6c757d !important; border-color: #6c757d !important; color: #fff !important;';
                     const styleUnhold  = 'background-color: #e2e6ea !important; border-color: #dae0e5 !important; color: #495057 !important;';
@@ -434,13 +436,28 @@
                     const styleReset   = 'background-color: #e67e22 !important; border-color: #e67e22 !important; color: #fff !important;';
                     const styleQueue   = 'background-color: #f1f3f5 !important; border-color: #ced4da !important; color: #343a40 !important;';
 
+                    // 🎯 กรณีที่ 1: ถ้าสถานะเสร็จสิ้นแล้ว (status = 5) ให้โชว์เฉพาะปุ่ม Reset ปุ่มเดียว
+                    if (isCompleted) {
+                        return `
+                        <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
+                            <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'reset')">Reset</button>
+                        </div>
+                        `;
+                    }
+
+                    // 🔒 กรณีที่ 2: ปุ่มสั่งตัดจะ "กดได้" เฉพาะเมื่อ status เป็น 1 หรือ ค่าว่าง (null/undefined) เท่านั้น
+                    const canCut = (rawStatus === null || rawStatus === undefined || currentCutStatus === 1);
+                    const isCutDisabled = canCut 
+                        ? `style="${styleCut}"` 
+                        : 'disabled style="' + styleCut + ' opacity: 0.55; cursor: not-allowed;"';
+
                     return `
                     <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleCut}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty})">สั่งตัด</button>
+                        <button class="btn btn-sm font-weight-bold m-1" ${isCutDisabled} onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty})">สั่งตัด</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleHold}" onclick="actionHold(${row.pl_order_detail_id}, ${row.pl_order_id})">HOLD</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleUnhold}" onclick="actionUnhold(${row.pl_order_detail_id}, ${row.pl_order_id})">ปลด HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleSuccess}" onclick="actionSuccess(${row.pl_order_detail_id}, ${row.pl_order_id})">เสร็จสิ้น</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionReset(${row.pl_order_detail_id}, ${row.pl_order_id})">Reset</button>
+                        <button class="btn btn-sm font-weight-bold m-1" style="${styleSuccess}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'success')">เสร็จสิ้น</button>
+                        <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'reset')">Reset</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveDown(${row.pl_order_detail_id}, ${row.que})">ลง</button>
                     </div>
@@ -546,7 +563,7 @@
   }
 
   // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionCut(pl_order_detail_id,pl_order_id,qty) { 
+  function actionCut(pl_order_detail_id,pl_order_id,qty,type = null) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
     showLoader(); 
 
@@ -559,7 +576,8 @@
         body: JSON.stringify({
             orderId: pl_order_id,
             orderDetailId: pl_order_detail_id,
-            qty: parseInt(qty)
+            qty: parseInt(qty),
+            type
         })
     })
     .then(response => response.json())
@@ -582,7 +600,6 @@
   function actionHold(pl_order_detail_id,pl_order_id) { console.log('HOLD:', pl_order_detail_id); }
   function actionUnhold(pl_order_detail_id,pl_order_id) { console.log('ปลด HOLD:', pl_order_detail_id); }
   function actionSuccess(pl_order_detail_id,pl_order_id) { console.log('เสร็จสิ้น:', pl_order_detail_id); }
-  function actionReset(pl_order_detail_id,pl_order_id) { console.log('Reset:', pl_order_detail_id); }
 
 
     function showLoader() {

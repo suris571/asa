@@ -319,86 +319,125 @@
         "pageLength": 25,
         "searching": true,
         "ordering": false,
-        "data": serverData, // ข้อมูล Array ที่ยิงมาจาก View หลังบ้าน
+        "data": serverData, 
         "columns": [
-            { "data": "order_no" },          // เลขที่ใบสั่งผลิต (เช่น 0065/2026)
-            { "data": "orderItem" },        // ITEM (เช่น 1, 2)
-            
+            { "data": "order_no" },
+            { "data": "orderItem" },
             { "data": "grade1" },
             { "data": "grade2" },
             { "data": "grade3" },
             { "data": "grade4" },
             { 
-                "data": "set",            // 🎯 คอลัมน์ set_no จาก pl_cut_split_set (เช่น 1/6, 2/6)
+                "data": "set",
                 "render": function(data) {
                     return `<span class="font-weight-bold text-primary">${data || '-'}</span>`;
                 }
             },
-            // --- ตั้งค่าใบมีด ---
             { "data": "blad1", "defaultContent": "" },
             { "data": "blad2", "defaultContent": "" },
             { "data": "blad3", "defaultContent": "" },
             { "data": "blad4", "defaultContent": "" },
-            // --- Size นิ้ว ---
             { "data": "size1", "defaultContent": "" },
             { "data": "size2", "defaultContent": "" },
             { "data": "size3", "defaultContent": "" },
             { "data": "size4", "defaultContent": "" },
-            // --- ความยาว ---
             { 
-                "data": "lenght",        // 🎯 ความยาวสั่งตัดจาก pl_cut_split_set
+                "data": "lenght",
                 "render": function(data) {
                     return data ? Number(data).toLocaleString() : '';
                 }
             },
-            // --- คอลัมน์ปุ่มกดจัดการรายการเซ็ตย่อย ---
+
+            // 🎯 คอลัมน์ปุ่ม "เสร็จสิ้น"
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    // 🔍 ถ้า status เป็น 5 (เสร็จสิ้นแล้ว) ไม่ต้องแสดงปุ่ม
-                    if (row.cut_status_id == 5) {
-                        return `<span class="badge badge-success btn-sm">เสร็จสิ้น</span>`; 
-                        // 💡 หรือถ้าไม่อยากแสดงอะไรเลย ให้ return "" ลอยๆ ได้เลยครับ
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+
+                    // 🟢 ถ้าเสร็จสิ้นแล้ว (status = 5) เปลี่ยนเป็น Badge สีเขียวเด่นๆ
+                    if (setStatus === 5) {
+                        return `<span class="badge badge-success btn-sm p-2 btn-block font-weight-bold" style="font-size: 90%;">✓ เสร็จสิ้น</span>`; 
                     }
 
-                    // 🟢 ถ้ายังไม่เสร็จ แสดงปุ่มกดปกติ
+                    // 🟡 สถานะอื่น (รวมถึง HOLD = 4) แสดงปุ่มเสร็จสิ้นให้กดได้
                     return `<button class="btn btn-sm btn-success font-weight-bold btn-block" 
                                 onclick="actionSetSuccess(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
                                 เสร็จสิ้น
                             </button>`;
                 }
             },
+            // 🎯 คอลัมน์ปุ่ม "HOLD"
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    // ปุ่ม HOLD
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    // 🟡 ติด HOLD อยู่ (status = 4) แสดง Badge คำว่า HOLD ชัดๆ
+                    if (setStatus === 4) {
+                        return `<span class="badge badge-dark btn-sm p-2 btn-block font-weight-bold" style="background-color: #5a6268; font-size: 90%;">⛔ HOLD</span>`;
+                    }
+                    // 🟢 เสร็จสิ้นแล้ว (status = 5) จางปุ่มลงให้เห็นชัดว่ากดไม่ได้
+                    if (setStatus === 5) {
+                        return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" disabled style="opacity: 0.25; cursor: not-allowed;">HOLD</button>`;
+                    }
+                    // ⚪ สถานะปกติ
                     return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" 
-                            onclick="actionSetHold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">HOLD</button>`;
+                                onclick="actionSetHold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
+                                HOLD
+                            </button>`;
                 }
             },
+            // 🎯 คอลัมน์ปุ่ม "ปลด HOLD"
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    // ปุ่ม ปลด HOLD
-                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block" 
-                            onclick="actionSetUnhold(${row.split_set_id})">ปลด HOLD</button>`;
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    // 🟡 ติด HOLD อยู่ (status = 4) เน้นปุ่ม "ปลด HOLD" เป็นสีน้ำเงินให้เห็นชัดเจน
+                    if (setStatus === 4) {
+                        return `<button class="btn btn-sm btn-primary font-weight-bold btn-block shadow-sm" 
+                                    onclick="actionSetUnhold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
+                                    🔓 ปลด HOLD
+                                </button>`;
+                    }
+                    // 🔒 สถานะอื่น จางปุ่มลงให้รู้ว่าใช้ไม่ได้
+                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block text-muted" disabled style="opacity: 0.25; cursor: not-allowed;">
+                                ปลด HOLD
+                            </button>`;
                 }
             },
+            // 🎯 คอลัมน์ปุ่ม "Reset"
             {
                 "data": null,
                 "render": function(data, type, row) {
-                    // ปุ่ม Reset
-                    return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" 
-                            onclick="actionSetReset(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">Reset</button>`;
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+
+                    // 🟢 1. สถานะต้องเป็น 5 (เสร็จสิ้น) เท่านั้น ถึงจะกด Reset ได้
+                    if (setStatus === 5) {
+                        return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" 
+                                    onclick="actionSetReset(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
+                                    Reset
+                                </button>`;
+                    }
+
+                    // 🔒 2. ถ้าสถานะไม่ใช่ 5 (ยังไม่เสร็จ) ให้ Disable ปุ่ม Reset ไว้
+                    return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" disabled style="opacity: 0.35; cursor: not-allowed;">
+                                Reset
+                            </button>`;
                 }
             }
         ],
+        // 🎨 จุดเด่นที่สุด: เพิ่มการไฮไลต์สีพื้นหลังทั้งแถว (Row Style) ตามสถานะ
         "createdRow": function(row, data, dataIndex) {
-            // ผูก Primary Key ของตาราง pl_cut_split_set ไว้ที่แถว
             $(row).attr('data-split-id', data.splitSetId);
+            const setStatus = data.status ? parseInt(data.status) : parseInt(data.cut_status_id);
+            if (setStatus === 5) {
+                // 🟢 แถวที่เสร็จสิ้น: ปรับพื้นหลังเป็นสีเขียวอ่อน นุ่มตา
+                $(row).css('background-color', '#e6f4ea'); 
+            } else if (setStatus === 4) {
+                // 🟡 แถวที่ติด HOLD: ปรับพื้นหลังเป็นสีส้ม/เทาเตือนสายตา
+                $(row).css('background-color', '#fff3cd'); 
+            }
         }
     });
-    
 
     socket.on('update_queue_table', function(res) {
         hideLoader();
@@ -475,7 +514,7 @@
     });
   }
 
-  function actionSetHold(split_set_id,pl_order_id,pl_order_detail_id) { 
+    function actionSetHold(split_set_id,pl_order_id,pl_order_detail_id) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
     showLoader(); 
 
@@ -507,9 +546,9 @@
         console.error("❌ API Error:", error);
         alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
     });
-  }
-  
-  function actionSetReset(split_set_id,pl_order_id,pl_order_detail_id) { 
+    }
+
+    function actionSetReset(split_set_id,pl_order_id,pl_order_detail_id) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
     showLoader(); 
 
@@ -543,7 +582,40 @@
     });
   }
 
-  
+    function actionSetUnhold(split_set_id,pl_order_id,pl_order_detail_id) { 
+    // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
+    showLoader(); 
+
+    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
+
+    // 2. ยิง HTTP POST API ไปหลังบ้าน
+    fetch('/wait-cut/start-weighing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            split_set_id: split_set_id,
+            pl_order_id: pl_order_id,
+            pl_order_detail_id: pl_order_detail_id,
+            type:"unhold"
+        })
+    })
+    .then(response => response.json())
+    .then(res => {
+        if (res.success) {
+            // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
+            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
+        } else {
+            hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
+            alert(`❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว`);
+        }
+    })
+    .catch(error => {
+        hideLoader();
+        console.error("❌ API Error:", error);
+        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+    });
+    }
+
 
 
     function showLoader() {

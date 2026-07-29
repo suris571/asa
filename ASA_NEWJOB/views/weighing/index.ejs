@@ -156,8 +156,12 @@
         // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
         // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
         $('#weighingForm').on('submit', async function(e) {
+            
             e.preventDefault()
-
+            if(!$('#id').val()){
+                alert("❌ เกิดข้อผิดพลาด: ไม่สามารถบันทึกได้เนื่องจากไม่มีรายการที่ถูกเลือก");
+                return;
+            }
             const selectedStatus = $('input[name="status"]:checked').val();
             const remarkInput = $('#remark'); // ดึง Object ช่องหมายเหตุมาถือไว้
             const remarkValue = remarkInput.val().trim();
