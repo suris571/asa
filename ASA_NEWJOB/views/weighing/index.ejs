@@ -121,8 +121,17 @@
 <script>
     let weighingTable;
     let modalOrderTable;
-    let socket = io('/socket/weighing');
+    const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
+    let socket = io('/socket/weighing', {
+        query: { 
+            productionLineId: userProductionLineId 
+        }
+    });
     let socketScale = io('http://localhost:4000');
+
+    socket.off('connect');
+    socket.off('disconnect');
+    socket.off('queue_updated');
 
     async function sendDataToPrint(data) {
         $.ajax({

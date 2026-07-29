@@ -3,9 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchweighinglist = exports.saveWeighingController = exports.getWeighingPage = void 0;
 const weighing_model_1 = require("./weighing.model");
 const getWeighingPage = async (req, res) => {
+    const productionLineId = req.session.user?.productionLineId;
     try {
         // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
-        const getNextWeighing = await weighing_model_1.WeighingModel.getNextWeighing();
+        const getNextWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId);
         // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
         res.render('weighing/index', { nextData: getNextWeighing });
     }
@@ -47,10 +48,11 @@ const saveWeighingController = async (req, res) => {
 };
 exports.saveWeighingController = saveWeighingController;
 const fetchweighinglist = async (req, res) => {
+    const productionLineId = req.session.user?.productionLineId;
     try {
         const search = req.query.order_no ? String(req.query.order_no).trim() : '%';
         console.log(search);
-        const data = await weighing_model_1.WeighingModel.getNextWeighing(search);
+        const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, search);
         return res.json({
             success: true,
             data: data

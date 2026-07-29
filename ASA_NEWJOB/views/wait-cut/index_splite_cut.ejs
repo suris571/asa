@@ -261,7 +261,13 @@
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
   let updateTimeout = null;
-  const socket = io('/socket/wait-cut/split-cut-set'); 
+    const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
+    const socket = io('/socket/wait-cut/split-cut-set', {
+        query: { 
+            productionLineId: userProductionLineId 
+        }
+    }); 
+   
 
   // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
   socket.off('connect');

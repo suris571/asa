@@ -337,7 +337,7 @@ export class WaitCutModel {
         }
     }
     
-    static async getSplitSetQueueData(orderNo?: string | null): Promise<any[]> {
+    static async getSplitSetQueueData(orderNo?: string | null, lineId?: string | number | null): Promise<any[]> {
         let conn;
 
         try {
@@ -367,23 +367,29 @@ export class WaitCutModel {
                     cut_length          AS CUT_LENGTH,
                     split_status_id     AS CUT_STATUS_ID,
                     queue_no            AS QUEUE_NO,
-                    order_item
+                    pl_production_line_id AS PL_PRODUCTION_LINE_ID
                 FROM pl_cut_split_set_view
                 WHERE 1=1
-                `;
+            `;
 
             const binds: any = {};
 
-            // 🔍 รับและกรองเฉพาะ orderNo ตัวเดียวตามคำสั่งกัปตัน
-            if (orderNo && orderNo.trim() !== '') {
-                sql += ` AND UPPER(order_no) LIKE :orderNo`;
-                binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
-                sql += ` AND split_status_id IN (2, 4, 5) `;
-            }else{
-                sql += ` AND split_status_id = 2`;
+            // 🔍 กรองตาม ID สายการผลิต/เครื่อง (pl_production_line_id)
+            if (lineId) {
+                sql += ` AND pl_production_line_id = :lineId `;
+                binds.lineId = lineId;
             }
 
-            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย (1/6, 2/6, ...)
+            // 🔍 กรอง Order No ตามเงื่อนไข
+            if (orderNo && orderNo.trim() !== '') {
+                sql += ` AND UPPER(order_no) LIKE :orderNo `;
+                binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
+                sql += ` AND split_status_id IN (2, 4, 5) `;
+            } else {
+                sql += ` AND split_status_id = 2 `;
+            }
+
+            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
 
             const result = await conn.execute(sql, binds, {
@@ -391,8 +397,8 @@ export class WaitCutModel {
             });
 
             const dataList: any[] = [];
-            let i = 0;
             if (result.rows) {
+                let i = 0;
                 for (const row of (result.rows as any[])) { 
                     i++;
                     dataList.push({
@@ -412,17 +418,17 @@ export class WaitCutModel {
                         size2: row.SIZE_2,
                         size3: row.SIZE_3,
                         size4: row.SIZE_4,
-                        lenght: row.CUT_LENGHT,
-                        status: row.STATUS,
+                        lenght: row.CUT_LENGTH,
                         que: row.QUEUE_NO,
                         cut_status_id: row.CUT_STATUS_ID,
                         pl_order_id: row.PL_ORDER_ID,
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
+                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID
                     });
                 }
             }
-            console.log("============================================================================")
+            
             return dataList;
 
         } catch (error) {

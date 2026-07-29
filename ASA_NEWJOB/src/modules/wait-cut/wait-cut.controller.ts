@@ -16,7 +16,8 @@ export const getWaitCutPage = async (req: Request, res: Response) => {
 
 export const getWaitCutSplitSet = async (req: Request, res: Response) => {
     try {
-        const queueData = await WaitCutModel.getSplitSetQueueData();
+        const productionLineId = req.session.user?.productionLineId;
+        const queueData = await WaitCutModel.getSplitSetQueueData(null, productionLineId);
         const statusList = await WaitCutModel.getAllCutStatuses();
         res.render("wait-cut/index_splite_cut", { orders: queueData, statusList });
     } catch (error) {
@@ -27,24 +28,26 @@ export const getWaitCutSplitSet = async (req: Request, res: Response) => {
 
 export const startProduction = async (req: Request, res: Response) => {
     const { orderId, orderDetailId, qty, type } = req.body;
+    // 🎯 ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
+    const productionLineId:any = req.session.user?.productionLineId;
 
-    // 1. Validation เบื้องต้นสำหรับข้อมูลบังคับ
     if (!orderId || !orderDetailId) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน (กรุณาระบุ orderId และ orderDetailId)" });
     }
 
     try {
         const io = getIO();
+        // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
+        const targetRoom = productionLineId ? io.of("/socket/wait-cut").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut");
 
-        // 🎯 CASE 1: กรณีสั่งกด "เสร็จสิ้น" (Force Complete)
         if (type && type === "success") {
             console.log(`📡 [Controller] รับคำสั่งบังคับเสร็จสิ้น สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
             const result = await WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId);
-            await FnNextCutSplitSet();
+            await FnNextCutSplitSet(productionLineId);
 
-            // 🔊 Broadcast บอกหน้าจอ /wait-cut ให้รีเฟรชข้อมูลเรียลไทม์
-            io.of("/socket/wait-cut").emit("queue_structure_changed", { success: true });
+            // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
+            targetRoom.emit("queue_structure_changed", { success: true });
 
             return res.status(200).json({
                 success: true,
@@ -56,8 +59,8 @@ export const startProduction = async (req: Request, res: Response) => {
 
             const result = await WaitCutModel.forceResetOrderDetail(orderDetailId, orderId);
 
-            // Broadcast สัญญาณให้ทุกหน้าจอดึงข้อมูลใหม่
-            io.of("/socket/wait-cut").emit("queue_structure_changed", { success: true });
+            // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
+            targetRoom.emit("queue_structure_changed", { success: true });
 
             return res.status(200).json({
                 success: true,
@@ -66,19 +69,17 @@ export const startProduction = async (req: Request, res: Response) => {
             });
         }
 
-        // 🎯 CASE 2: กรณีสั่งตัดปกติ (สร้าง Set ใหม่)
-        // ตรวจสอบ qty สำหรับการสั่งตัด
         if (!qty || isNaN(Number(qty)) || Number(qty) <= 0) {
             return res.status(400).json({ success: false, message: "จำนวนเซ็ตไม่ถูกต้อง" });
         }
 
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
-        // สั่งสร้างรายการเซ็ตย่อย
         const createResult = await WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty));
-        await FnNextCutSplitSet();
-        // 🔊 Broadcast บอกหน้าจอ /wait-cut ให้รีเฟรชข้อมูลเรียลไทม์
-        io.of("/socket/wait-cut").emit("queue_structure_changed", { success: true });
+        await FnNextCutSplitSet(productionLineId);
+
+        // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
+        targetRoom.emit("queue_structure_changed", { success: true });
 
         return res.status(200).json({
             success: true,
@@ -96,13 +97,22 @@ export const startProduction = async (req: Request, res: Response) => {
 
 export const startWeighing = async (req: Request, res: Response) => {
     const { split_set_id, pl_order_id, pl_order_detail_id, type } = req.body;
+    // 🎯 ดึง ID เครื่องจาก Session
+    const productionLineId:any = req.session.user?.productionLineId;
+    const io = getIO();
+
+    // 🎯 เตรียม Target Room สำหรับยิงไปหน้า Split Set เฉพาะเครื่อง
+    const splitSetTargetRoom = productionLineId ? io.of("/socket/wait-cut/split-cut-set").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut/split-cut-set");
+
     if (type == "hold") {
         try {
             let data = await WaitCutModel.holdCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
             await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
-            const io = getIO();
-            io.of("/socket/wait-cut/split-cut-set").emit("queue_structure_changed", { success: true });
-            await FnNextRoll();
+
+            // 🔊 ยิงเฉพาะเครื่อง
+            splitSetTargetRoom.emit("queue_structure_changed", { success: true });
+
+            await FnNextRoll(productionLineId);
             return res.status(200).json({ success: data, message: "Hold สำเร็จ" });
         } catch (error: any) {
             console.error("❌ [Controller Error] ระบบสั่งการติดขัด:", error);
@@ -112,9 +122,11 @@ export const startWeighing = async (req: Request, res: Response) => {
         try {
             let data = await WaitCutModel.ResetCutSlitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
             await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
-            const io = getIO();
-            io.of("/socket/wait-cut/split-cut-set").emit("queue_structure_changed", { success: true });
-            await FnNextRoll();
+
+            // 🔊 ยิงเฉพาะเครื่อง
+            splitSetTargetRoom.emit("queue_structure_changed", { success: true });
+
+            await FnNextRoll(productionLineId);
             return res.status(200).json({ success: data, message: "Reset สำเร็จ" });
         } catch (error: any) {
             console.error("❌ [Controller Error] ระบบสั่งการติดขัด:", error);
@@ -124,16 +136,18 @@ export const startWeighing = async (req: Request, res: Response) => {
         try {
             let data = await WaitCutModel.unHoldCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
             await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
-            const io = getIO();
-            io.of("/socket/wait-cut/split-cut-set").emit("queue_structure_changed", { success: true });
-            await FnNextRoll();
+
+            // 🔊 ยิงเฉพาะเครื่อง
+            splitSetTargetRoom.emit("queue_structure_changed", { success: true });
+
+            await FnNextRoll(productionLineId);
             return res.status(200).json({ success: data, message: "UnHold สำเร็จ" });
         } catch (error: any) {
             console.error("❌ [Controller Error] ระบบสั่งการติดขัด:", error);
             return res.status(500).json({ success: false, message: error.message || "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" });
         }
     }
-    // ตรวจสอบความถูกต้องของข้อมูลเบื้องต้น (Validation) ก่อนลงแรงทำงาน
+
     if (!split_set_id || !pl_order_id || !pl_order_detail_id) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วนหรือจำนวนเซ็ตไม่ถูกต้อง" });
     }
@@ -141,12 +155,13 @@ export const startWeighing = async (req: Request, res: Response) => {
     try {
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
 
-        // 🚀 สั่งเรียกใช้งานฟังก์ชัน Model ที่กัปตันย้ายคำสั่งไปจัดเก็บไว้
         await WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
         await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
-        const io = getIO();
-        io.of("/socket/wait-cut/split-cut-set").emit("queue_structure_changed", { success: true });
-        await FnNextRoll();
+
+        // 🔊 ยิงเฉพาะเครื่อง
+        splitSetTargetRoom.emit("queue_structure_changed", { success: true });
+
+        await FnNextRoll(productionLineId);
         return res.status(200).json({ success: true, message: "บันทึกคำสั่งและสร้างรายการเซ็ตย่อยสำเร็จ" });
     } catch (error: any) {
         console.error("❌ [Controller Error] ระบบสั่งการติดขัด:", error);
@@ -166,10 +181,8 @@ export const qcCloseReel = async (req: Request, res: Response) => {
 
 export const saveRemarkController = async (req: Request, res: Response) => {
     try {
-        // รับค่า items ที่เป็น Array [{ id: 101, remark: '...' }, ...] จาก req.body
         const { items } = req.body;
 
-        // 🛡️ Validation ตรวจสอบความถูกต้องของ Payload
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -177,7 +190,6 @@ export const saveRemarkController = async (req: Request, res: Response) => {
             });
         }
 
-        // 🎯 กรองเฉพาะรายการที่มี id ส่งมาจริง
         const validItems = items.filter((item) => item.id !== undefined && item.id !== null);
 
         if (validItems.length === 0) {
@@ -187,7 +199,6 @@ export const saveRemarkController = async (req: Request, res: Response) => {
             });
         }
 
-        // 🎯 เรียก Model สั่งบันทึกลงตาราง pl_cut_split_set
         const isSuccess = await WaitCutModel.saveRemarks(validItems);
 
         if (isSuccess) {
@@ -235,7 +246,6 @@ export const saveQcCloseReelController = async (req: Request, res: Response) => 
     try {
         const { splitSetId, reelId } = req.body;
 
-        // ตรวจสอบค่าที่ส่งมา
         if (!splitSetId || !reelId) {
             return res.status(400).json({
                 success: false,
@@ -243,7 +253,6 @@ export const saveQcCloseReelController = async (req: Request, res: Response) => 
             });
         }
 
-        // ยิงไปอัปเดต REEL_ID
         const result = await WaitCutModel.updateCloseReel(splitSetId, reelId);
         await FnNextQcCloseReel();
         if (result.rowsAffected && result.rowsAffected > 0) {

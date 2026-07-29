@@ -10,54 +10,60 @@ const oracledb_1 = __importDefault(require("oracledb"));
 // 💾 คลังข้อมูลจำลองประวัติการชั่งน้ำหนักในแรม (In-Memory)
 class WeighingModel {
     // ดึงประวัติที่ชั่งน้ำหนักแล้วทั้งหมดมารายงานผล
-    static async getNextWeighing(search = null) {
+    static async getNextWeighing(productionLineId, search = null) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
             // 🎯 1. Query ดึงคิว
             let sql = `
-                SELECT 
-                    id                  AS "id",
-                    pl_order_id         AS "orderId",
-                    pl_order_detail_id  AS "orderDetailId",
-                    split_set_id        AS "splitSetId",
-                    roll_no             AS "rollNo",
-                    blad                AS "blad",
-                    grade_name          AS "gradeName",
-                    size_name           AS "sizeName",
-                    model               AS "model",
-                    weigh               AS "weigh",
-                    status              AS "status",
-                    remark              AS "remark",
-                    created_at          AS "createdAt",
-                    order_no            AS "orderNo",
-                    order_item          AS "orderItem",
-                    set_no              AS "setNo",
-                    cut_length          AS "cutLength",
-                    queue_no            AS "queueNo",
-                    diameter            AS "diameter",
-                    finish_at           AS "finish_at",
-                    reel_no             AS "reel_no",
-                    total               AS "total",
-                    already_done        AS "alreadyDone"
-                FROM pl_wait_weighing_view
-                WHERE (status IS NULL OR TRIM(status) = '')
-            `;
+            SELECT 
+                id                  AS "id",
+                pl_order_id         AS "orderId",
+                pl_order_detail_id  AS "orderDetailId",
+                split_set_id        AS "splitSetId",
+                roll_no             AS "rollNo",
+                blad                AS "blad",
+                grade_name          AS "gradeName",
+                size_name           AS "sizeName",
+                model               AS "model",
+                weigh               AS "weigh",
+                status              AS "status",
+                remark              AS "remark",
+                created_at          AS "createdAt",
+                order_no            AS "orderNo",
+                order_item          AS "orderItem",
+                set_no              AS "setNo",
+                cut_length          AS "cutLength",
+                queue_no            AS "queueNo",
+                diameter            AS "diameter",
+                finish_at           AS "finish_at",
+                reel_no             AS "reel_no",
+                total               AS "total",
+                already_done        AS "alreadyDone",
+                pl_production_line_id AS "productionLineId"
+            FROM pl_wait_weighing_view
+            WHERE (status IS NULL OR TRIM(status) = '')
+        `;
             const binds = {};
-            const isSearchMode = search && search.trim() !== '';
-            // 🔍 2. เช็ก search parameter และต่อเงื่อนไข LIKE order_no
+            // 🔍 2. เช็กและกรองตาม ID เครื่อง (pl_production_line_id)
+            if (productionLineId) {
+                sql += ` AND pl_production_line_id = :productionLineId`;
+                binds.productionLineId = productionLineId;
+            }
+            const isSearchMode = search && search.trim() !== "";
+            // 🔍 3. เช็ก search parameter และต่อเงื่อนไข LIKE order_no
             if (isSearchMode) {
                 sql += ` AND UPPER(order_no) LIKE :search`;
                 binds.search = `%${search.trim().toUpperCase()}%`;
             }
-            // 🎯 3. จัดเรียงคิว
+            // 🎯 4. จัดเรียงคิว
             sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll_no DESC`;
-            // ถ้าไม่ได้ค้นหา ให้จำกัดเอาแค่ 1 รายการ
+            // ถ้าไม่ได้ค้นหา ให้จำกัดเอาแค่ 1 รายการของเครื่องนั้นๆ
             if (!isSearchMode) {
                 sql += ` FETCH FIRST 1 ROWS ONLY`;
             }
             const result = await conn.execute(sql, binds, {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const rows = result.rows || [];
             // 🎯 Helper Function สำหรับแปลงวันที่ + คำนวณ remaining
@@ -68,8 +74,8 @@ class WeighingModel {
                 if (row.createdAt) {
                     const dateObj = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
                     if (!isNaN(dateObj.getTime())) {
-                        row.createdAt = dateObj.toLocaleDateString('en-GB', {
-                            timeZone: 'Asia/Bangkok'
+                        row.createdAt = dateObj.toLocaleDateString("en-GB", {
+                            timeZone: "Asia/Bangkok",
                         });
                     }
                 }
@@ -80,10 +86,10 @@ class WeighingModel {
                 row.remaining = Math.max(0, total - alreadyDone);
                 return row;
             };
-            // 🎯 4. เงื่อนไขการ Return ข้อมูล
+            // 🎯 5. เงื่อนไขการ Return ข้อมูล
             if (isSearchMode) {
                 // 🟢 กรณีมี ค้นหา (search): แปลงข้อมูลทุกแถว แล้ว Return เป็น Array
-                return rows.map(row => processRowData(row));
+                return rows.map((row) => processRowData(row));
             }
             else {
                 // 🟢 กรณีไม่ได้ค้นหา: แปลงข้อมูลเฉพาะแถวแรก แล้ว Return เป็น Object (หรือ null)
@@ -121,9 +127,9 @@ class WeighingModel {
                 weigh: data.weigh,
                 status: data.status,
                 remark: data.remark,
-                id: data.id
+                id: data.id,
             }, { autoCommit: false });
-            const isSuccess = (result.rowsAffected && result.rowsAffected > 0) ? true : false;
+            const isSuccess = result.rowsAffected && result.rowsAffected > 0 ? true : false;
             // 🎯 บันทึกผลลง Database ถาวรเมื่อ Update สำเร็จ
             if (isSuccess) {
                 await conn.commit();
@@ -147,12 +153,12 @@ class WeighingModel {
     }
     static async getLatestReadySubRoll() {
         return {
-            order_no: '0066/2026',
-            roll_no: 'R260618-01', // รหัสลูกม้วนย่อยตัวแรกที่เพิ่งคลอด
-            grade: 'KA185',
-            version: 'รุ่น ASSSf',
-            size: '72 นิ้ว',
-            diameter: 1200
+            order_no: "0066/2026",
+            roll_no: "R260618-01", // รหัสลูกม้วนย่อยตัวแรกที่เพิ่งคลอด
+            grade: "KA185",
+            version: "รุ่น ASSSf",
+            size: "72 นิ้ว",
+            diameter: 1200,
         };
     }
     static async CheckResetSplitSet(id) {
@@ -170,7 +176,7 @@ class WeighingModel {
             `;
             // 1. ค้นหาข้อมูล (ใช้ Object { id } ให้ตรงกับ :id ใน SQL)
             const result = await conn.execute(sqlSelect, { id }, {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             // 2. ถ้าเจอข้อมูล ให้ส่งออกแถวแรกทันที
             if (result.rows && result.rows.length > 0) {
