@@ -72,7 +72,8 @@ app.use((req, res, next) => {
         role: req.session.user?.role === 'admin' ? "หัวหน้าผู้ควบคุมงาน" : "พนักงานหน้างาน",
         pm1_pending: 5, // สถิติรอชุบชีวิตคิวรีจาก Oracle จริงในอนาคต
         pm2_pending: 3,
-        pm_select:req.session.user?.machineNo
+        pm_select:req.session.user?.machineNo,
+        pm_select_ID:req.session.user?.productionLineId,
     };
     next();
 });

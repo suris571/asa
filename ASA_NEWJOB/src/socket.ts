@@ -4,42 +4,51 @@ import { WaitCutModel } from './modules/wait-cut/wait-cut.model';
 import { WeighingModel } from './modules/weighing/weighing.model';
 import crypto from 'crypto';
 
-let lastQueueHash = ''; 
+// เก็บ Hash แยกตามเครื่องจักร (เช่น { 1: 'hash_xxx', 2: 'hash_yyy' })
+let lastQueueHashes: { [key: number]: string } = {}; 
 
-// ⏳ ฟังก์ชันหลังบ้าน คอยตรวจส่อง Oracle DB (รันทำงานอัตโนมัติรอบเดียวสั่งการยาว)
+// ⏳ ฟังก์ชันหลังบ้าน คอยตรวจส่อง Oracle DB แยกตามเครื่องจักร
 const startQueueMonitor = (waitCutNamespace: any) => {
-    const MONITOR_INTERVAL = 30000; // 🎯 วิ่งไปถามเบสทุก ๆ 30 วินาที (ปรับเพิ่ม/ลดได้ตามความเหมาะสม)
+    const MONITOR_INTERVAL = 30000;
 
     setInterval(async () => {
         try {
-            // เช็กก่อนว่ามีคนเปิดหน้าเว็บสแตนด์บายอยู่ใน Namespace ไหม (ถ้าไม่มีใครเปิดอยู่เลย ก็ไม่ต้อง Query ให้เปลืองแรง)
+            // 1. เช็กก่อนว่ามีคนเปิดหน้าเว็บต่อ Socket อยู่ไหม
             const connectedSockets = await waitCutNamespace.fetchSockets();
             if (connectedSockets.length === 0) return;
 
-            // 1. หลังบ้านทำหน้าที่เป็นตัวแทนหมู่บ้าน วิ่งไปดึงคิวงานทั้งหมดจาก Oracle
-            const currentRawData = await WaitCutModel.getAllWaitingAndWeighing();
-            
-            // 2. 🎯 ไม้ตายตามสั่งกัปตัน: ลอกคราบข้อมูล กรองฟิลด์ที่มีท่อตัวเองอยู่แล้วออกไปก่อนทำ Hash
-            // กรองเอา 'que' (เลขคิวสลับ) และ 'status' (สถานะงาน) ออกไป เพื่อป้องกันท่อยิงซ้ำซ้อน
-            const filteredDataForHash = currentRawData.map((item: any) => {
-                const { que, ...restOfData } = item; 
-                return restOfData; // เหลือไว้เฉพาะข้อมูลเชิงโครงสร้าง เช่น orderNo, ITEM, ขนาดใบมีด
-            });
-            // 3. ทำ Hash จากข้อมูลที่กรองแล้ว
-            const currentHash = crypto.createHash('md5').update(JSON.stringify(filteredDataForHash)).digest('hex');
+            // 🎯 2. ดึงรายการ Room ทั้งหมดที่ขึ้นต้นด้วย 'machine_room_' มาสร้างเป็น Set ของ Machine ID ที่ใช้งานอยู่จริง
+            const activeMachineIds = new Set<number>();
 
-            // 3. 🎯 จุดตัดตัดสินใจ: เปรียบเทียบกับลายนิ้วมือรอบที่แล้ว
-            if (currentHash !== lastQueueHash) {
-                console.log("📢 [Backend Monitor] ตรวจพบข้อมูลใน Oracle เปลี่ยนแปลง! กำลังส่งสัญญาณเตือนหน้าบ้าน...");
+            for (const socket of connectedSockets) {
+                // 🎯 ใช้ for...of อ่านจาก socket.rooms โดยตรง ไร้ปัญหา Type Error แน่นอนค่ะ
+                for (const room of socket.rooms) {
+                    if (room.startsWith('machine_room_')) {
+                        const id = parseInt(room.replace('machine_room_', ''));
+                        if (!isNaN(id)) activeMachineIds.add(id);
+                    }
+                }
+            }
+
+            // 🎯 3. วนลูปตรวจเฉพาะเครื่องที่มีคนเปิดหน้าจอทำงานอยู่จริงๆ (Dynamic 100%)
+            for (const machineId of activeMachineIds) {
+                const currentRawData = await WaitCutModel.getAllWaitingAndWeighing(null, null, null, null, null, machineId);
                 
-                // อัปเดตลายนิ้วมือล่าสุดเก็บไว้
-                lastQueueHash = currentHash;
+                const filteredDataForHash = currentRawData.map((item: any) => {
+                    const { que, ...restOfData } = item; 
+                    return restOfData;
+                });
+                
+                const currentHash = crypto.createHash('md5').update(JSON.stringify(filteredDataForHash)).digest('hex');
 
-                // 🚀 ตะโกนบอกหน้าบ้านทุกคนทันทีว่า "ข้อมูลเปลี่ยนแล้วโว้ย!"
-                waitCutNamespace.emit('queue_structure_changed', { success: true });
-            } else {
-                // ข้อมูลเหมือนเดิม นิ่งเงียบไว้ ถนอม Network Traffic
-                console.log("💤 [Backend Monitor] ข้อมูลใน Oracle ยังเหมือนเดิม ไม่มีอะไรเปลี่ยนแปลง");
+                if (currentHash !== lastQueueHashes[machineId]) {
+                    console.log(`📢 [Backend Monitor] เครื่องตัด ID: ${machineId} มีข้อมูลเปลี่ยนแปลง! ยิงเตือนเฉพาะห้อง...`);
+                    
+                    lastQueueHashes[machineId] = currentHash;
+
+                    // ยิงแจ้งเตือนเฉพาะ Room ของเครื่องนั้นๆ
+                    waitCutNamespace.to(`machine_room_${machineId}`).emit('queue_structure_changed', { success: true });
+                }
             }
 
         } catch (error) {
@@ -48,43 +57,66 @@ const startQueueMonitor = (waitCutNamespace: any) => {
     }, MONITOR_INTERVAL);
 };
 
-// ประกาศตัวแปรระดับ Global ภายในไฟล์นี้ เพื่อให้ฟังก์ชันข้างนอกเรียกส่งของได้
 let io: SocketIOServer;
 
 export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
     io = new SocketIOServer(httpServer, {
         cors: { origin: "*", methods: ["GET", "POST"] }
     });
+
     // ==========================================================================
-    // 🪓 ห้องที่ 1: [/socket/wait-cut] สำหรับหน้ารอตัด (กั้นพื้นที่ให้โค้ดเดิม)
+    // 🪓 ห้องที่ 1: [/socket/wait-cut]
     // ==========================================================================
     const waitCutNamespace = io.of('/socket/wait-cut');
     startQueueMonitor(waitCutNamespace);
+
     waitCutNamespace.on('connection', (socket: Socket) => {
-        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+        console.log('🟢 พนักงานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+
+        // 🎯 1. เมื่อเชื่อมต่อเข้ามา ให้จัด Socket เข้า Room ตามเครื่องจักรที่ส่งมาตอน Handshake หรือ Payload
+        const clientProductionLineId = socket.handshake.query.productionLineId;
+        if (clientProductionLineId) {
+            socket.join(`machine_room_${clientProductionLineId}`);
+            console.log(`📌 Socket ID: ${socket.id} เข้าสู่ Room: machine_room_${clientProductionLineId}`);
+        }
 
         socket.on('get_filtered_queue', async (payload) => {
             try {
-                console.log(payload)
-                const { status, orderNo, startDate, endDate } = payload;
-                const data = await WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate);
+                // 🎯 2. รับ productionLineId เพิ่มมาจาก Payload หน้าบ้าน
+                const { status, orderNo, startDate, endDate, productionLineId } = payload;
                 
-                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
-            } catch (error:any) {
+                // ส่งต่อไปยัง Parameter ตัวที่ 6 ของ Model
+                const data = await WaitCutModel.getAllWaitingAndWeighing(
+                    null, 
+                    status, 
+                    orderNo, 
+                    startDate, 
+                    endDate, 
+                    productionLineId // 👈 ยัดใส่ตำแหน่งที่ 6 ตรงนี้!
+                );
+                
+                socket.emit('update_queue_table', { success: true, data: data });
+            } catch (error: any) {
                 socket.emit('update_queue_table', { success: false, error: error.message });
             }
         });
 
-        socket.on('swapQueue', async (data: { orderId: any, current_que: any, aboveOrderId: any, above_que: any }) => {
-            const { orderId, current_que, aboveOrderId, above_que } = data;
+        socket.on('swapQueue', async (data: { orderId: any, current_que: any, aboveOrderId: any, above_que: any, productionLineId: any }) => {
+            const { orderId, current_que, aboveOrderId, above_que, productionLineId } = data;
             console.log(`⚡️ หลังบ้านรับคำสั่งเลื่อนคิว: ID ${orderId} ปะทะ ${aboveOrderId}`);
             try {
                 await WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
                 
-                await FnNextCutSplitSet()
-                await FnNextRoll()
-                await FnNextQcCloseReel()
-                waitCutNamespace.emit('queue_structure_changed', { success: true });
+                await FnNextCutSplitSet();
+                await FnNextRoll();
+                await FnNextQcCloseReel();
+
+                // ยิงแจ้งเตือนกลับเฉพาะเครื่องตัวเอง
+                if (productionLineId) {
+                    waitCutNamespace.to(`machine_room_${productionLineId}`).emit('queue_structure_changed', { success: true });
+                } else {
+                    waitCutNamespace.emit('queue_structure_changed', { success: true });
+                }
 
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการสลับคิว:", error);
@@ -97,15 +129,14 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
     });
     
     // ==========================================================================
-    // ⚖️ ห้องที่ 2: [/socket/weighing] สำหรับหน้าชั่งน้ำหนัก (เปิดท่อปล่อยข้อมูล)
+    // ⚖️ ห้องที่ 2: [/socket/weighing]
     // ==========================================================================
     const weighingNamespace = io.of('/socket/weighing');
     weighingNamespace.on('connection', async (socket: Socket) => {
-        console.log('🟢 พนักงานหน้างานเปิด [หน้าชั่งน้ำหนัก] เชื่อมต่อเข้ามา ID:', socket.id);
+        console.log('🟢 พนักงานเปิด [หน้าชั่งน้ำหนัก] เชื่อมต่อเข้ามา ID:', socket.id);
 
         socket.on('get_next_roll', async () => {
-            console.log('socket')
-            FnNextRoll()
+            FnNextRoll();
         });
 
         socket.on('disconnect', () => {
@@ -113,21 +144,20 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
     });
 
-
     // ==========================================================================
-    // 🪓 ห้องที่ 3: [/socket/wait-cut/split-cut-set] สำหรับหน้ารอตัดแยก set
+    // 🪓 ห้องที่ 3: [/socket/wait-cut/split-cut-set]
     // ==========================================================================
     const waitCutSplitSet = io.of('/socket/wait-cut/split-cut-set');
     waitCutSplitSet.on('connection', (socket: Socket) => {
-        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+        console.log('🟢 พนักงานเปิด [หน้ารอตัดแยก Set] เชื่อมต่อเข้ามา ID:', socket.id);
 
         socket.on('get_filtered_queue', async (payload) => {
             try {
-                const {orderNo} = payload;
+                const { orderNo } = payload;
                 const data = await WaitCutModel.getSplitSetQueueData(orderNo);
                 
-                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
-            } catch (error:any) {
+                socket.emit('update_queue_table', { success: true, data: data });
+            } catch (error: any) {
                 socket.emit('update_queue_table', { success: false, error: error.message });
             }
         });
@@ -137,22 +167,20 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
     });
 
-
     // ==========================================================================
-    // 🪓 ห้องที่ 4: [/socket/wait-cut/qc-close-reel] สำหรับหน้าQC CLOSE REEL
+    // 🪓 ห้องที่ 4: [/socket/wait-cut/qc-close-reel]
     // ==========================================================================
     const waitCutCoseReel = io.of('/socket/wait-cut/qc-close-reel');
     waitCutCoseReel.on('connection', (socket: Socket) => {
-        console.log('🟢 พนักงานหน้างานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:', socket.id);
+        console.log('🟢 พนักงานเปิด [หน้า QC CLOSE REEL] เชื่อมต่อเข้ามา ID:', socket.id);
 
         socket.on('get_filtered_queue', async (payload) => {
-            console.log(payload)
             try {
-                const {startDate,endDate} = payload;
-                const data = await WaitCutModel.getQcCloseReel(null,startDate,endDate);
+                const { startDate, endDate } = payload;
+                const data = await WaitCutModel.getQcCloseReel(null, startDate, endDate);
                 
-                socket.emit('update_queue_table', { success: true, data: data }); // 🎯 ใช้ชื่อท่อเดิมได้เลย
-            } catch (error:any) {
+                socket.emit('update_queue_table', { success: true, data: data });
+            } catch (error: any) {
                 socket.emit('update_queue_table', { success: false, error: error.message });
             }
         });

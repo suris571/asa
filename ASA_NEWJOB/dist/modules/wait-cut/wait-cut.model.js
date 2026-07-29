@@ -51,6 +51,7 @@ class WaitCutModel {
     ) {
         let conn;
         let isLocalConn = false;
+        console.log(productionLineId);
         try {
             if (Conn) {
                 conn = Conn;

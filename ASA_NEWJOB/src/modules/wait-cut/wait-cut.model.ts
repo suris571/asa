@@ -83,7 +83,7 @@ export class WaitCutModel {
     ): Promise<any[]> {
         let conn: any;
         let isLocalConn = false;
-
+        console.log(productionLineId)
         try {
             if (Conn) {
                 conn = Conn;

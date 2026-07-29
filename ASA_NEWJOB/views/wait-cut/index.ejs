@@ -276,17 +276,23 @@
 
 <script>
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
-  let queueTable;
-  let updateTimeout = null;
-  const socket = io('/socket/wait-cut'); 
+    let queueTable;
+    let updateTimeout = null;
+    const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
+    // 🔌 เพิ่ม query ติดไปกับ Socket
+    const socket = io('/socket/wait-cut', {
+        query: { 
+            productionLineId: userProductionLineId 
+        }
+    });
 
-  // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
-  socket.off('connect');
-  socket.off('disconnect');
-  socket.off('update_queue_table');
-  socket.off('queue_structure_changed');
+    // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
+    socket.off('connect');
+    socket.off('disconnect');
+    socket.off('update_queue_table');
+    socket.off('queue_structure_changed');
 
-  $(function () {
+    $(function () {
     // 2. ตั้งค่าการควบคุม DateRangePicker ให้ล็อกฟอร์แมต ค.ศ.
     $('.date-picker').daterangepicker({
         singleDatePicker: true,
@@ -313,13 +319,13 @@
 
     // 3. จัดระเบียบสายสัญญาณ Socket Listeners ให้อยู่ในจังหวะที่ DOM พร้อมใช้งานอย่างปลอดภัย
     socket.on('connect', function() {
-      $('#socketStatus').removeClass('bg-warning bg-danger').addClass('bg-success text-white').text('🟢 เชื่อมต่อเรียลไทม์ปกติ');
+        $('#socketStatus').removeClass('bg-warning bg-danger').addClass('bg-success text-white').text('🟢 เชื่อมต่อเรียลไทม์ปกติ');
     });
 
     socket.on('disconnect', function() {
-      $('#socketStatus').removeClass('bg-success bg-warning').addClass('bg-danger text-white').text('🔴 การเชื่อมต่อหลุด (ข้อมูลอาจไม่อัปเดต)');
+        $('#socketStatus').removeClass('bg-success bg-warning').addClass('bg-danger text-white').text('🔴 การเชื่อมต่อหลุด (ข้อมูลอาจไม่อัปเดต)');
     });
-    
+
     socket.on('update_queue_table', function(res) {
         hideLoader();
         if (!res || !res.success || !res.data) return;
@@ -343,7 +349,7 @@
             }
         }
     });
-    
+
     socket.on('queue_structure_changed', function(res) {
         console.log("🔔 สัญญาณเตือนภัยคิวเปลี่ยน: ทำการสั่งดาวน์โหลดข้อมูลตามฟิลเตอร์ปัจจุบันของตัวเองทันที!");
         if (res && res.success) {
@@ -493,77 +499,80 @@
         $('#searchOrderNo').val('');
         fetchFilteredQueue(); 
     });
-  
 
-});//ready fn
 
-  // 5. โดดออกมาสร้างฟังก์ชันหลักนอก Ready block เพื่อให้โครงสร้างปุ่มกด (onclick) ดึงไปทำงานได้แม่นยำ
-  function moveUp(myId, myQueue) {
-      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
-      const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
+    });//ready fn
 
-      if (myIndex === 0) {
-          alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
-          return;
-      }
+    // 5. โดดออกมาสร้างฟังก์ชันหลักนอก Ready block เพื่อให้โครงสร้างปุ่มกด (onclick) ดึงไปทำงานได้แม่นยำ
+    function moveUp(myId, myQueue) {
+        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+        const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
 
-    showLoader();
-      const upperRowData = allData[myIndex - 1];
-      console.log(upperRowData)
-      const aboveId = upperRowData.pl_order_detail_id;
-      const aboveQueue = upperRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
-
-      console.log(`🔼 [Client Request Mode] สลับคิวขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
-
-      socket.emit('swapQueue', {
-          orderId: myId,
-          current_que: myQueue,
-          aboveOrderId: aboveId,
-          above_que: aboveQueue
-      });
-  }
-
-  function moveDown(myId, myQueue) {
-      const allData = queueTable.rows({ order: 'applied' }).data().toArray();
-      const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
-
-      if (myIndex === allData.length - 1) {
-          alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
-          return;
-      }
+        if (myIndex === 0) {
+            alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
+            return;
+        }
 
     showLoader();
-      const lowerRowData = allData[myIndex + 1];
-      const belowId = lowerRowData.pl_order_detail_id;
-      const belowQueue = lowerRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
+        const upperRowData = allData[myIndex - 1];
+        console.log(upperRowData)
+        const aboveId = upperRowData.pl_order_detail_id;
+        const aboveQueue = upperRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
 
-      console.log(`🔽 [Client Request Mode] สลับคิวลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+        console.log(`🔼 [Client Request Mode] สลับคิวขึ้น: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวบน ID ${aboveId} (คิว ${aboveQueue})`);
 
-      socket.emit('swapQueue', {
-          orderId: myId,
-          current_que: myQueue,
-          aboveOrderId: belowId,
-          above_que: belowQueue
-      });
-  }
+        socket.emit('swapQueue', {
+            orderId: myId,
+            current_que: myQueue,
+            aboveOrderId: aboveId,
+            above_que: aboveQueue,
+            productionLineId: userProductionLineId
+        });
+    }
 
-  function fetchFilteredQueue() {
-      const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
-      const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
+    function moveDown(myId, myQueue) {
+        const allData = queueTable.rows({ order: 'applied' }).data().toArray();
+        const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
 
-      const filterParams = {
-          startDate: rawStartDate !== '' ? rawStartDate : null,
-          endDate: rawEndDate !== '' ? rawEndDate : null,
-          status: $('#searchStatus').val() || null,
-          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null
-      };
+        if (myIndex === allData.length - 1) {
+            alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
+            return;
+        }
 
-      console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
-      socket.emit('get_filtered_queue', filterParams);
-  }
+    showLoader();
+        const lowerRowData = allData[myIndex + 1];
+        const belowId = lowerRowData.pl_order_detail_id;
+        const belowQueue = lowerRowData.que; // 🎯 แก้ไข: เปลี่ยนมาส่งฟิลด์ .que ซึ่งเป็นเลขคิวจริงใน DB แทนการใช้ลำดับหน้าจอ
 
-  // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionCut(pl_order_detail_id,pl_order_id,qty,type = null) { 
+        console.log(`🔽 [Client Request Mode] สลับคิวลง: ID ${myId} (คิว ${myQueue}) -> แทนที่แถวล่าง ID ${belowId} (คิว ${belowQueue})`);
+
+        socket.emit('swapQueue', {
+            orderId: myId,
+            current_que: myQueue,
+            aboveOrderId: belowId,
+            above_que: belowQueue,
+            productionLineId: userProductionLineId
+        });
+    }
+
+    function fetchFilteredQueue() {
+        const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
+        const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
+
+        const filterParams = {
+            startDate: rawStartDate !== '' ? rawStartDate : null,
+            endDate: rawEndDate !== '' ? rawEndDate : null,
+            status: $('#searchStatus').val() || null,
+            orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null,
+            productionLineId: userProductionLineId // 🎯 เพิ่มบรรทัดนี้ลงไปครับ!
+        };
+
+        console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
+        socket.emit('get_filtered_queue', filterParams);
+    }
+
+    // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
+    function actionCut(pl_order_detail_id,pl_order_id,qty,type = null) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
     showLoader(); 
 
@@ -595,11 +604,11 @@
         console.error("❌ API Error:", error);
         alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
     });
-  }
+    }
 
-  function actionHold(pl_order_detail_id,pl_order_id) { console.log('HOLD:', pl_order_detail_id); }
-  function actionUnhold(pl_order_detail_id,pl_order_id) { console.log('ปลด HOLD:', pl_order_detail_id); }
-  function actionSuccess(pl_order_detail_id,pl_order_id) { console.log('เสร็จสิ้น:', pl_order_detail_id); }
+    function actionHold(pl_order_detail_id,pl_order_id) { console.log('HOLD:', pl_order_detail_id); }
+    function actionUnhold(pl_order_detail_id,pl_order_id) { console.log('ปลด HOLD:', pl_order_detail_id); }
+    function actionSuccess(pl_order_detail_id,pl_order_id) { console.log('เสร็จสิ้น:', pl_order_detail_id); }
 
 
     function showLoader() {
