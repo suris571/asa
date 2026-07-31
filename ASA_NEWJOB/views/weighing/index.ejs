@@ -82,7 +82,37 @@
     #modalOrderTable tbody tr:hover {
         background-color: #e2f0ff !important; /* สีฟ้าอ่อนสบายตาตอน Hover */
     }
+
+
+      .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4); /* ม่านดำโปร่งแสง 40% */
+    z-index: 9999; /* อยู่เหนือทุกสิ่งบนหน้าจอ */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+.spinner-box {
+    background: white;
+    padding: 25px 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    text-align: center;
+}
 </style>
+
+<div id="pageLoader" class="loading-overlay" style="display: none;">
+    <div class="spinner-box">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+        <h5 class="font-weight-bold mb-0 text-dark">⏳ กำลังทำรายการ...</h5>
+        <small class="text-muted">กรุณารอสักครู่ ระบบกำลังดำเนินการ...</small>
+    </div>
+</div>
 
 <div class="content-wrapper">
   <section class="content-header p-2">
@@ -121,6 +151,8 @@
 <script>
     let weighingTable;
     let modalOrderTable;
+    let weighingTableHistory;
+    let urlPrintBarcode = 'http://localhost:4000/preview-label';
     const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
     let socket = io('/socket/weighing', {
         query: { 
@@ -129,9 +161,12 @@
     });
     let socketScale = io('http://localhost:4000');
 
+    socketScale.off('connect');
+    socketScale.off('weight_stream');
     socket.off('connect');
     socket.off('disconnect');
     socket.off('queue_updated');
+    socket.off('historyUpdate');
 
     async function sendDataToPrint(data) {
         $.ajax({
@@ -194,9 +229,9 @@
             $(this).serializeArray().forEach(item => {
                 formData[item.name] = item.value;
             });
-            
+            showLoader()
             try {
-                let saveDB = sendDataToPrint({ url: 'http://localhost:4000/preview-label', body: formData });
+                let saveDB = sendDataToPrint({ url: urlPrintBarcode, body: formData });
                 // 3. ยิงไปบันทึก Database ที่ Backend หลัก (พอร์ต 3000)
                 const response = await $.ajax({
                     url: '/weighing/save',
@@ -216,7 +251,7 @@
             } catch (err) {
                 console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
             }
-
+            hideLoader()
             
 
         });
@@ -323,16 +358,100 @@
         });
 
         // 📊 ชุบชีวิตตารางประวัติให้เป็น DataTables
-        weighingTable = $('#weighingHistoryTable').DataTable({
-            "paging": true,          // เปิดใช้งานระบบแบ่งหน้า (10, 25, 50 แถว)
-            "lengthChange": true,    // อนุญาตให้พนักงานเลือกจำนวนแถวที่จะโชว์ได้
-            "searching": true,       // เปิดช่องเสิร์ชด้านบนขวา (ตรงตามรูปภาพระบบเดิมเป๊ะ!)
-            "ordering": true,        // เปิดระบบกดหัวคอลัมน์เพื่อเรียงลำดับสูง-ต่ำ
-            "info": true,            // แสดงข้อความ "รายการที่ 1 ถึง X จากทั้งหมด Y รายการ"
-            "autoWidth": false,      // ปิดออโต้วิดท์เพื่อให้คอลัมน์ขยายตามสเปกจอ
-            "responsive": true,      // รองรับกรณีเปิดบนหน้าจอขนาดเล็ก
+        let rawHistoryData = <%- JSON.stringify(historyData || []) %>;
+        let formattedHistoryData = Array.isArray(rawHistoryData) 
+            ? rawHistoryData 
+            : (rawHistoryData ? [rawHistoryData] : []);
+
+        // 🎯 นำ formattedHistoryData ไปยัดใส่ DataTables
+        weighingTableHistory = $('#weighingHistoryTable').DataTable({
+            "data": formattedHistoryData, // 👈 ใช้ตัวแปรที่ครอบ Array แล้ว
+            "columns": [
+                { 
+                    "data": "rollNo",
+                    "className": "font-weight-bold text-primary",
+                    "defaultContent": "-"
+                },
+                { 
+                    "data": "gradeName",
+                    "defaultContent": "-"
+                },
+                { 
+                    "data": "model",
+                    "defaultContent": "-"
+                },
+                { 
+                    "data": "sizeName",
+                    "defaultContent": "-"
+                },
+                { 
+                    "data": "weigh",
+                    "className": "font-weight-bold text-success",
+                    "render": function(data) {
+                        const val = Number(data) || 0;
+                        return val.toFixed(2);
+                    }
+                },
+                { 
+                    "data": "reel_no",
+                    "className": "font-weight-bold",
+                    "render": function(data, type, row) {
+                        if (data) return data;
+                        if (row.rollNo && String(row.rollNo).includes('-')) {
+                            return String(row.rollNo).split('-')[1];
+                        }
+                        return '01';
+                    }
+                },
+                { 
+                    "data": "status",
+                    "render": function(data) {
+                        const isPass = (data || '').toUpperCase() === 'PASS';
+                        const badgeClass = isPass ? 'badge-success' : 'badge-danger';
+                        return `<span class="badge ${badgeClass}">${data || 'UNKNOWN'}</span>`;
+                    }
+                },
+                {
+                    "data": null,
+                    "orderable": false,
+                    "render": function(data, type, row) {
+                        // 🎯 1. Map ข้อมูลตามโครงสร้างที่กัปตันต้องการ (อันไหนไม่มีให้ fallback เป็น null)
+                        const printParams = {
+                            createdAt: row.createdAt || null,
+                            shift: row.part || null,             // ถ้าใน row ไม่มี จะได้ null
+                            gradeName: row.gradeName || null,
+                            model: row.model || null,
+                            size1: row.sizeName || null,          // แมปจาก sizeName
+                            diameter1: row.diameter || null,      // แมปจาก diameter
+                            reelno: row.reel_no || null,          // แมปจาก reel_no
+                            weight1: row.weigh || null,           // แมปจาก weigh
+                            status: row.status || null,
+                            remark: row.remark || null
+                        };
+
+                        // 🎯 2. แปลงเป็น JSON String และ Escape เครื่องหมาย " ให้ใส่ใน attribute ของ HTML ได้ปลอดภัย
+                        const jsonString = JSON.stringify(printParams).replace(/"/g, '&quot;');
+
+                        // 🎯 3. พ่นปุ่ม HTML ส่ง Object ไปยัง printBarcode() เป็น 1 Parameter เดียว
+                        return `
+                            <button type="button" 
+                                    class="btn btn-outline-primary btn-xs font-weight-bold" 
+                                    onclick="printBarcode(${jsonString})">
+                                <i class="fas fa-print"></i> พิมพ์บาร์โค้ด
+                            </button>
+                        `;
+                    }
+                }
+            ],
+            "paging": true,
+            "lengthChange": true,
+            "searching": false,
+            "ordering": true,
+            "info": true,
+            "autoWidth": false,
+            "responsive": true,
             "language": {
-                "search": "🔍 ค้นหาข้อมูลที่บันทึกแล้ว (Roll No):", // ล็อกข้อความป้ายเสิร์ชตามแบบเดิม
+                "search": "🔍 ค้นหาข้อมูลที่บันทึกแล้ว (Roll No):",
                 "lengthMenu": "แสดง _MENU_ รายการต่อหน้า",
                 "zeroRecords": "❌ ไม่พบข้อมูลประวัติการชั่งน้ำหนักในกะนี้",
                 "info": "แสดงหน้า _PAGE_ จากทั้งหมด _PAGES_ หน้า",
@@ -342,12 +461,10 @@
                     "next": "ถัดไป"
                 }
             },
-            // 🛠️ ล็อกไม่ให้ระบบแอบเอาคอลัมน์สุดท้าย (พิมพ์บาร์โค้ด) มาจัดเรียงลำดับเวลาพนักงานกดหัวตาราง
             "columnDefs": [
-                { "orderable": false, "targets": 7 } 
+                { "orderable": false, "targets": 7 }
             ]
         });
-
         
         socket.on('queue_updated', function(response) {
             console.log("⚡ ได้รับข้อมูลคิวถัดไปจาก Socket:", response);
@@ -361,6 +478,7 @@
                 $('#size').val(nextData.sizeName);
                 $('#model').val(nextData.model);
                 $('#diameter').val(nextData.diameter);
+                $('#part').val(nextData.part);
                 
                 // ล้างช่องกรอกรอชั่งลูกใหม่
                 $('#remark').val('');
@@ -425,6 +543,7 @@
             $('#size').val('');
             $('#model').val('');
             $('#diameter').val('');
+            $('#part').val('');
             
             // ล้างช่องกรอกรอชั่งลูกใหม่
             $('#remark').val('');
@@ -461,6 +580,7 @@
             $('#size').val(rowData.sizeName || '');                     // ขนาด
             $('#diameter').val(rowData.diameter || '');                 // Diameter
             $('#reelno').val(rowData.reel_no || '');                    // รหัส Roll No.
+            $('#part').val(rowData.part || '');                         // กะการทำงาน
 
             // 3. ปิด Modal Popup
             $('#orderQueueModal').modal('hide');
@@ -471,10 +591,56 @@
             // }, 300);
         });
 
+        socket.on('historyUpdate', function() {
+            console.log("🔄 ได้รับเหตุการณ์อัปเดตประวัติจาก Socket history table");
+            fetchFilteredHistory();
+        });
+        
+
+        socket.on('update_history_table', function(res) {
+            hideLoader();
+            if (!res || !res.success || !res.data) return;
+            if (weighingTableHistory) {
+                // เช็กว่าพนักงานกำลังเอาเมาส์ชี้เล็งปุ่มจัดการคิวงานอยู่หรือไม่
+                
+                weighingTableHistory.clear().rows.add(res.data).draw(false);
+            }
+        });
+
     });//ready fn
-  // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
+    // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
+    function fetchFilteredHistory() {
+        const rollNO = $('#btnSearchRollNo').val() ? $('#btnSearchRollNo').val().trim() : '';
+
+        const filterParams = {
+            rollNO: rollNO !== '' ? rollNO : null
+        };
+        socket.emit('GetHistoryWeight', filterParams);
+    }
+
     function fetchFilteredQueue() {
         console.log("get_next_roll")
         socket.emit('get_next_roll');
+    }
+
+    async function printBarcode(data) {
+        // 1. แปลง Object เป็น JSON String
+        const jsonString = JSON.stringify(data);
+
+        // 2. ส่งข้อมูลไปยังท่อพิมพ์บาร์โค้ด (พอร์ต 4000)
+        showLoader()
+        await sendDataToPrint({ url: urlPrintBarcode, body: data });
+        hideLoader()
+    }
+
+
+    function showLoader() {
+        // ล็อกหน้าจอทันที พนักงานจะคลิกปุ่มใดๆ ในตารางซ้ำไม่ได้เลย
+        $('#pageLoader').fadeIn(150); 
+    }
+
+    function hideLoader() {
+        // ปลดล็อกหน้าจอเมื่อทำงานเสร็จ
+        $('#pageLoader').fadeOut(150);
     }
 </script>

@@ -140,6 +140,13 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
             FnNextRoll(currentLineId);
         });
 
+        socket.on("GetHistoryWeight", async (payload) => {
+            const { rollNO } = payload;
+            const productionLineId:any = currentLineId;
+            const data = await WeighingModel.getNextWeighing(productionLineId, rollNO || null, 'history');
+            socket.emit("update_history_table", { success: true, data: data });
+        });
+
         socket.on("disconnect", () => {
             console.log("🔴 พนักงานปิดหน้าจอชั่งน้ำหนัก ID:", socket.id);
         });

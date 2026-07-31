@@ -3,11 +3,11 @@
   
   <div class="form-group mb-2">
     <label class="font-weight-bold text-muted text-sm mb-1">ระบุรหัส Roll No.</label>
-    <input type="text" name="reelno" class="form-control form-control-sm mx-auto text-center font-weight-bold text-primary" id="reelno" value="<%= (nextData && nextData.reel_no) ? nextData.reel_no : '' %>"  style="max-width: 220px; font-size: 1.1rem; background-color: #e1f5fe;">
+    <input readonly type="text" name="reelno" class="form-control form-control-sm mx-auto text-center font-weight-bold text-primary" id="reelno" value="<%= (nextData && nextData.reel_no) ? nextData.reel_no : '' %>"  style="max-width: 220px; font-size: 1.1rem; background-color: #e1f5fe;">
   </div>
 
   <div class="form-group mb-0">
     <label class="font-weight-bold text-success text-sm mb-1">น้ำหนักสุทธิ (Kg.)</label>
-    <input type="number" name="weight" step="0.01" class="form-control form-control-lg text-center font-weight-bold text-success border-success mx-auto shadow-sm" id="weight" style="font-size: 2.2rem; max-width: 220px; background-color: #e8f5e9;" placeholder="0.00" required>
+    <input readonly type="number" name="weight" step="0.01" class="form-control form-control-lg text-center font-weight-bold text-success border-success mx-auto shadow-sm" id="weight" style="font-size: 2.2rem; max-width: 220px; background-color: #e8f5e9;" placeholder="0.00" required>
   </div>
 </div>

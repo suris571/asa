@@ -67,7 +67,8 @@ const startProduction = async (req, res) => {
             return res.status(400).json({ success: false, message: "จำนวนเซ็ตไม่ถูกต้อง" });
         }
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${orderDetailId}`);
-        const createResult = await wait_cut_model_1.WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty));
+        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        const createResult = await wait_cut_model_1.WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId);
         await (0, socket_1.FnNextCutSplitSet)(productionLineId);
         // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
         targetRoom.emit("queue_structure_changed", { success: true });
@@ -140,7 +141,8 @@ const startWeighing = async (req, res) => {
     }
     try {
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
-        await wait_cut_model_1.WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
+        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        await wait_cut_model_1.WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId);
         await wait_cut_model_1.WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
         // 🔊 ยิงเฉพาะเครื่อง
         splitSetTargetRoom.emit("queue_structure_changed", { success: true });

@@ -33,6 +33,7 @@ router.post('/login', async (req, res) => {
                 username: user.username,
                 role: user.role,
                 name: user.name,
+                staff_id: 1, // เพิ่ม staff_id ลงใน session
                 machineNo: Number(machineNo),
                 productionLineId: productionLineId
             };

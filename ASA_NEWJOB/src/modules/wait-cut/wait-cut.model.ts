@@ -260,7 +260,7 @@ export class WaitCutModel {
      * @param orderDetailId รหัสรายละเอียดออเดอร์
      * @param qty จำนวนเซ็ตที่ต้องการสร้าง
      */
-    static async createOrderSplitSet(orderId: number, orderDetailId: number, qty: number): Promise<boolean> {
+    static async createOrderSplitSet(orderId: number, orderDetailId: number, qty: number, staff_id: number | null = 1): Promise<boolean> {
         let conn;
 
         try {
@@ -291,7 +291,7 @@ export class WaitCutModel {
                         status = 2,
                         finish_at = NULL,
                         sub_status = NULL,
-                        reel_id = NULL
+                        qc_reel_id = NULL
                     WHERE pl_order_detail_id = :orderDetailId
                     AND sub_status = 'บังคับเสร็จสิ้น'
                 `;
@@ -300,8 +300,8 @@ export class WaitCutModel {
             } else {
                 // 🚀 CASE B: ยังไม่มีข้อมูลเดิม (สั่งตัดครั้งแรก) -> วนลูป INSERT เซ็ตย่อยใหม่ตามจำนวน qty
                 const insertSplitQuery = `
-                    INSERT INTO pl_cut_split_set (pl_order_id, pl_order_detail_id, set_no, cut_length, status)
-                    VALUES (:orderId, :orderDetailId, :setNo, 0, 2)
+                    INSERT INTO pl_cut_split_set (pl_order_id, pl_order_detail_id, set_no, cut_length, status,CREATE_STAFF)
+                    VALUES (:orderId, :orderDetailId, :setNo, 0, 2, :staffId)
                 `;
 
                 for (let i = 0; i < qty; i++) {
@@ -311,7 +311,8 @@ export class WaitCutModel {
                     await conn.execute(insertSplitQuery, { 
                         orderId, 
                         orderDetailId, 
-                        setNo: setNoStr 
+                        setNo: setNoStr,
+                        staffId: staff_id
                     });
                 }
             }
@@ -446,7 +447,7 @@ export class WaitCutModel {
     }
 
 
-    static async createOrderWeighing(split_set_id: number, pl_order_id: number, pl_order_detail_id: number): Promise<boolean> {
+    static async createOrderWeighing(split_set_id: number, pl_order_id: number, pl_order_detail_id: number, staff_id: number | null = 1): Promise<boolean> {
         let conn;
 
         try {
@@ -524,7 +525,7 @@ export class WaitCutModel {
                         blade_size, 
                         size_id, 
                         grade_id,
-                        weigh, status, remark
+                        weigh, status, remark,CREATE_STAFF
                     ) VALUES (
                         :pl_order_id, 
                         :pl_order_detail_id, 
@@ -533,7 +534,7 @@ export class WaitCutModel {
                         :bladeSize, 
                         :sizeId, 
                         :gradeId,
-                        NULL, NULL, NULL
+                        NULL, NULL, NULL, :staffId
                     )
                 `; 
 
@@ -546,7 +547,8 @@ export class WaitCutModel {
                         rollNo: roll.rollNo,
                         bladeSize: roll.bladeSize,
                         sizeId: roll.sizeId,
-                        gradeId: roll.gradeId
+                        gradeId: roll.gradeId,
+                        staffId: staff_id
                     });
                 }
                 console.log(`✅ บันทึกคิวรอชั่งน้ำหนักสำเร็จ: แตกออกมาทั้งหมด ${rollsToInsert.length} ลูก`);
@@ -836,7 +838,7 @@ export class WaitCutModel {
             // 🎯 UPDATE คอลัมน์ REEL_ID โดยตรง
             const updateSql = `
                 UPDATE pl_cut_split_set
-                SET reel_id = :reelId
+                SET qc_reel_id = :reelId
                 WHERE id = :splitSetId
             `;
 

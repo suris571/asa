@@ -74,8 +74,8 @@ export const startProduction = async (req: Request, res: Response) => {
         }
 
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${orderDetailId}`);
-
-        const createResult = await WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty));
+        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        const createResult = await WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId);
         await FnNextCutSplitSet(productionLineId);
 
         // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
@@ -154,8 +154,8 @@ export const startWeighing = async (req: Request, res: Response) => {
 
     try {
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
-
-        await WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
+        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        await WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId);
         await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
 
         // 🔊 ยิงเฉพาะเครื่อง

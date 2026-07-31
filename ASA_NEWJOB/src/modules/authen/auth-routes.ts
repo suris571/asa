@@ -10,6 +10,7 @@ declare module 'express-session' {
       username: string; 
       role: 'admin' | 'operator'; 
       name: string; 
+      staff_id: number;          // เพิ่ม staff_id
       machineNo: number;         // เช่น 1 หรือ 2
       productionLineId: number;  // ID จริงจากตาราง PL_PRODUCTION_LINE
     };
@@ -51,6 +52,7 @@ router.post('/login', async (req: Request, res: Response) => {
         username: user.username,
         role: user.role as 'admin' | 'operator',
         name: user.name,
+        staff_id: 1, // เพิ่ม staff_id ลงใน session
         machineNo: Number(machineNo),
         productionLineId: productionLineId
       };
