@@ -521,7 +521,7 @@ export class WaitCutModel {
                         pl_order_id, 
                         pl_order_detail_id, 
                         split_set_id, 
-                        roll_no,
+                        roll,
                         blade_size, 
                         size_id, 
                         grade_id,

@@ -143,7 +143,7 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
         socket.on("GetHistoryWeight", async (payload) => {
             const { rollNO } = payload;
             const productionLineId:any = currentLineId;
-            const data = await WeighingModel.getNextWeighing(productionLineId, rollNO || null, 'history');
+            const data = await WeighingModel.getNextWeighing(productionLineId, null, 'history', rollNO);
             socket.emit("update_history_table", { success: true, data: data });
         });
 

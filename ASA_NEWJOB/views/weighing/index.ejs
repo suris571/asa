@@ -169,7 +169,7 @@
     socket.off('historyUpdate');
 
     async function sendDataToPrint(data) {
-        $.ajax({
+        return $.ajax({
             url: data.url, // 👈 ชี้เป้าไปที่ท่อที่เราเปิดทดสอบไว้ (พอร์ต 3000 หรือ 4000)
             method: 'POST',        // สลับร่างเป็น POST ตามสเปกงานจริง
             contentType: 'application/json',
@@ -231,7 +231,6 @@
             });
             showLoader()
             try {
-                let saveDB = sendDataToPrint({ url: urlPrintBarcode, body: formData });
                 // 3. ยิงไปบันทึก Database ที่ Backend หลัก (พอร์ต 3000)
                 const response = await $.ajax({
                     url: '/weighing/save',
@@ -241,7 +240,8 @@
                 });
 
                 if (response.success) {
-                    
+                    formData['roll_no'] = response.roll_no; // เพิ่ม roll_no ที่ได้จาก Backend
+                    let saveDB = await sendDataToPrint({ url: urlPrintBarcode, body: formData });
                     resetWeighingForm()
                     fetchFilteredQueue()
                 } else {
@@ -607,14 +607,26 @@
             }
         });
 
+        $('#btnSearchRollNo').on('click', function() {
+            fetchFilteredHistory();
+        });
+
+        $('#btnResetRollNo').on('click', function() {
+            $('#searchRollNoInput').val(''); // ล้างค่าในช่องค้นหา
+            fetchFilteredHistory();
+        });
+
+
+
     });//ready fn
     // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
     function fetchFilteredHistory() {
-        const rollNO = $('#btnSearchRollNo').val() ? $('#btnSearchRollNo').val().trim() : '';
+        const rollNO = $('#searchRollNoInput').val() ? $('#searchRollNoInput').val().trim() : '';
 
         const filterParams = {
             rollNO: rollNO !== '' ? rollNO : null
         };
+        console.log("📡 กำลังยิง Socket เพื่อดึงประวัติการชั่งน้ำหนักด้วย Filter:", filterParams);
         socket.emit('GetHistoryWeight', filterParams);
     }
 
@@ -622,6 +634,8 @@
         console.log("get_next_roll")
         socket.emit('get_next_roll');
     }
+
+
 
     async function printBarcode(data) {
         // 1. แปลง Object เป็น JSON String

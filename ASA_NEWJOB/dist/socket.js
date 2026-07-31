@@ -123,7 +123,7 @@ const initSocket = (httpServer) => {
         socket.on("GetHistoryWeight", async (payload) => {
             const { rollNO } = payload;
             const productionLineId = currentLineId;
-            const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, rollNO || null, 'history');
+            const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', rollNO);
             socket.emit("update_history_table", { success: true, data: data });
         });
         socket.on("disconnect", () => {

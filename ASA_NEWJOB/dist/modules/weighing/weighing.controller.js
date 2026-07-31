@@ -34,12 +34,10 @@ const saveWeighingController = async (req, res) => {
             model: model && model.trim() !== '' ? model.trim() : null,
             staffId: staffId,
         };
-        console.log("Payload for saving weighing:", payload);
         const waitWeighingInfo = await weighing_model_1.WeighingModel.GetWaitWeighingInfoById(payload.id);
         if (!waitWeighingInfo) {
             return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลในระบบ' });
         }
-        console.log("Wait Weighing Info:", waitWeighingInfo);
         // 2. เรียก Model สั่ง อัปเดตลง Database
         const insertPD_ROLL = await weighing_model_1.WeighingModel.InsertPD_ROLL({
             id_pl_wait_weight: payload.id,
@@ -49,18 +47,17 @@ const saveWeighingController = async (req, res) => {
             pl_order_id: waitWeighingInfo.PL_ORDER_ID,
             staffId: payload.staffId,
             qc_reel_id: waitWeighingInfo.QC_REEL_ID,
-            roll: waitWeighingInfo.ROLL_NO,
+            roll: waitWeighingInfo.ROLL,
         });
-        console.log("Insert PD_ROLL Result:", insertPD_ROLL);
         if (insertPD_ROLL?.id) {
-            const insertPD_ROLL_quality = await weighing_model_1.WeighingModel.InsertPD_ROLL_QUALITY({
+            await weighing_model_1.WeighingModel.InsertPD_ROLL_QUALITY({
                 id_pl_wait_weight: payload.id,
                 pd_roll_id: insertPD_ROLL.id,
                 qcReelQualityId: waitWeighingInfo.QC_REEL_QUALITY_ID,
                 staffId: staffId
             });
         }
-        const isSuccess = await weighing_model_1.WeighingModel.updateWeighingResult(payload);
+        const isSuccess = await weighing_model_1.WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no);
         // const isSuccess =   false; // เปลี่ยนเป็น false เพื่อทดสอบการตอบกลับเมื่อไม่สำเร็จ
         if (!isSuccess) {
             return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
@@ -73,6 +70,7 @@ const saveWeighingController = async (req, res) => {
         // 3. ตอบกลับหน้าบ้าน
         return res.json({
             success: true,
+            roll_no: insertPD_ROLL.roll_no,
             message: "บันทึกข้อมูลน้ำหนักลง Database เรียบร้อยแล้ว"
         });
     }

@@ -10,7 +10,7 @@ const oracledb_1 = __importDefault(require("oracledb"));
 // 💾 คลังข้อมูลจำลองประวัติการชั่งน้ำหนักในแรม (In-Memory)
 class WeighingModel {
     // ดึงประวัติที่ชั่งน้ำหนักแล้วทั้งหมดมารายงานผล
-    static async getNextWeighing(productionLineId, search = null, type = null) {
+    static async getNextWeighing(productionLineId, search = null, type = null, roll_no = null) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -22,6 +22,7 @@ class WeighingModel {
                 pl_order_detail_id  AS "orderDetailId",
                 split_set_id        AS "splitSetId",
                 part                AS "part",
+                roll                AS "roll",
                 roll_no             AS "rollNo",
                 blad                AS "blad",
                 grade_name          AS "gradeName",
@@ -63,8 +64,14 @@ class WeighingModel {
                 sql += ` AND UPPER(order_no) LIKE :search`;
                 binds.search = `%${search.trim().toUpperCase()}%`;
             }
+            const rollSearchMode = roll_no && roll_no.trim() !== "";
+            // 🔍 3. เช็ก search parameter และต่อเงื่อนไข LIKE roll_no
+            if (rollSearchMode) {
+                sql += ` AND UPPER(roll_no) LIKE :roll_no`;
+                binds.roll_no = `%${roll_no.trim().toUpperCase()}%`;
+            }
             // 🎯 4. จัดเรียงคิว
-            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll_no DESC`;
+            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
             // ถ้าไม่ได้ค้นหา ให้จำกัดเอาแค่ 1 รายการของเครื่องนั้นๆ
             if (!isSearchMode && !type) {
                 sql += ` FETCH FIRST 1 ROWS ONLY`;
@@ -122,7 +129,7 @@ class WeighingModel {
             }
         }
     }
-    static async updateWeighingResult(data) {
+    static async updateWeighingResult(data, roll_no) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -132,7 +139,8 @@ class WeighingModel {
                     weigh = :weigh,
                     status = :status,
                     remark = :remark,
-                    part = :part
+                    part = :part,
+                    roll_no = :roll_no
                 WHERE id = :id
             `;
             const result = await conn.execute(sql, {
@@ -140,6 +148,7 @@ class WeighingModel {
                 status: data.status,
                 remark: data.remark,
                 part: WeighingModel.getCurrentShift(), // ดึงกะการทำงานปัจจุบัน
+                roll_no: roll_no,
                 id: data.id,
             }, { autoCommit: false });
             const isSuccess = result.rowsAffected && result.rowsAffected > 0 ? true : false;
@@ -163,16 +172,6 @@ class WeighingModel {
             if (conn)
                 await conn.close();
         }
-    }
-    static async getLatestReadySubRoll() {
-        return {
-            order_no: "0066/2026",
-            roll_no: "R260618-01", // รหัสลูกม้วนย่อยตัวแรกที่เพิ่งคลอด
-            grade: "KA185",
-            version: "รุ่น ASSSf",
-            size: "72 นิ้ว",
-            diameter: 1200,
-        };
     }
     static async CheckResetSplitSet(id) {
         let conn;
@@ -280,7 +279,7 @@ class WeighingModel {
                     pl_order_id,
                     qc_reel_id,
                     qc_reel_quality_id,
-                    roll_no
+                    roll
                 FROM pl_wait_weighing_view 
                 WHERE id = :id_pl_wait_weight
             `;
