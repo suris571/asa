@@ -35,6 +35,18 @@ router.get('/login', (req: Request, res: Response) => {
   res.render('login/login', { error: null });
 });
 
+
+router.get('/auth/logout', (req: Request, res: Response) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('❌ เกิดข้อผิดพลาดในการ Destroy Session:', err);
+        }
+        // ล้าง cookie และส่งกลับหน้า login
+        res.clearCookie('connect.sid');
+        res.redirect('/login');
+    });
+});
+
 // 🔑 ตรวจจับรหัสผ่าน และเครื่องจักรที่เลือก (POST: /login)
 router.post('/login', async (req: Request, res: Response) => {
   const { username, password, machineNo } = req.body;
@@ -77,14 +89,6 @@ router.post('/login', async (req: Request, res: Response) => {
       error: '❌ รหัสผ่านไม่ถูกต้องหรือชื่อผู้ใช้ไม่ถูกต้อง' 
     });
   }
-});
-
-// 🚪 ปุ่มกดออกจากระบบ (GET: /logout)
-router.get('/logout', (req: Request, res: Response) => {
-  req.session.destroy((err) => {
-    if (err) console.error('ทำลายเซสชันพัง:', err);
-    res.redirect('/login');
-  });
 });
 
 export default router;
