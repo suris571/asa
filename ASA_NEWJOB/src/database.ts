@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // ❌ ลบ oracledb.initOracleClient(); ออกแล้ว เพื่อให้วิ่งเป็น Thin Mode ตาม Default
-
+// oracledb.initOracleClient();
 let pool: oracledb.Pool;
 
 // 1. สั่งสร้างกองกลาง (Pool) ค้างไว้ตอนแอปเปิดตัวครั้งแรกครั้งเดียว
@@ -14,9 +14,13 @@ export async function initializePool() {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     connectionString: process.env.DB_CONNECTION_STRING,
-    poolMin: 1, // เปิดสแตนด์บายค้างไว้แค่ 1 ท่อพอ
-    poolMax: 4, // ยืดหยุ่นได้สูงสุดไม่เกิน 4 ท่อถ้างานรุม
-    poolIncrement: 1
+    poolMin: 1,
+    poolMax: 4,
+    poolIncrement: 1,
+    
+    // 💡 เพิ่ม 2 ออปชันนี้เพื่อป้องกันปัญหา Listener หนักใจ
+    connectTimeout: 60,      // ให้เวลาลองเชื่อมต่อสูงสุด 60 วินาที (ไม่ตัดสายทันทีที่เจอสะดุด)
+    queueMax: 500            // ถ้าคิวยังเต็มให้รอในคิวก่อน อย่าเพิ่งพ่น Error ทันที
   });
   console.log('⚓ กองกลางท่อฐานข้อมูล (Connection Pool) พร้อมรบ!');
 }
