@@ -4,8 +4,7 @@ import dotenv from 'dotenv';
 // สั่งให้ระบบโหลดค่าจากไฟล์ .env เข้ามาใช้งาน
 dotenv.config();
 
-// ตั้งค่าให้ตัวจิ้ม Oracle ทำงานในโหมด Thin (ไม่ต้องพึ่ง Instant Client)
-oracledb.initOracleClient();
+// ❌ ลบ oracledb.initOracleClient(); ออกแล้ว เพื่อให้วิ่งเป็น Thin Mode ตาม Default
 
 let pool: oracledb.Pool;
 
@@ -38,7 +37,7 @@ export async function testDatabaseConnection() {
     console.log('⏰ เวลาปัจจุบันจาก Oracle DB:', result.rows?.[0]);
     console.log('-----------------------------------------');
   } catch (error) {
-    // ระบบจะดักจับและโชว์ error ตรงนี้
+    console.error('❌ Connection Error:', error);
   } finally {
     if (conn) {
       try {
