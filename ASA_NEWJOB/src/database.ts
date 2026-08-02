@@ -6,6 +6,7 @@ dotenv.config();
 
 // ❌ ลบ oracledb.initOracleClient(); ออกแล้ว เพื่อให้วิ่งเป็น Thin Mode ตาม Default
 // oracledb.initOracleClient();
+// oracledb.initOracleClient({ libDir: 'C:\\oracle\\instantclient_11_2' });
 let pool: oracledb.Pool;
 
 // 1. สั่งสร้างกองกลาง (Pool) ค้างไว้ตอนแอปเปิดตัวครั้งแรกครั้งเดียว

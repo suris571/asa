@@ -206,12 +206,13 @@
                 <div class="custom-filter-item">
                     <label for="searchStatus">🚦 สถานะ:</label>
                     <select id="searchStatus" class="form-control form-control-sm">
-                        <option value="">-- ทั้งหมด --</option>
+                        <option value="">-- เลือกสถาณะ --</option>
                         <% if (typeof statusList !== 'undefined' && statusList.length > 0) { %>
                             <% statusList.forEach(function(item) { %>
                                 <option value="<%= item.id %>"><%= item.status %></option>
                             <% }); %>
                         <% } %>
+                        <option value="ALL">รอสั่งตัด+รอตัด+ตัดไม่ครบ+HOLD</option>
                     </select>
                 </div>
 
@@ -238,6 +239,7 @@
                 <th rowspan="2" class="align-middle">ลำดับ</th>
                 <th rowspan="2" class="align-middle">เลขที่ใบสั่งผลิต</th>
                 <th rowspan="2" class="align-middle">ITEM</th>
+                <th rowspan="2" class="align-middle">Set</th>
                 <th colspan="4" class="text-center bg-gray-light">GRADE</th>
                 <!-- <th rowspan="2" class="align-middle">Set</th> -->
                 <th colspan="4" class="text-center bg-gray-light">ตั้งค่าใบมีด</th>
@@ -370,6 +372,7 @@
             { "data": "number" },
             { "data": "orderNo" },
             { "data": "orderItem" },
+            { "data": "qty","defaultContent": "" },
             { "data": "grade1" },
             { "data": "grade2" },
             { "data": "grade3" },
@@ -385,8 +388,8 @@
             { "data": "size4", "defaultContent": "" },
             { "data": "finishDate", "defaultContent": "" },
             { "data": "finishTime", "defaultContent": "" },
-            { "data": "diameter", "defaultContent": "" },
-            { "data": "qty", "defaultContent": "" },
+            { "data": "completed_roll_qty", "defaultContent": "" },
+            { "data": "completed_set_qty", "defaultContent": "" },
             { 
                 // 🎯 1. เปลี่ยนการผูก Data มาจับฟิลด์ใหม่ระบบเรา
                 "data": "cut_status_id", 
@@ -396,31 +399,26 @@
                     let statusName = '';
                     let badgeClass = '';
                     // ดักจับเคส: ค่าว่าง (ข้อมูลใหม่) หรือเลข 1 => ให้เป็น "รอสั่งตัด"
-                    if (data === null || data === undefined || parseInt(data) === 1) {
-                        statusName = '';
-                        badgeClass = ''; // สีเหลืองเด่น ให้รู้ว่างานใหม่เข้ามารอสั่งการ
-                    } else {
-                        switch(parseInt(data)) {
-                            case 2:
-                                statusName = 'รอตัด';
-                                badgeClass = 'bg-primary'; // สีน้ำเงิน กำลังเดินกระบวนการ
-                                break;
-                            case 3:
-                                statusName = 'ตัดไม่ครบ';
-                                badgeClass = 'bg-danger'; // สีแดงแจ้งเตือน มีปัญหาหน้างาน
-                                break;
-                            case 4:
-                                statusName = 'HOLD';
-                                badgeClass = 'bg-secondary'; // สีเทาหม่น หยุดชั่วคราวตามเดิม
-                                break;
-                            case 5:
-                                statusName = 'เสร็จสิ้น';
-                                badgeClass = 'bg-success'; // สีเขียว จบงานสมบูรณ์
-                                break;
-                            default:
-                                statusName = 'ไม่ทราบสถานะ';
-                                badgeClass = 'bg-dark';
-                        }
+                    switch(parseInt(data)) {
+                        case 2:
+                            statusName = 'รอตัด';
+                            badgeClass = 'bg-primary'; // สีน้ำเงิน กำลังเดินกระบวนการ
+                            break;
+                        case 3:
+                            statusName = 'ตัดไม่ครบ';
+                            badgeClass = 'bg-danger'; // สีแดงแจ้งเตือน มีปัญหาหน้างาน
+                            break;
+                        case 4:
+                            statusName = 'HOLD';
+                            badgeClass = 'bg-secondary'; // สีเทาหม่น หยุดชั่วคราวตามเดิม
+                            break;
+                        case 5:
+                            statusName = 'เสร็จสิ้น';
+                            badgeClass = 'bg-success'; // สีเขียว จบงานสมบูรณ์
+                            break;
+                        default:
+                            statusName = 'รอสั่งตัด';
+                            badgeClass = 'bg-warning'; // สีเหลืองเด่น ให้รู้ว่างานใหม่เข้ามารอสั่งการ
                     }
                     // 🚀 ส่งชิ้นส่วน HTML Badge สวยๆ ออกไปเรนเดอร์บนหน้าจอ
                     return `<span class="badge ${badgeClass} p-2 font-weight-bold" style="font-size: 85%;">${statusName}</span>`;

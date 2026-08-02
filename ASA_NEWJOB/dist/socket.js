@@ -83,6 +83,7 @@ const initSocket = (httpServer) => {
                 // ใช้ currentLineId จาก connection หรือ payload ก็ได้
                 const { status, orderNo, startDate, endDate, productionLineId } = payload;
                 const targetLineId = productionLineId || currentLineId;
+                console.log(`📌 [Socket] ดึงข้อมูลคิวรอตัด ${JSON.stringify(payload)}`);
                 const data = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate, targetLineId);
                 socket.emit("update_queue_table", { success: true, data: data });
             }

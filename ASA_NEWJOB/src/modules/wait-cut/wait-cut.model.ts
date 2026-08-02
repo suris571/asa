@@ -101,7 +101,7 @@ export class WaitCutModel {
                     blad1, blad2, blad3, blad4,
                     size_1, size_2, size_3, size_4,
                     finish_date, finish_time, diameter, queue_no, cut_status_id,
-                    pl_production_line_id
+                    pl_production_line_id,COMPLETED_SET_QTY,COMPLETED_ROLL_QTY
                 FROM pl_order_view
                 WHERE 1 = 1
             `;
@@ -121,15 +121,22 @@ export class WaitCutModel {
             }
 
             // ⚡ เงื่อนไขเดิม 2: ค้นหาด้วยสถานะระบบใหม่
-            if (status && typeof status === "string" && status.trim() !== "" && status !== "null") {
+            if(status && typeof status === "string" && status.trim() !== "" && status !== "null" && status == "ALL") {
+                query += ` AND cut_status_id IN (1, 2, 3, 4) `;
+            }else if (status && typeof status === "string" && status.trim() !== "" && status !== "null") {
                 const selectedStatus = parseInt(status.trim());
                 
                 if (selectedStatus === 1) {
-                    query += ` AND (cut_status_id = 1 OR cut_status_id IS NULL) `;
+                    query += ` AND (cut_status_id = 1) `;
                 } else {
                     query += ` AND cut_status_id = :cutStatusId `;
                     bindParams.cutStatusId = selectedStatus;
                 }
+            }else if (!order_no && !startDate && !endDate) {
+                // 💡 CASE DEFAULT: จะทำงาน "เฉพาะตอนที่ผู้ใช้เปิดหน้าเว็บมาครั้งแรก" (ไม่ได้เลือก Filter ใดๆ เลย)
+                // ถึงจะกวาดเอาเฉพาะงานปัจจุบันที่รอทำหน้าเครื่อง Rewinder มาโชว์
+                query += ` AND STATUS = 'ส่งให้ Rewinder' `;
+                query += ` AND cut_status_id IN (1, 2, 3, 4) `;
             }
 
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -144,11 +151,6 @@ export class WaitCutModel {
             if (endDate && typeof endDate === 'string' && dateRegex.test(endDate.trim())) {
                 query += ` AND finish_date <= :endDate `;
                 bindParams.endDate = endDate.trim();
-            }
-
-            if (!order_no && !status && !startDate && !endDate) {
-                query += ` AND STATUS = 'ส่งให้ Rewider' `;
-                query += ` AND (cut_status_id IS NULL OR cut_status_id IN (1, 2, 3, 4)) `;
             }
 
             query += ` ORDER BY queue_no ASC`;
@@ -187,7 +189,9 @@ export class WaitCutModel {
                         diameter: row.DIAMETER,
                         que: row.QUEUE_NO,
                         cut_status_id: row.CUT_STATUS_ID,
-                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID
+                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID,
+                        completed_set_qty: row.COMPLETED_SET_QTY,
+                        completed_roll_qty: row.COMPLETED_ROLL_QTY,
                     });
                 }
             }
@@ -266,15 +270,7 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
-            // 🔒 ขั้นตอนที่ 1: อัปเดตสถานะใบสั่งผลิตในตารางหลักให้เป็น "รอตัด (ID = 2)"
-            const updateDetailQuery = `
-                UPDATE pl_order_detail 
-                SET cut_status_id = 2 
-                WHERE id = :orderDetailId
-            `;
-            await conn.execute(updateDetailQuery, { orderDetailId });
-
-            // 🔍 ขั้นตอนที่ 2: เช็คก่อนว่ามีข้อมูลเซ็ตย่อยใน PL_CUT_SPLIT_SET แล้วหรือยัง
+            // 🔍 ขั้นตอนที่ 1: เช็คก่อนว่ามีข้อมูลเซ็ตย่อยใน PL_CUT_SPLIT_SET แล้วหรือยัง
             const checkExistingQuery = `
                 SELECT COUNT(*) AS COUNT_SETS
                 FROM pl_cut_split_set
@@ -299,9 +295,13 @@ export class WaitCutModel {
 
             } else {
                 // 🚀 CASE B: ยังไม่มีข้อมูลเดิม (สั่งตัดครั้งแรก) -> วนลูป INSERT เซ็ตย่อยใหม่ตามจำนวน qty
+                // 💡 สังเกต: ใช้ SQ_PL_CUT_SPLIT_SET.NEXTVAL หรือ Sequence ของตารางนี้ถ้ามี
                 const insertSplitQuery = `
-                    INSERT INTO pl_cut_split_set (pl_order_id, pl_order_detail_id, set_no, cut_length, status,CREATE_STAFF)
-                    VALUES (:orderId, :orderDetailId, :setNo, 0, 2, :staffId)
+                    INSERT INTO pl_cut_split_set (
+                        id, pl_order_id, pl_order_detail_id, set_no, cut_length, status, create_staff
+                    ) VALUES (
+                        sq_pl_cut_split_set.NEXTVAL, :orderId, :orderDetailId, :setNo, 0, 2, :staffId
+                    )
                 `;
 
                 for (let i = 0; i < qty; i++) {
@@ -316,6 +316,38 @@ export class WaitCutModel {
                     });
                 }
             }
+
+            // 🎯 ขั้นตอนที่ 2: คำนวณหา cut_status_id ของ pl_order_detail ตามสถานะจริงของเซ็ตย่อยทั้งหมด
+            const checkStatusQuery = `
+                SELECT 
+                    COUNT(*) AS TOTAL_SETS,
+                    COUNT(CASE WHEN status = 5 THEN 1 END) AS COMPLETED_SETS
+                FROM pl_cut_split_set
+                WHERE pl_order_detail_id = :orderDetailId
+            `;
+            const statusResult: any = await conn.execute(checkStatusQuery, { orderDetailId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+            
+            const row = statusResult.rows[0];
+            const totalSets = row?.TOTAL_SETS || 0;
+            const completedSets = row?.COMPLETED_SETS || 0;
+
+            let targetCutStatusId = 2; // Default = 2 (รอตัด)
+
+            if (completedSets > 0 && completedSets < totalSets) {
+                targetCutStatusId = 3; // ⚡ มีบางเซ็ตตัดเสร็จแล้วแต่ยังไม่ครบ -> "ตัดยังไม่ครบ / อยู่ระหว่างตัด"
+            } else if (completedSets >= totalSets && totalSets > 0) {
+                targetCutStatusId = 5; // ตัดเสร็จครบทุกเซ็ตแล้ว
+            } else {
+                targetCutStatusId = 2; // ยังไม่มีเซ็ตไหนเสร็จเลย -> "รอตัด"
+            }
+
+            // 🔒 ขั้นตอนที่ 3: อัปเดตสถานะที่คำนวณได้ลงตารางหลัก pl_order_detail
+            const updateDetailQuery = `
+                UPDATE pl_order_detail 
+                SET cut_status_id = :targetCutStatusId 
+                WHERE id = :orderDetailId
+            `;
+            await conn.execute(updateDetailQuery, { targetCutStatusId, orderDetailId });
 
             // ยืนยันกระบวนการ Transaction ทั้งหมด (Atomic Commit)
             await conn.commit();
@@ -636,7 +668,7 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
-            // 🎯 Query ข้อมูลจาก View รวม 3 ตาราง
+            // 🎯 Query ข้อมูลจาก View รวม 3 ตาราง (แก้ Alias คำสงวน "date" และ "time")
             let sql = `
                 SELECT 
                     split_set_id        AS SPLIT_SET_ID,
@@ -663,13 +695,13 @@ export class WaitCutModel {
                     reel_no,
                     remark,
                     finish_at,
-                    TO_CHAR(finish_at, 'DD/MM/YYYY') AS "date",
-                    TO_CHAR(finish_at, 'HH24:MI')    AS "time"
+                    TO_CHAR(finish_at, 'DD/MM/YYYY') AS "DATE_STR",
+                    TO_CHAR(finish_at, 'HH24:MI')    AS "TIME_STR"
                 FROM pl_cut_split_set_view
                 WHERE 1=1
                 AND split_status_id = 5
             `;
-            console.log(sql)
+
             const binds: any = {};
 
             // 🔍 1. กรอง orderNo
@@ -678,7 +710,7 @@ export class WaitCutModel {
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
             }
 
-            // 📅 2. กรองช่วงวันที่ finish_at (รองรับทั้งส่งคู่ หรือส่งแค่วันใดวันหนึ่ง)
+            // 📅 2. กรองช่วงวันที่ finish_at
             if (startDate && startDate.trim() !== '') {
                 sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'YYYY-MM-DD')`;
                 binds.startDate = startDate.trim();
@@ -689,8 +721,8 @@ export class WaitCutModel {
                 binds.endDate = endDate.trim();
             }
 
-            if(!endDate && !startDate){
-                sql += ` AND reel_no is null`;
+            if (!endDate && !startDate) {
+                sql += ` AND reel_no IS NULL`;
             }
 
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
@@ -729,8 +761,8 @@ export class WaitCutModel {
                         pl_order_id: row.PL_ORDER_ID,
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
-                        date: row.date,
-                        time: row.time,
+                        date: row.DATE_STR,  // ดึงค่าจาก Alias ใหม่
+                        time: row.TIME_STR,  // ดึงค่าจาก Alias ใหม่
                         remark: row.REMARK
                     });
                 }

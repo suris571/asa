@@ -14,68 +14,69 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🎯 1. Query ดึงคิว
+            // 🎯 1. Query หลักแบบเดิม
             let sql = `
-            SELECT 
-                id                  AS "id",
-                pl_order_id         AS "orderId",
-                pl_order_detail_id  AS "orderDetailId",
-                split_set_id        AS "splitSetId",
-                part                AS "part",
-                roll                AS "roll",
-                roll_no             AS "rollNo",
-                blad                AS "blad",
-                grade_name          AS "gradeName",
-                size_name           AS "sizeName",
-                model               AS "model",
-                weigh               AS "weigh",
-                status              AS "status",
-                remark              AS "remark",
-                created_at          AS "createdAt",
-                order_no            AS "orderNo",
-                order_item          AS "orderItem",
-                set_no              AS "setNo",
-                cut_length          AS "cutLength",
-                queue_no            AS "queueNo",
-                diameter            AS "diameter",
-                finish_at           AS "finish_at",
-                reel_no             AS "reel_no",
-                total               AS "total",
-                already_done        AS "alreadyDone",
-                pl_production_line_id AS "productionLineId"
-            FROM pl_wait_weighing_view
-            WHERE 1 = 1
-        `;
+                SELECT 
+                    id                  AS "id",
+                    pl_order_id         AS "orderId",
+                    pl_order_detail_id  AS "orderDetailId",
+                    split_set_id        AS "splitSetId",
+                    part                AS "part",
+                    roll                AS "roll",
+                    roll_no             AS "rollNo",
+                    blad                AS "blad",
+                    grade_name          AS "gradeName",
+                    size_name           AS "sizeName",
+                    model               AS "model",
+                    weigh               AS "weigh",
+                    status              AS "status",
+                    remark              AS "remark",
+                    created_at          AS "createdAt",
+                    order_no            AS "orderNo",
+                    order_item          AS "orderItem",
+                    set_no              AS "setNo",
+                    cut_length          AS "cutLength",
+                    queue_no            AS "queueNo",
+                    diameter            AS "diameter",
+                    finish_at           AS "finish_at",
+                    reel_no             AS "reel_no",
+                    total               AS "total",
+                    already_done        AS "alreadyDone",
+                    pl_production_line_id AS "productionLineId"
+                FROM pl_wait_weighing_view
+                WHERE 1 = 1
+            `;
+            // 🛠️ แก้จุดที่ 1: เปลี่ยน TRIM(status) = '' เป็น status IS NULL (เพราะ Oracle มอง '' เป็น NULL)
             if (!type) {
-                sql += ` AND  (status IS NULL OR TRIM(status) = '')`;
+                sql += ` AND status IS NULL`;
             }
             else {
                 sql += ` AND status IS NOT NULL`;
             }
             const binds = {};
-            // 🔍 2. เช็กและกรองตาม ID เครื่อง (pl_production_line_id)
+            // 🔍 2. กรองตาม ID เครื่อง
             if (productionLineId) {
                 sql += ` AND pl_production_line_id = :productionLineId`;
                 binds.productionLineId = productionLineId;
             }
             const isSearchMode = search && search.trim() !== "";
-            // 🔍 3. เช็ก search parameter และต่อเงื่อนไข LIKE order_no
+            // 🔍 3. กรองตาม order_no
             if (isSearchMode) {
                 sql += ` AND UPPER(order_no) LIKE :search`;
                 binds.search = `%${search.trim().toUpperCase()}%`;
             }
             const rollSearchMode = roll_no && roll_no.trim() !== "";
-            // 🔍 3. เช็ก search parameter และต่อเงื่อนไข LIKE roll_no
+            // 🔍 4. กรองตาม roll_no
             if (rollSearchMode) {
                 sql += ` AND UPPER(roll_no) LIKE :roll_no`;
                 binds.roll_no = `%${roll_no.trim().toUpperCase()}%`;
             }
-            // 🎯 4. จัดเรียงคิว
-            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
-            // ถ้าไม่ได้ค้นหา ให้จำกัดเอาแค่ 1 รายการของเครื่องนั้นๆ
+            // 🛠️ แก้จุดที่ 2: ถ้าต้องการเอาแค่ 1 รายการ ให้จำกัด ROWNUM ใน WHERE ก่อนเข้า ORDER BY
             if (!isSearchMode && !type) {
-                sql += ` FETCH FIRST 1 ROWS ONLY`;
+                sql += ` AND ROWNUM <= 1`;
             }
+            // 🎯 5. จัดเรียงคิวแบบเดิมไว้ล่างสุด
+            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
             console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
@@ -100,17 +101,14 @@ class WeighingModel {
                 // 🧮 2. คำนวณ remaining = total - alreadyDone
                 const total = Number(row.total || 0);
                 const alreadyDone = Number(row.alreadyDone || 0);
-                // ป้องกันติดลบ (ถ้ามี) ให้สลับเป็น 0 ต่ำสุด
                 row.remaining = Math.max(0, total - alreadyDone);
                 return row;
             };
-            // 🎯 5. เงื่อนไขการ Return ข้อมูล
-            if (isSearchMode || type === 'history') {
-                // 🟢 กรณีมี ค้นหา (search): แปลงข้อมูลทุกแถว แล้ว Return เป็น Array
+            // 🎯 6. Return ข้อมูล
+            if (isSearchMode || type === "history") {
                 return rows.map((row) => processRowData(row));
             }
             else {
-                // 🟢 กรณีไม่ได้ค้นหา: แปลงข้อมูลเฉพาะแถวแรก แล้ว Return เป็น Object (หรือ null)
                 return rows.length > 0 ? processRowData(rows[0]) : null;
             }
         }
@@ -133,7 +131,20 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            const sql = `
+            // 🔍 STEP 1: SELECT หา pl_order_detail_id และ split_set_id จาก pl_wait_weighing
+            const checkSql = `
+                SELECT pl_order_detail_id, split_set_id 
+                FROM pl_wait_weighing 
+                WHERE id = :id
+            `;
+            const checkResult = await conn.execute(checkSql, { id: data.id }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (!checkResult.rows || checkResult.rows.length === 0) {
+                throw new Error(`ไม่พบรายการชั่งน้ำหนัก ID: ${data.id}`);
+            }
+            const orderDetailId = checkResult.rows[0].PL_ORDER_DETAIL_ID;
+            const splitSetId = checkResult.rows[0].SPLIT_SET_ID;
+            // 🎯 STEP 2: อัปเดตผลการชั่งน้ำหนักลงตาราง pl_wait_weighing
+            const updateWeighSql = `
                 UPDATE pl_wait_weighing
                 SET 
                     weigh = :weigh,
@@ -143,17 +154,44 @@ class WeighingModel {
                     roll_no = :roll_no
                 WHERE id = :id
             `;
-            const result = await conn.execute(sql, {
+            const result = await conn.execute(updateWeighSql, {
                 weigh: data.weigh,
                 status: data.status,
                 remark: data.remark,
-                part: WeighingModel.getCurrentShift(), // ดึงกะการทำงานปัจจุบัน
+                part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
                 id: data.id,
             }, { autoCommit: false });
-            const isSuccess = result.rowsAffected && result.rowsAffected > 0 ? true : false;
-            // 🎯 บันทึกผลลง Database ถาวรเมื่อ Update สำเร็จ
-            if (isSuccess) {
+            const isSuccess = result.rowsAffected && result.rowsAffected > 0;
+            if (isSuccess && orderDetailId) {
+                // 🎯 STEP 3: อัปเดตจำนวนลูกย่อยสะสม COMPLETED_ROLL_QTY + 1
+                const updateRollQtySql = `
+                    UPDATE pl_order_detail
+                    SET completed_roll_qty = NVL(completed_roll_qty, 0) + 1
+                    WHERE id = :orderDetailId
+                `;
+                await conn.execute(updateRollQtySql, { orderDetailId }, { autoCommit: false });
+                // 🎯 STEP 4: เช็กว่าใน split_set_id นี้ มีลูกย่อยที่ยังชั่งไม่เสร็จเหลืออยู่อีกไหม?
+                if (splitSetId) {
+                    const checkRemainingSql = `
+                        SELECT COUNT(*) AS REMAINING_COUNT
+                        FROM pl_wait_weighing
+                        WHERE split_set_id = :splitSetId
+                        AND status IS NULL
+                    `;
+                    const remainResult = await conn.execute(checkRemainingSql, { splitSetId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+                    const remainingCount = remainResult.rows[0]?.REMAINING_COUNT || 0;
+                    // 💡 ถ้ารายการค้างชั่งในเซ็ตนี้เป็น 0 แล้ว = ชั่งครบทั้งเซ็ตแล้ว! -> บวก COMPLETED_SET_QTY + 1
+                    if (remainingCount === 0) {
+                        const updateSetQtySql = `
+                            UPDATE pl_order_detail
+                            SET completed_set_qty = NVL(completed_set_qty, 0) + 1
+                            WHERE id = :orderDetailId
+                        `;
+                        await conn.execute(updateSetQtySql, { orderDetailId }, { autoCommit: false });
+                    }
+                }
+                // 🔒 Commit ธุรกรรมทั้งหมดพร้อมกันแบบ Atomic Transaction
                 await conn.commit();
             }
             else {
@@ -162,7 +200,6 @@ class WeighingModel {
             return isSuccess;
         }
         catch (error) {
-            // 🎯 ถ้ามี Error ให้ Rollback ทันที
             if (conn)
                 await conn.rollback();
             console.error("❌ เกิดข้อผิดพลาดใน Model [updateWeighingResult]:", error);
@@ -177,37 +214,36 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🎯 Query ดึงคิวถัดไปเพียง 1 รายการ จาก View ตัวใหม่ล่าสุด
+            // 🎯 Query ดึงคิวถัดไปเพียง 1 รายการ (ปรับให้ใช้ ROWNUM <= 1 สำหรับ Oracle 10g)
             const sqlSelect = `
-                SELECT 
-                    id AS "id"
-                FROM pl_wait_weighing_view
-                WHERE split_set_id = :id
-                AND weigh IS NOT NULL
-                FETCH FIRST 1 ROWS ONLY
-            `;
-            // 1. ค้นหาข้อมูล (ใช้ Object { id } ให้ตรงกับ :id ใน SQL)
+            SELECT 
+                id AS "id"
+            FROM pl_wait_weighing_view
+            WHERE split_set_id = :id
+              AND weigh IS NOT NULL
+              AND ROWNUM <= 1
+        `;
+            // 1. ค้นหาข้อมูล
             const result = await conn.execute(sqlSelect, { id }, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
-            // 2. ถ้าเจอข้อมูล ให้ส่งออกแถวแรกทันที
+            // 2. ถ้าเจอข้อมูล (มีการชั่งน้ำหนักแล้ว) ให้ส่งออก false ทันที
             if (result.rows && result.rows.length > 0) {
                 console.log("reset ไม่ได้เจอข้อมูล");
                 return false;
             }
-            console.log(result);
-            // 3. 🚨 ถ้าไม่เจอข้อมูล (แสดงว่าไม่มีม้วนไหนที่มีค่าน้ำหนักเลย) ให้สั่งลบข้อมูลใน PL_WAIT_WEIGHING ทั้งหมดของ split_set_id นี้
+            // 3. ถ้าไม่เจอข้อมูล ให้ลบข้อมูลใน PL_WAIT_WEIGHING ของ split_set_id นี้
             const sqlDelete = `
-                DELETE FROM pl_wait_weighing
-                WHERE split_set_id = :id
-            `;
+            DELETE FROM pl_wait_weighing
+            WHERE split_set_id = :id
+        `;
             await conn.execute(sqlDelete, { id });
-            // 💡 อย่าลืม commit หากฟังก์ชันนี้จัดการ transaction เอง
+            // Commit transaction
             await conn.commit();
             return true;
         }
         catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [getNextWeighing]:", error);
+            console.error("❌ เกิดข้อผิดพลาดใน Model [CheckResetSplitSet]:", error);
             throw error;
         }
         finally {
@@ -225,30 +261,32 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🎯 ดึง roll_no ทั้งหมด หรือดึงเฉพาะอันที่เป็นตัวเลขมาหาค่าสูงสุด
+            // 💡 วิธีที่ 1: ปรับใช้ ROWNUM <= 1 แทน FETCH FIRST 1 ROWS ONLY
             const sql = `
+            SELECT roll_no 
+            FROM (
                 SELECT roll_no 
                 FROM PD_ROLL 
                 WHERE roll_no IS NOT NULL 
-                AND REGEXP_LIKE(roll_no, '^[0-9]+$')
+                  AND REGEXP_LIKE(roll_no, '^[0-9]+$')
                 ORDER BY TO_NUMBER(roll_no) DESC
-                FETCH FIRST 1 ROWS ONLY
-            `;
+            )
+            WHERE ROWNUM <= 1
+        `;
             const result = await conn.execute(sql, [], {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const rows = result.rows || [];
             if (rows.length > 0 && rows[0].ROLL_NO) {
                 const currentMax = parseInt(rows[0].ROLL_NO, 10);
-                return String(currentMax + 1); // 🎯 ดึงได้ปุ๊บ +1 แล้วแปลงกลับเป็น String
+                return String(currentMax + 1); // 🎯 ดึงได้ปุ๊บ +1 แล้วส่งกลับ
             }
-            // 🎯 ถ้าตารางยังไม่มีข้อมูล ให้เริ่มที่ '1' (หรือเลขเริ่มต้นของโรงงาน เช่น '100001')
-            return '1';
+            // 🎯 ถ้าตารางยังไม่มีข้อมูล ให้เริ่มที่ '1'
+            return "1";
         }
         catch (error) {
             console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
-            // Fallback ป้องกันระบบล่ม
-            return '1';
+            return "1";
         }
         finally {
             if (conn)
@@ -260,14 +298,14 @@ class WeighingModel {
         const currentHour = dateObj.getHours();
         // 🎯 1. ช่วงเวลา 08:00 ถึง 15:59 (8 ถึง 15) -> กะเช้า
         if (currentHour >= 8 && currentHour < 16) {
-            return 'เช้า'; // หรือใส่ 'กะเช้า' ตามที่ DB ต้องการ
+            return "เช้า"; // หรือใส่ 'กะเช้า' ตามที่ DB ต้องการ
         }
         // 🎯 2. ช่วงเวลา 16:00 ถึง 23:59 (16 ถึง 23) -> กะบ่าย
         if (currentHour >= 16 && currentHour < 24) {
-            return 'บ่าย'; // หรือใส่ 'กะบ่าย'
+            return "บ่าย"; // หรือใส่ 'กะบ่าย'
         }
         // 🎯 3. ช่วงเวลา 00:00 ถึง 07:59 (0 ถึง 7) -> กะดึก
-        return 'ดึก'; // หรือใส่ 'กะดึก'
+        return "ดึก"; // หรือใส่ 'กะดึก'
     };
     static async GetWaitWeighingInfoById(id_pl_wait_weight) {
         let conn;
@@ -305,6 +343,7 @@ class WeighingModel {
             let roll_no = await WeighingModel.getMaxRollNo(); // 🎯 ดึง roll_no ล่าสุด +1
             const insertPDQuery = `
                 INSERT INTO PD_ROLL (
+                    ID,
                     CREATE_DATE,
                     CREATE_STAFF,
                     PART,
@@ -327,7 +366,8 @@ class WeighingModel {
                     RETURN_OLD_ROLL,
                     R_ROLL
                 )
-                SELECT 
+                SELECT
+                    sq_pd_roll.nextval,
                     SYSDATE,                                    -- CREATE_DATE
                     NVL(:staffId, 1),                           -- CREATE_STAFF
                     :part,                                      -- PART
@@ -355,13 +395,13 @@ class WeighingModel {
             const bindVars = {
                 id_pl_wait_weight: data.id_pl_wait_weight,
                 weigh: data.weigh,
-                status: data.status || 'PASS',
+                status: data.status || "PASS",
                 remark: data.remark || null,
                 staffId: data.staffId || 1,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
                 qc_reel_id: data.qc_reel_id || 0,
-                roll: data.roll
+                roll: data.roll,
             };
             const result = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
@@ -378,7 +418,7 @@ class WeighingModel {
                 // 🎯 Return เป็น Object กลับไปใช้งานต่อ
                 return {
                     id: newId,
-                    roll_no: roll_no
+                    roll_no: roll_no,
                 };
             }
             else {
@@ -403,10 +443,12 @@ class WeighingModel {
             conn = await (0, database_1.getConnection)();
             let result;
             // 🎯 Step 2: เช็ก IF
+            console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
                 // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert
                 const insertFromQcSql = `
                     INSERT INTO PD_ROLL_QUALITY (
+                        ID,
                         CREATE_DATE,
                         CREATE_STAFF,
                         PD_ROLL_ID,
@@ -425,6 +467,7 @@ class WeighingModel {
                         REMARKS
                     )
                     SELECT 
+                        SQ_PD_ROLL_QUALITY.NEXTVAL,
                         SYSDATE,
                         -1,
                         :pd_roll_id,
@@ -479,12 +522,12 @@ class WeighingModel {
     static async InsertDefaultNull(conn, pd_roll_id) {
         const insertNullSql = `
             INSERT INTO PD_ROLL_QUALITY (
-                CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,
+                ID,CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,
                 BASIS_WEIGHT, BURSTING_STRENGTH, RING_CRUSH, CONCORA, THICKNESS,
                 COBB, MOISTURE_CONTENT, CIE_LAB_L, CIE_LAB_A, CIE_LAB_B,
                 BOTTOM_SIDE, INKJET, REMARKS
             ) VALUES (
-                SYSDATE, -1, :pd_roll_id,
+                SQ_PD_ROLL_QUALITY.NEXTVAL,SYSDATE, -1, :pd_roll_id,
                 NULL, NULL, NULL, NULL, NULL,
                 NULL, NULL, NULL, NULL, NULL,
                 NULL, NULL, NULL
