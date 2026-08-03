@@ -228,30 +228,32 @@ exports.getQcReelListController = getQcReelListController;
 const saveQcCloseReelController = async (req, res) => {
     try {
         const { splitSetId, reelId } = req.body;
+        // 1. Validation เบื้องต้น
         if (!splitSetId || !reelId) {
             return res.status(400).json({
                 success: false,
                 message: "ข้อมูลไม่ครบถ้วน กรุณาระบุ splitSetId และ reelId",
             });
         }
+        // 2. เรียกใช้งาน Model
         const result = await wait_cut_model_1.WaitCutModel.updateCloseReel(splitSetId, reelId);
-        await (0, socket_1.FnNextQcCloseReel)();
-        if (result.rowsAffected && result.rowsAffected > 0) {
-            return res.json({
-                success: true,
-                message: "บันทึก REEL_ID เรียบร้อยแล้ว",
-                data: {
-                    splitSetId: splitSetId,
-                    reelId: reelId,
-                },
-            });
-        }
-        else {
-            return res.status(404).json({
+        // 🛑 3. เช็กว่า Model ทำงานสำเร็จหรือไม่ (ถ้าโควตาไม่พอ หรือไม่พบ ID จะเด้งเข้าเงื่อนไขนี้)
+        if (!result.success) {
+            return res.status(400).json({
                 success: false,
-                message: `ไม่พบรายการ PL_CUT_SPLIT_SET ที่มี ID: ${splitSetId}`,
+                message: result.message, // ส่ง Message เตือนจาก Model (เช่น "โควตาคงเหลือไม่พอ...") ไปแสดงที่หน้า UI
             });
         }
+        // 🟢 4. ถ้าผ่าน (สำเร็จ) ค่อยเรียกฟังก์ชันถัดไป
+        await (0, socket_1.FnNextQcCloseReel)();
+        return res.json({
+            success: true,
+            message: "บันทึก REEL_ID เรียบร้อยแล้ว",
+            data: {
+                splitSetId: splitSetId,
+                reelId: reelId,
+            },
+        });
     }
     catch (error) {
         console.error("❌ Controller Error [saveQcCloseReelController]:", error);

@@ -364,7 +364,8 @@ class WeighingModel {
                     REMARKS,
                     PL_ORDER_DETAIL_ID,
                     RETURN_OLD_ROLL,
-                    R_ROLL
+                    R_ROLL,
+                    SPLIT_SET_ID
                 )
                 SELECT
                     sq_pd_roll.nextval,
@@ -388,7 +389,8 @@ class WeighingModel {
                     :remark,                                    -- REMARKS
                     v.pl_order_detail_id,                       -- PL_ORDER_DETAIL_ID
                     'N',                                        -- RETURN_OLD_ROLL
-                    :roll                                       -- R_ROLL
+                    :roll,                                      -- R_ROLL
+                    v.split_set_id                              -- split_set_id
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
             `;

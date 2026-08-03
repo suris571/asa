@@ -823,32 +823,46 @@ export class WaitCutModel {
         }
     }
 
-    static async getReelList(keyword: string) {
+    static async getReelList(keyword?: string) {
         let conn;
         try {
             conn = await getConnection();
             
-            // จัดการรูปแบบคำค้นหา
-            let cleanKeyword = keyword ? String(keyword).trim() : '';
-        
-            // ถ้าส่งมาเป็น '%' หรือว่างเปล่า ให้ค้นหาทั้งหมด
-            let searchVal = '%';
-            if (cleanKeyword && cleanKeyword !== '%' && cleanKeyword !== 'null' && cleanKeyword !== 'undefined') {
-                searchVal = `%${cleanKeyword}%`;
-            }
-            const sql = `
+            // 🧹 1. ทำความสะอาด Keyword
+            const cleanKeyword = keyword ? String(keyword).trim() : '';
+
+            // 🔍 2. เช็กว่ามีการส่ง keyword จริงๆ หรือไม่ (ไม่ใช่ค่าว่าง, %, 'null', 'undefined')
+            const hasKeyword = cleanKeyword !== '' && 
+                            cleanKeyword !== '%' && 
+                            cleanKeyword !== 'null' && 
+                            cleanKeyword !== 'undefined';
+
+            // 📝 3. ประกอบ Dynamic SQL
+            let sql = `
                 SELECT 
                     id,
                     reel_no,
                     grade,
                     date_str AS "date",
                     status,
-                    dcs_reel_no
+                    dcs_reel_no,
+                    target_roll_qty,
+                    used_roll_qty
                 FROM pl_qc_reel_view
-                WHERE reel_no LIKE :search
             `;
-            
-            const result = await conn.execute(sql, { search: searchVal }, {
+
+            const bindVars: any = {};
+
+            // 🎯 ถ้านับแล้วว่ามี Keyword ค่อยต่อ WHERE reel_no LIKE :search
+            if (hasKeyword) {
+                sql += ` WHERE UPPER(reel_no) LIKE UPPER(:search)`;
+                bindVars.search = `%${cleanKeyword}%`;
+            }
+
+            // 📌 ใส่ ORDER BY เพื่อให้ผลลัพธ์เรียงลำดับอ่านง่ายเสมอ (ปรับตามคอลัมน์ที่ต้องการได้ค่ะ)
+            sql += ` ORDER BY id DESC`;
+
+            const result = await conn.execute(sql, bindVars, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT
             });
 
@@ -867,27 +881,110 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
-            // 🎯 UPDATE คอลัมน์ REEL_ID โดยตรง
-            const updateSql = `
+            // 🔍 1. ดึงโควตาคงเหลือ (remaining) จาก PL_QC_REEL_VIEW
+            const reelViewSql = `
+                SELECT reel_no, remaining 
+                FROM pl_qc_reel_view 
+                WHERE id = :reelId
+            `;
+            const reelResult: any = await conn.execute(
+                reelViewSql, 
+                { reelId }, 
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+
+            if (!reelResult.rows || reelResult.rows.length === 0) {
+                return {
+                    success: false,
+                    message: `ไม่พบข้อมูล QC Reel ID: ${reelId} หรือม้วนนี้โควตาเต็ม/ปิดงานไปแล้ว`
+                };
+            }
+
+            const reelNo = reelResult.rows[0]?.REEL_NO;
+            const remainingQty = reelResult.rows[0]?.REMAINING || 0;
+
+            // 🔍 2. ดึงจำนวนม้วนที่ Set นี้ต้องใช้ (wait_weighing_qty) จาก PL_CUT_SPLIT_SET_VIEW
+            const currentSetSql = `
+                SELECT wait_weighing_qty 
+                FROM pl_cut_split_set_view 
+                WHERE split_set_id = :splitSetId
+            `;
+            const currentSetResult: any = await conn.execute(
+                currentSetSql, 
+                { splitSetId }, 
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+
+            if (!currentSetResult.rows || currentSetResult.rows.length === 0) {
+                return {
+                    success: false,
+                    message: `ไม่พบข้อมูล Set ID: ${splitSetId}`
+                };
+            }
+
+            const requiredQty = currentSetResult.rows[0]?.WAIT_WEIGHING_QTY || 0;
+
+            // 🛑 3. เปรียบเทียบ: จำนวนที่จะใช้ > โควตาคงเหลือหรือไม่?
+            if (requiredQty > remainingQty) {
+                return {
+                    success: false,
+                    message: `ไม่สามารถเลือกม้วน QC (${reelNo}) ได้! โควตาคงเหลือไม่พอ (ม้วน QC เหลือตัดได้อีก ${remainingQty} ลูก แต่ Set นี้ต้องใช้ ${requiredQty} ลูก)`
+                };
+            }
+
+            // 🟢 4. โควตาเพียงพอ -> UPDATE ทั้ง 3 ตารางที่เกี่ยวข้องกัน
+
+            // 4.1 อัปเดตผูก qc_reel_id ใน pd_roll (ถ้ามีรายการชั่งน้ำหนักไปก่อนแล้ว)
+            const updatePdRollSql = `
+                UPDATE pd_roll
+                SET qc_reel_id = :reelId
+                WHERE split_set_id = :splitSetId
+            `;
+            await conn.execute(updatePdRollSql, { reelId, splitSetId });
+
+            // 4.2 อัปเดตผูกค่า Quality สเปกกระดาษย้อนหลังใน pd_roll_quality (ถ้ามีรายการชั่งไปก่อนแล้ว)
+            const updatePdRollQualitySql = `
+                UPDATE pd_roll_quality pq
+                SET (
+                    BASIS_WEIGHT, BURSTING_STRENGTH, RING_CRUSH, CONCORA, THICKNESS,
+                    COBB, MOISTURE_CONTENT, CIE_LAB_L, CIE_LAB_A, CIE_LAB_B,
+                    BOTTOM_SIDE, INKJET, REMARKS
+                ) = (
+                    SELECT 
+                        q.BASIS_WEIGHT, q.BURSTING_STRENGHT, q.RING_CRUSH, q.CONCORA, q.THICKNESS,
+                        q.COBB, q.MOISTURE_CONTENT, q.CIE_LAB_L, q.CIE_LAB_A, q.CIE_LAB_B,
+                        q.BOTTOM_SIDE, q.INKJET, q.REMARKS
+                    FROM qc_reel_quality q
+                    WHERE q.qc_reel_id = :reelId
+                )
+                WHERE pq.pd_roll_id IN (
+                    SELECT id 
+                    FROM pd_roll 
+                    WHERE split_set_id = :splitSetId
+                )
+            `;
+            await conn.execute(updatePdRollQualitySql, { reelId, splitSetId });
+
+            // 4.3 อัปเดตผูก qc_reel_id ลงใน pl_cut_split_set (ตารางหลัก)
+            const updateSplitSetSql = `
                 UPDATE pl_cut_split_set
                 SET qc_reel_id = :reelId
                 WHERE id = :splitSetId
             `;
+            const result = await conn.execute(updateSplitSetSql, { reelId, splitSetId });
 
-            const result = await conn.execute(
-                updateSql, 
-                { 
-                    reelId: reelId, 
-                    splitSetId: splitSetId 
-                }, 
-                { autoCommit: true } // Commit ธุรกรรมลง Database ทันที
-            );
+            // 💾 4.4 Commit All Transaction
+            await conn.commit();
 
             return {
+                success: true,
                 rowsAffected: result.rowsAffected
             };
 
         } catch (error) {
+            if (conn) {
+                try { await conn.rollback(); } catch (rbErr) {}
+            }
             console.error("❌ Model Error [updateCloseReel]:", error);
             throw error;
         } finally {

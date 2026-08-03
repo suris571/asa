@@ -170,14 +170,19 @@
 
     async function sendDataToPrint(data) {
         return $.ajax({
-            url: data.url, // 👈 ชี้เป้าไปที่ท่อที่เราเปิดทดสอบไว้ (พอร์ต 3000 หรือ 4000)
-            method: 'POST',        // สลับร่างเป็น POST ตามสเปกงานจริง
+            url: data.url,
+            method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify(data.body), // แปลงข้อมูลเป็น JSON สตริงก่อนวิ่งผ่านสายแลน
+            data: JSON.stringify(data.body),
             success: function(response) {
+                console.log("✅ ยิงพิมพ์สำเร็จ:", response);
             },
             error: function(xhr, status, error) {
                 console.error("💥 ท่อยิงพิมพ์ล่ม:", error);
+            },
+            complete: function(xhr, status) {
+                // 🎯 จุดนี้จะทำงานเสมอ ไม่ว่าจะ Success หรือ Error ก็ตาม!
+                console.log("🏁 กระบวนการยิงพิมพ์จบลงแล้ว (Status: " + status + ")");
             }
         });
     }
@@ -198,17 +203,18 @@
         $('#orderNo').on('change', function() {  });
 
         // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
-        // ตัวอย่าง: ดักฟังการ Submit ฟอร์มที่รวมทุกสเต็ปเข้าด้วยกัน
         $('#weighingForm').on('submit', async function(e) {
+            e.preventDefault();
             
-            e.preventDefault()
-            if(!$('#id').val()){
+            if (!$('#id').val()) {
                 alert("❌ เกิดข้อผิดพลาด: ไม่สามารถบันทึกได้เนื่องจากไม่มีรายการที่ถูกเลือก");
                 return;
             }
+
             const selectedStatus = $('input[name="status"]:checked').val();
-            const remarkInput = $('#remark'); // ดึง Object ช่องหมายเหตุมาถือไว้
+            const remarkInput = $('#remark');
             const remarkValue = remarkInput.val().trim();
+
             if (selectedStatus === 'HOLD' && remarkValue === '') {
                 remarkInput.css({
                     'border-color': '#dc3545',
@@ -229,9 +235,11 @@
             $(this).serializeArray().forEach(item => {
                 formData[item.name] = item.value;
             });
-            showLoader()
+
+            showLoader();
+
             try {
-                // 3. ยิงไปบันทึก Database ที่ Backend หลัก (พอร์ต 3000)
+                // 1. บันทึกข้อมูลลง DB ก่อน
                 const response = await $.ajax({
                     url: '/weighing/save',
                     type: 'POST',
@@ -240,21 +248,35 @@
                 });
 
                 if (response.success) {
-                    formData['roll_no'] = response.roll_no; // เพิ่ม roll_no ที่ได้จาก Backend
-                    let saveDB = await sendDataToPrint({ url: urlPrintBarcode, body: formData });
-                    resetWeighingForm()
-                    fetchFilteredQueue()
+                    formData['roll_no'] = response.roll_no;
+
+                    // 🎯 Step 1: สั่ง Reset Form + โหลดตารางใหม่ + ปิด Loader ให้เสร็จทันทีก่อนยิงพิมพ์!
+                    if (typeof resetWeighingForm === 'function') resetWeighingForm();
+                    if (typeof fetchFilteredQueue === 'function') fetchFilteredQueue();
+                    
+                    // 🟢 ปิด Loader ทันทีตรงนี้ เพื่อให้ UI บนหน้าจอเปลี่ยนกลับเป็น Form เปล่าทันตาเห็น
+                    hideLoader();
+
+                    // 🚀 Step 2: ยิงสั่งพิมพ์ทีหลัง (แม้เบราว์เซอร์จะเด้ง Popup Save/Print มา Freeze UI หน้าจอก็เคลียร์แล้ว)
+                    try {
+                        await sendDataToPrint({ url: urlPrintBarcode, body: formData });
+                    } catch (printError) {
+                        console.warn("⚠️ สั่งพิมพ์ไม่สำเร็จ:", printError);
+                    }
+
                 } else {
-                    console.log("❌ เกิดข้อผิดพลาด: " + response.message)
+                    hideLoader();
+                    console.log("❌ เกิดข้อผิดพลาด: " + response.message);
+                    alert("❌ " + response.message);
                 }
 
             } catch (err) {
+                hideLoader();
                 console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
+                alert("💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
             }
-            hideLoader()
-            
-
         });
+
 
         modalOrderTable = $('#modalOrderTable').DataTable({
             data: [], // ตั้งค่าเริ่มต้นเป็น Array ว่างเปล่า

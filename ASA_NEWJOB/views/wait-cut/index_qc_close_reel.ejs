@@ -574,19 +574,26 @@
     }
 
     // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-    function actionQC(split_set_id) {
-        $('#selectedSplitSetId').val(split_set_id);
-    
-        // รีเซ็ตค่าการเลือกเดิม
-        $('#selectedReelId').val('');
-        $('#selectedReelNo').val('');
-        $('#btnModalConfirm').prop('disabled', true); // ปิดปุ่มตกลงไว้ก่อนจนกว่าจะเลือกแถว
-        
-        // โหลดข้อมูล Reel ครั้งแรกใส่ Modal
-        loadQcReelData();
+    async function actionQC(split_set_id) {
 
-        // เปิด Modal เด้งขึ้นมา
         $('#qcReelModal').modal('show');
+            try {
+                $('#selectedSplitSetId').val(split_set_id);
+            
+                // รีเซ็ตค่าการเลือกเดิม
+                $('#selectedReelId').val('');
+                $('#selectedReelNo').val('');
+                $('#btnModalConfirm').prop('disabled', true); // ปิดปุ่มตกลงไว้ก่อนจนกว่าจะเลือกแถว
+                
+                // โหลดข้อมูล Reel ครั้งแรกใส่ Modal
+                await loadQcReelData();
+
+                // เปิด Modal เด้งขึ้นมา
+
+        } catch (error) {
+            // ❌ ถ้า AJAX ล้มเหลว จะหลุดมาที่ catch ทันที
+            console.error("⚠️ ฟังก์ชัน A เช็กแล้ว: AJAX Failed!", error);
+        }
     }
 
     $('#qcReelModal').on('shown.bs.modal', function () {
@@ -601,46 +608,48 @@
     });
 
     function loadQcReelData() {
-        // 🎯 ดึงคำค้นหาจากช่องค้นหาใน Modal (ถ้าไม่มีค่า ให้ส่ง '%' ไปดึงทั้งหมด)
-        const keyword = $('#modalSearchReelNo').val() ? $('#modalSearchReelNo').val().trim() : '%';
-        console.log("========================uuuu=ddhdddhdhhdhdhd"+keyword)
-        if(!keyword || keyword == "%"){
-            return;
-        }
-        // (Optional) เปิด Loading Overlay ถ้ามี
-        if (typeof showLoader === 'function') showLoader();
+        // 🎯 Return Promise ออกไปเพื่อให้ฟังก์ชัน A รอผลลัพธ์ได้
+        return new Promise((resolve, reject) => {
+            const keyword = $('#modalSearchReelNo').val() ? $('#modalSearchReelNo').val().trim() : '';
+            
+            if (typeof showLoader === 'function') showLoader();
 
-        // 🚀 ยิง AJAX ไปดึงข้อมูลจาก API หลังบ้าน
-        $.ajax({
-            url: '/wait-cut/qc-close-reel/getModal-reel', // 🎯 ปรับ URL ให้ตรงกับ Route หลังบ้านของกัปตัน
-            type: 'GET',
-            data: { search: keyword },
-            dataType: 'json',
-            success: function (response) {
-                if (typeof hideLoader === 'function') hideLoader();
+            $.ajax({
+                url: '/wait-cut/qc-close-reel/getModal-reel',
+                type: 'GET',
+                data: { search: keyword },
+                dataType: 'json',
+                success: function (response) {
+                    if (typeof hideLoader === 'function') hideLoader();
 
-                if (response && response.success && Array.isArray(response.data)) {
-                    
-                    // 🛑 1. ปิดปุ่ม "ตกลง" และเคลียร์ค่ารายการที่เลือกเดิมก่อน
-                    selectedReelData = null;
-                    $('#btnModalConfirm').prop('disabled', true);
+                    if (response && response.success && Array.isArray(response.data)) {
+                        selectedReelData = null;
+                        $('#btnModalConfirm').prop('disabled', true);
 
-                    // 🎯 2. ล้างข้อมูลเก่า และนำข้อมูลใหม่ยัดใส่ DataTables บน Modal
-                    if (qcModalTable) {
-                        qcModalTable.clear().rows.add(response.data).draw();
+                        if (qcModalTable) {
+                            qcModalTable.clear().rows.add(response.data).draw();
+                        }
+
+                        console.log(`✅ โหลดข้อมูล Reel สำเร็จ: ${response.data.length} รายการ`);
+                        
+                        // 🟢 AJAX สำเร็จ -> ส่ง response.data กลับไปให้ฟังก์ชัน A
+                        resolve(response.data); 
+                    } else {
+                        alert('❌ ไม่สามารถดึงข้อมูล Reel ได้: ' + (response.message || 'รูปแบบข้อมูลไม่ถูกต้อง'));
+                        
+                        // 🔴 AJAX ไม่สำเร็จเนื่องจาก Logic หลังบ้าน -> แจ้ง reject
+                        reject(response.message || 'รูปแบบข้อมูลไม่ถูกต้อง');
                     }
-
-                    console.log(`✅ โหลดข้อมูล Reel สำเร็จ: ${response.data.length} รายการ`);
-
-                } else {
-                    alert('❌ ไม่สามารถดึงข้อมูล Reel ได้: ' + (response.message || 'รูปแบบข้อมูลไม่ถูกต้อง'));
+                },
+                error: function (xhr, status, error) {
+                    if (typeof hideLoader === 'function') hideLoader();
+                    console.error("💥 AJAX Error [loadQcReelData]:", error);
+                    alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อดึงข้อมูล Reel ได้');
+                    
+                    // 🔴 AJAX ไม่สำเร็จจาก Network/Server error -> แจ้ง reject
+                    reject(error);
                 }
-            },
-            error: function (xhr, status, error) {
-                if (typeof hideLoader === 'function') hideLoader();
-                console.error("💥 AJAX Error [loadQcReelData]:", error);
-                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อดึงข้อมูล Reel ได้');
-            }
+            });
         });
     }
 
@@ -648,19 +657,15 @@
     async function saveQcReelSelection() {
         const splitSetId = $('#selectedSplitSetId').val();
         const reelId = $('#selectedReelId').val();
-
         if (!splitSetId || !reelId) {
             alert('กรุณาเลือกรายการ Reel ก่อนกดบันทึกครับ');
             return;
         }
-
         const payload = {
             splitSetId: splitSetId,
             reelId: reelId
         };
-
         if (typeof showLoader === 'function') showLoader();
-
         try {
             const response = await $.ajax({
                 url: '/wait-cut/qc-close-reel/save-reel',
@@ -668,9 +673,7 @@
                 contentType: 'application/json',
                 data: JSON.stringify(payload)
             });
-
             if (typeof hideLoader === 'function') hideLoader();
-
             if (response && response.success) {
                 alert('✅ บันทึกเลือก Reel สำเร็จ!');
                 const targetRow = queueTable.row(function (idx, data, node) {
@@ -681,8 +684,8 @@
                     const rowData = targetRow.data();
                     rowData.reel_id = reelId; 
                     
-                    if (response.reelNo) {
-                        rowData.reel_no = response.reelNo; // อัปเดตชื่อ Reel No ไว้แสดงผล
+                    if (response.data && response.data.reelNo) {
+                        rowData.reel_no = response.data.reelNo; // อัปเดตชื่อ Reel No ไว้แสดงผล
                     }
                     targetRow.data(rowData).draw(false);
                 }
@@ -690,14 +693,26 @@
                 // ปิด Modal
                 $('#qcReelModal').modal('hide');
 
+                // 💡 แนะนำ: สั่งรีโหลด Datatable ของ QC Reel Modal (ถ้ามี) เพื่อให้ยอด remaining อัปเดตล่าสุด Real-time
+                if (typeof qcReelTable !== 'undefined' && qcReelTable.ajax) {
+                    qcReelTable.ajax.reload(null, false);
+                }
             } else {
-                alert('❌ เกิดข้อผิดพลาด: ' + (response.message || 'ไม่สามารถบันทึกข้อมูลได้'));
+                alert('❌ ' + (response.message || 'บันทึกไม่สำเร็จ'));
             }
 
         } catch (err) {
             if (typeof hideLoader === 'function') hideLoader();
             console.error("💥 Error [saveQcReelSelection]:", err);
-            alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
+
+            // 🎯 แก้ไขจุดนี้: ดึงข้อความแจ้งเตือนที่ส่งมาจาก Controller (HTTP 400 / 404 / 500)
+            let errorMsg = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้';
+            
+            if (err.responseJSON && err.responseJSON.message) {
+                errorMsg = err.responseJSON.message; // จะได้ข้อความ "โควตาคงเหลือไม่พอ..." จาก Backend
+            }
+
+            alert('⚠️ ' + errorMsg);
         }
     }
 
