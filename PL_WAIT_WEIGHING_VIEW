@@ -1,0 +1,72 @@
+SELECT 
+    p_wei.id,
+    p_wei.pl_order_id,
+    p_wei.pl_order_detail_id,
+    p_wei.split_set_id,
+		p_wei.part,
+    p_or.model,
+    p_wei.weigh,
+    p_wei.status,
+    p_wei.remark,
+    p_wei.created_at,
+
+    p_wei.roll,
+		p_wei.roll_no,
+    p_wei.blade_size AS blad,
+    g.grade AS grade_name,
+		g.id AS grade_id,
+    pz.p_size AS size_name,
+		pz.id AS size_id,
+		
+    p_or.order_no,
+    p_de.order_item,
+    p_cut.set_no,
+    p_cut.cut_length,
+    p_cut.finish_at,
+    qc_reel.reel_no,
+		qc_reel.id AS qc_reel_id,
+		qc_re_qua.id AS qc_reel_quality_id,
+    p_de.queue_no,
+    p_de.cut_status_id AS main_cut_status_id,
+    p_or.diameter,
+		p_or.pl_production_line_id,
+    (
+        SELECT 
+            SUM(
+                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
+            )
+        FROM pl_cut_split_set_view v
+        WHERE v.pl_order_id = p_wei.pl_order_id
+        GROUP BY v.pl_order_id
+    ) AS total,
+		(
+        SELECT COUNT(*)
+        FROM pl_wait_weighing w
+        WHERE w.pl_order_id = p_wei.pl_order_id
+          AND w.status IS NOT NULL 
+          AND TRIM(w.status) IS NOT NULL
+    ) AS already_done,
+		(
+        SELECT 
+            NVL(SUM(
+                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
+            ), 0)
+        FROM pl_cut_split_set_view v
+        WHERE v.pl_order_detail_id = p_wei.pl_order_detail_id
+          AND v.status_id = 5
+    ) AS done_cal_pl_cut_split_set
+
+FROM pl_wait_weighing p_wei
+INNER JOIN pl_cut_split_set p_cut ON p_wei.split_set_id = p_cut.id
+INNER JOIN pl_order_detail p_de ON p_wei.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or ON p_wei.pl_order_id = p_or.id
+LEFT JOIN grade g ON p_wei.grade_id = g.id
+LEFT JOIN p_size pz ON p_wei.size_id = pz.id
+LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
+LEFT JOIN qc_reel_quality qc_re_qua ON qc_reel.id = qc_re_qua.qc_reel_id

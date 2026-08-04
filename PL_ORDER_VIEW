@@ -1,0 +1,37 @@
+SELECT 
+		p_or.id as pl_order_id,
+		p_de.id as pl_order_detail_id,
+    p_or.order_no,
+    p_de.order_item,
+    g1.grade AS grade1_name,
+    g2.grade AS grade2_name,
+    g3.grade AS grade3_name,
+    g4.grade AS grade4_name,
+    p_de.qty,
+    p_de.over_size1 AS blad1,
+    p_de.over_size2 AS blad2,
+    p_de.over_size3 AS blad3,
+    p_de.over_size4 AS blad4,
+    pz1.p_size AS size_1,
+    pz2.p_size AS size_2,
+    pz3.p_size AS size_3,
+    pz4.p_size AS size_4,
+    TO_CHAR(p_de.finish_date_time, 'YYYY-MM-DD') AS finish_date,
+    TO_CHAR(p_de.finish_date_time, 'HH24:MI') AS finish_time,
+		p_or.diameter,
+    p_or.status,
+		p_de.QUEUE_NO,
+		p_de.cut_status_id,
+		p_or.pl_production_line_id,
+		COMPLETED_SET_QTY,
+		COMPLETED_ROLL_QTY
+FROM pl_order p_or
+JOIN pl_order_detail p_de ON p_or.id = p_de.pl_order_id
+LEFT JOIN p_size pz1 ON p_de.size1_id = pz1.id
+LEFT JOIN p_size pz2 ON p_de.size2_id = pz2.id
+LEFT JOIN p_size pz3 ON p_de.size3_id = pz3.id
+LEFT JOIN p_size pz4 ON p_de.size4_id = pz4.id
+LEFT JOIN grade g1 ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2 ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4 ON p_de.grade4_id = g4.id

@@ -1,0 +1,49 @@
+SELECT 
+    q.id,
+    q.reel_no,
+    g.grade,
+    TO_CHAR(q.qc_date, 'DD/MM/YYYY') AS date_str,
+    q.status,
+    q.dcs_reel_no,
+		q.PL_PRODUCTION_LINE_ID,
+    q.roll_qty AS target_roll_qty,
+    
+    -- ���� 1. ยอดชั่งเสร็จสิ้นจากตารางเดิม (PD_ROLL)
+    NVL(p_roll.pd_roll_qty, 0) AS pd_roll_used_qty,
+    
+    -- ���� 2. ยอดจองค้างรอชั่งจากระบบใหม่ (ดึง reel_use_qty จาก PL_CUT_SPLIT_SET_VIEW)
+    NVL(p_set.pending_allocated_qty, 0) AS set_allocated_qty,
+    
+    -- ���� 3. ยอดใช้ไปรวมทั้งหมด = (ชั่งเสร็จ + ค้างรอชั่ง)
+    (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0)) AS used_roll_qty,
+    
+    -- ���� 4. จำนวนโควตาคงเหลือคงค้าง = Target Qty - ยอดใช้รวม
+    (NVL(q.roll_qty, 0) - (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0))) AS remaining,
+    
+    'open' AS roll_status
+
+FROM qc_reel q
+LEFT JOIN grade g ON q.grade_id = g.id
+
+-- ���� ก้อนที่ 1: นับม้วนที่ชั่งน้ำหนักเสร็จแล้วจาก PD_ROLL
+LEFT JOIN (
+    SELECT 
+        qc_reel_id, 
+        COUNT(*) AS pd_roll_qty
+    FROM pd_roll
+    WHERE qc_reel_id IS NOT NULL
+    GROUP BY qc_reel_id
+) p_roll ON q.id = p_roll.qc_reel_id
+
+-- ���� ก้อนที่ 2: SUM ค่า reel_use_qty ของแต่ละ Set จาก PL_CUT_SPLIT_SET_VIEW
+LEFT JOIN (
+    SELECT 
+        qc_reel_id, 
+        SUM(reel_use_qty) AS pending_allocated_qty
+    FROM pl_cut_split_set_view
+    WHERE qc_reel_id IS NOT NULL
+    GROUP BY qc_reel_id
+) p_set ON q.id = p_set.qc_reel_id
+
+-- ���� แสดงเฉพาะม้วนที่โควตายังไม่เต็ม (used_roll_qty < target_roll_qty)
+WHERE (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0)) < NVL(q.roll_qty, 0)

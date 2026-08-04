@@ -1,0 +1,75 @@
+SELECT 
+    p_cut.id AS split_set_id,
+    p_cut.pl_order_id,
+    p_cut.pl_order_detail_id,
+    p_cut.qc_reel_id,
+        
+    p_or.order_no,
+    p_de.order_item,
+    g1.grade AS grade1_name,
+    g2.grade AS grade2_name,
+    g3.grade AS grade3_name,
+    g4.grade AS grade4_name,
+    p_cut.set_no,
+    p_de.over_size1 AS blad1,
+    p_de.over_size2 AS blad2,
+    p_de.over_size3 AS blad3,
+    p_de.over_size4 AS blad4,
+        
+    pz1.p_size AS size_1,
+    pz2.p_size AS size_2,
+    pz3.p_size AS size_3,
+    pz4.p_size AS size_4,
+        
+    p_cut.cut_length,
+    p_cut.status AS split_status_id,
+        
+    p_de.queue_no,
+    p_de.cut_status_id AS main_cut_status_id,
+    qc_reel.reel_no,
+    p_cut.remark,
+    p_cut.finish_at,
+    c_stat.status_name,
+    c_stat.id AS status_id,
+    p_or.pl_production_line_id,
+
+    -- ���� 1. จำนวนม้วนย่อยทั้งหมดใน Set นี้ (ไว้ใช้เช็กโควตาก่อนผูก QC)
+    NVL(w_all.wait_weighing_qty, 0) AS wait_weighing_qty,
+
+    -- ���� 2. จำนวนม้วนย่อยที่ค้างรอชั่ง (status IS NULL) (ไว้ส่งให้ PL_QC_REEL_VIEW คำนวณโควตาคงค้าง)
+    NVL(w_pending.reel_use_qty, 0) AS reel_use_qty
+
+FROM pl_cut_split_set p_cut
+INNER JOIN pl_order_detail p_de ON p_cut.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or ON p_cut.pl_order_id = p_or.id
+LEFT JOIN p_size pz1 ON p_de.size1_id = pz1.id
+LEFT JOIN p_size pz2 ON p_de.size2_id = pz2.id
+LEFT JOIN p_size pz3 ON p_de.size3_id = pz3.id
+LEFT JOIN p_size pz4 ON p_de.size4_id = pz4.id
+LEFT JOIN grade g1 ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2 ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4 ON p_de.grade4_id = g4.id
+LEFT JOIN CUT_STATUSES c_stat ON p_cut.status = c_stat.id
+LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
+
+-- ���� Subquery ก้อนที่ 1: นับม้วนย่อยทั้งหมดของ Set นี้ (ไม่สนใจสถานะ)
+LEFT JOIN (
+    SELECT 
+        split_set_id,
+        COUNT(*) AS wait_weighing_qty
+    FROM pl_wait_weighing
+    WHERE split_set_id IS NOT NULL
+    GROUP BY split_set_id
+) w_all ON p_cut.id = w_all.split_set_id
+
+-- ���� Subquery ก้อนที่ 2: นับม้วนย่อยที่ยังค้างรอชั่ง (status IS NULL)
+LEFT JOIN (
+    SELECT 
+        split_set_id,
+        COUNT(*) AS reel_use_qty
+    FROM pl_wait_weighing
+    WHERE split_set_id IS NOT NULL
+      AND status IS NULL
+    GROUP BY split_set_id
+) w_pending ON p_cut.id = w_pending.split_set_id
