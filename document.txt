@@ -1,0 +1,438 @@
+หน้ารายการรอผลิต tap ที่ 2
+oversize คือใบมีด
+ลูกกับ set อันหลังอะจะไม่แสดงจนกว่าจะทำเสร็จหมด
+item = pl_oder (ฟิล)
+
+หน้าแรก
+เพิ่ม set หลัก item จำนวนมากจาก set ที่คาดหวังว่าจะตัดจริง
+ลูก คือจำนวน ลูกเล็กที่ชั่งไปแล้วจริง
+set คือจำนวนลูกหารด้วย ใบมีด
+ตัวเลขต้องมีคอมม่า
+วันที่จะเป็น วัน/เดือน/ปี
+เพิ่ม dropdown เลือก status ค้นหา VI.
+ปุ่ม HOLD ถ้ามี  set ที่เสร็จสิ้นไปแล้วรายการที่ยังไม่เสร็จสิ้นจะเป็น hold ส่วนถ้าไม่มีรายการเสร็จเสร็จรายการแยก set จะโดนลบ
+
+
+ถ้าตัดครบหมดแล้วจะต้อง  update status pl_order ="ยกเลิก"
+
+
+
+เพิ่ม where pl_order_id ต้องมากกว่า วันที่เริ่ม id มากสุดอะเช่นมากสุด 1000
+
+status = 
+1 รอสั่งตัด(รายการยังไม่ได้กดสั่งตัด) 
+2 รอตัด คือรายการที่กดกสั่งตัดแล้วไปอยู่ในหน้าแยก set
+pl_order_detail
+
+
+หน้า 2 รายการแยก set
+ตั้งค่าใบมีด ต้องสามารถขยับใบมีด 1 ไป 2 หรือ 1 2 3 4 ต้องขยับซ้ายขวาได้
+ต้องกรอกความยาวก่อนถึงจะเสร็จสิ้นได้
+
+
+
+หน้า 3 qc_reel (ต้อง where pl_order_id) มันจะมีฟิลอยู่ถ้ากด qc อันไหนให้คนหาด้วยอันนั้น
+
+
+หน้า 4 ตารางชั่งน้ำหนัก ตารางประวัติจะฟิวเตอร์วันที่ย้อนหลังดูใน pototype
+ปุ่มพิมพ์ barcode ต้องลองเช็คดูยังใช้งานไม่ได้ในตารางประวัติ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+imp system/12345678@localhost:1521/XE FILE=/opt/oracle/admin/XE/dpdump/akpc_Wed.DMP TABLES=\(PD_ROLL\) FROMUSER=AKPC TOUSER=C##FACTORY_DEV IGNORE=Y GRANTS=N INDEXES=N CONSTRAINTS=N
+
+
+
+ALTER TABLE PL_ORDER_DETAIL ADD (
+	QUEUE_NO NUMBER,
+    CUT_STATUS_ID  NUMBER DEFAULT 1 NOT NULL,
+    COMPLETED_SET_QTY  NUMBER DEFAULT 0 NOT NULL,
+    COMPLETED_ROLL_QTY NUMBER DEFAULT 0 NOT NULL
+);
+
+
+
+MERGE INTO PL_ORDER_DETAIL target
+USING (
+    SELECT id, 
+           ROW_NUMBER() OVER (ORDER BY id ASC) AS sequence_queue
+    FROM PL_ORDER_DETAIL
+) source
+ON (target.id = source.id)
+WHEN MATCHED THEN
+UPDATE SET target.QUEUE_NO = source.sequence_queue;
+
+
+DECLARE
+    v_max NUMBER;
+BEGIN
+    SELECT NVL(MAX(QUEUE_NO), 0) + 1 INTO v_max FROM PL_ORDER_DETAIL;
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE SEQ_PL_ORDER_DETAIL_QUEUE START WITH ' || v_max || ' INCREMENT BY 1 NOCACHE';
+END;
+/
+
+
+
+CREATE OR REPLACE TRIGGER TRG_PL_ORDER_DETAIL_QUEUE
+BEFORE INSERT ON PL_ORDER_DETAIL
+FOR EACH ROW
+BEGIN
+    IF :NEW.QUEUE_NO IS NULL THEN
+        SELECT SEQ_PL_ORDER_DETAIL_QUEUE.NEXTVAL 
+        INTO :NEW.QUEUE_NO 
+        FROM DUAL;
+    END IF;
+END;
+/
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- สร้างตาราง Master สำหรับเก็บสถานะการสั่งตัด
+CREATE TABLE cut_statuses (
+    id NUMBER PRIMARY KEY,
+    status_name VARCHAR2(100) NOT NULL,
+    description VARCHAR2(255)
+);
+
+-- เพิ่ม Comment อธิบายตารางและฟิลด์ (ช่วยให้ทีมพัฒนาคนอื่นไม่งง)
+COMMENT ON TABLE cut_statuses IS 'ตารางเก็บสถานะระบบคิวงานสั่งตัดใหม่';
+COMMENT ON COLUMN cut_statuses.id IS 'รหัสสถานะ (1=รอสั่งตัด, 2=รอตัด, 3=ตัดไม่ครบ, 4=HOLD, 5=เสร็จสิ้น)';
+COMMENT ON COLUMN cut_statuses.status_name IS 'ชื่อสถานะภาษาไทย';
+
+-- 🚀 Insert ข้อมูล Master Data ทั้ง 5 สถานะเข้าไปพร้อมใช้งาน
+INSERT INTO cut_statuses (id, status_name, description) VALUES (1, 'รอสั่งตัด', 'ข้อมูลใหม่จากระบบอื่น/ค่าเริ่มต้น');
+INSERT INTO cut_statuses (id, status_name, description) VALUES (2, 'รอตัด', 'พนักงานกดปุ่มสั่งตัดแล้ว กำลังเดินเครื่อง');
+INSERT INTO cut_statuses (id, status_name, description) VALUES (3, 'ตัดไม่ครบ', 'มีปัญหาหน้างาน ยอดผลิตจริงไม่ครบตามเป้า');
+INSERT INTO cut_statuses (id, status_name, description) VALUES (4, 'HOLD', 'ระงับการทำงานชั่วคราว');
+INSERT INTO cut_statuses (id, status_name, description) VALUES (5, 'เสร็จสิ้น', 'จบกระบวนการทำงานและชั่งน้ำหนักเรียบร้อย');
+
+-- ยืนยันการบันทึกข้อมูล Master Data
+COMMIT;
+
+
+
+
+สร้างตารางสั่งตัดแยกset
+-- 1. สร้างตารางแบบระบุ ID ปกติ
+CREATE TABLE pl_cut_split_set (
+    id                  NUMBER PRIMARY KEY,
+    pl_order_id         NUMBER NOT NULL,
+    pl_order_detail_id  NUMBER NOT NULL,
+    cut_length          NUMBER(10, 2) NOT NULL,
+    status              NUMBER DEFAULT 1 NOT NULL,
+    sub_status          VARCHAR2(50) NULL,
+    set_no              VARCHAR2(50) NULL,
+    create_staff        NUMBER NULL,
+    finish_at           DATE NULL,
+    qc_reel_id          NUMBER NULL,
+    remark              VARCHAR2(500) NULL
+);
+
+
+CREATE SEQUENCE seq_pl_cut_split_set
+START WITH 1
+INCREMENT BY 1;
+
+
+CREATE OR REPLACE TRIGGER trg_pl_cut_split_set_id
+BEFORE INSERT ON pl_cut_split_set
+FOR EACH ROW
+BEGIN
+  IF :NEW.id IS NULL THEN
+    SELECT seq_pl_cut_split_set.NEXTVAL INTO :NEW.id FROM DUAL;
+  END IF;
+END;
+
+
+COMMENT ON COLUMN pl_cut_split_set.finish_at IS 'วันและเวลาที่ตัดเสร็จสิ้น (YYYY-MM-DD HH24:MI:SS)';
+
+-- 2. เพิ่ม Comment กำกับฟิลด์เพื่อให้นักพัฒนาคนอื่นเข้าใจลอจิก
+COMMENT ON COLUMN pl_cut_split_set.set_no IS 'หมายเลขเซ็ตย่อยในฟอร์แมตเศษส่วนเป้าหมาย (เช่น 1/6, 2/6 จนถึง 6/6)';
+
+
+
+
+
+
+
+
+
+ALTER TABLE pl_wait_weighing ADD PART VARCHAR2(30) NULL,
+CREATE TABLE pl_wait_weighing (
+    id                 NUMBER PRIMARY KEY,
+    pl_order_id        NUMBER NOT NULL,
+    pl_order_detail_id NUMBER NOT NULL,
+    split_set_id       NUMBER NOT NULL,
+    weigh              NUMBER(10, 3) NULL,
+    status             VARCHAR2(20) NULL,
+    PART               VARCHAR2(30) NULL,
+    remark             VARCHAR2(500) NULL,
+    roll               NUMBER NULL,
+    roll_no            VARCHAR2(50) NULL,
+    blade_size         NUMBER NULL,
+    size_id            NUMBER NULL,
+    grade_id           NUMBER NULL,
+    create_staff       NUMBER NULL,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- 2. สร้าง Sequence สำหรับตาราง pl_wait_weighing
+CREATE SEQUENCE seq_pl_wait_weighing
+START WITH 1
+INCREMENT BY 1
+NOCACHE;
+
+-- 3. สร้าง Trigger สำหรับรัน Auto ID (รูปแบบที่รองรับ Oracle 11g และรุ่นเก่ากว่า)
+CREATE OR REPLACE TRIGGER trg_pl_wait_weighing_id
+BEFORE INSERT ON pl_wait_weighing
+FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT seq_pl_wait_weighing.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
+
+
+
+
+
+CREATE OR REPLACE VIEW PL_CUT_SPLIT_SET_VIEW AS
+SELECT 
+    p_cut.id                    AS split_set_id,
+    p_cut.pl_order_id,
+    p_cut.pl_order_detail_id,
+    p_or.order_no,
+    p_de.order_item,
+    g1.grade                    AS grade1_name,
+    g2.grade                    AS grade2_name,
+    g3.grade                    AS grade3_name,
+    g4.grade                    AS grade4_name,
+    p_cut.set_no,
+    p_de.over_size1             AS blad1,
+    p_de.over_size2             AS blad2,
+    p_de.over_size3             AS blad3,
+    p_de.over_size4             AS blad4,
+    pz1.p_size                  AS size_1,
+    pz2.p_size                  AS size_2,
+    pz3.p_size                  AS size_3,
+    pz4.p_size                  AS size_4,
+    p_cut.cut_length,
+    p_cut.status                AS split_status_id,
+    p_de.queue_no,
+    p_de.cut_status_id          AS main_cut_status_id,
+    qc_reel.reel_no,
+    p_cut.remark,
+    p_cut.finish_at,
+    c_stat.status_name,
+    c_stat.id                   AS status_id,
+    p_or.pl_production_line_id
+FROM pl_cut_split_set p_cut
+INNER JOIN pl_order_detail p_de   ON p_cut.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or          ON p_cut.pl_order_id = p_or.id
+LEFT JOIN p_size pz1              ON p_de.size1_id = pz1.id
+LEFT JOIN p_size pz2              ON p_de.size2_id = pz2.id
+LEFT JOIN p_size pz3              ON p_de.size3_id = pz3.id
+LEFT JOIN p_size pz4              ON p_de.size4_id = pz4.id
+LEFT JOIN grade g1                ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2                ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3                ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4                ON p_de.grade4_id = g4.id
+LEFT JOIN cut_statuses c_stat     ON p_cut.status = c_stat.id
+LEFT JOIN qc_reel                 ON p_cut.qc_reel_id = qc_reel.id;
+
+
+
+
+
+
+
+CREATE OR REPLACE VIEW PL_ORDER_VIEW AS
+SELECT 
+    p_or.id                                         AS pl_order_id,
+    p_de.id                                         AS pl_order_detail_id,
+    p_or.order_no,
+    p_de.order_item,
+    g1.grade                                        AS grade1_name,
+    g2.grade                                        AS grade2_name,
+    g3.grade                                        AS grade3_name,
+    g4.grade                                        AS grade4_name,
+    p_de.qty,
+    p_de.over_size1                                 AS blad1,
+    p_de.over_size2                                 AS blad2,
+    p_de.over_size3                                 AS blad3,
+    p_de.over_size4                                 AS blad4,
+    pz1.p_size                                      AS size_1,
+    pz2.p_size                                      AS size_2,
+    pz3.p_size                                      AS size_3,
+    pz4.p_size                                      AS size_4,
+    TO_CHAR(p_de.finish_date_time, 'YYYY-MM-DD')    AS finish_date,
+    TO_CHAR(p_de.finish_date_time, 'HH24:MI')       AS finish_time,
+    p_or.diameter,
+    p_or.status,
+    p_de.queue_no,
+    p_de.cut_status_id,
+    p_or.pl_production_line_id
+FROM pl_order p_or
+JOIN pl_order_detail p_de ON p_or.id = p_de.pl_order_id
+LEFT JOIN p_size pz1       ON p_de.size1_id = pz1.id
+LEFT JOIN p_size pz2       ON p_de.size2_id = pz2.id
+LEFT JOIN p_size pz3       ON p_de.size3_id = pz3.id
+LEFT JOIN p_size pz4       ON p_de.size4_id = pz4.id
+LEFT JOIN grade g1        ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2        ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3        ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4        ON p_de.grade4_id = g4.id;
+
+
+
+
+
+
+CREATE OR REPLACE VIEW PL_QC_REEL_VIEW AS
+SELECT 
+    q.id,
+    q.reel_no,
+    g.grade,
+    TO_CHAR(q.qc_date, 'DD/MM/YYYY') AS date_str,
+    q.status,
+    q.dcs_reel_no
+FROM qc_reel q
+LEFT JOIN grade g ON q.grade_id = g.id;
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE OR REPLACE VIEW PL_WAIT_WEIGHING_VIEW AS
+SELECT 
+    p_wei.id,
+    p_wei.pl_order_id,
+    p_wei.pl_order_detail_id,
+    p_wei.split_set_id,
+    p_wei.part,
+    p_or.model,
+    p_wei.weigh,
+    p_wei.status,
+    p_wei.remark,
+    p_wei.created_at,
+    p_wei.roll,
+    p_wei.roll_no,
+    p_wei.blade_size                                  AS blad,
+    g.grade                                           AS grade_name,
+    g.id                                              AS grade_id,
+    pz.p_size                                         AS size_name,
+    pz.id                                             AS size_id,
+    p_or.order_no,
+    p_de.order_item,
+    p_cut.set_no,
+    p_cut.cut_length,
+    p_cut.finish_at,
+    qc_reel.reel_no,
+    qc_reel.id                                        AS qc_reel_id,
+    qc_re_qua.id                                      AS qc_reel_quality_id,
+    p_de.queue_no,
+    p_de.cut_status_id                                AS main_cut_status_id,
+    p_or.diameter,
+    p_or.pl_production_line_id,
+    (
+        SELECT 
+            SUM(
+                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
+            )
+        FROM pl_cut_split_set_view v
+        WHERE v.pl_order_id = p_wei.pl_order_id
+        GROUP BY v.pl_order_id
+    )                                                 AS total,
+    (
+        SELECT COUNT(*)
+        FROM pl_wait_weighing w
+        WHERE w.pl_order_id = p_wei.pl_order_id
+          AND w.status IS NOT NULL 
+          AND TRIM(w.status) IS NOT NULL
+    )                                                 AS already_done,
+    (
+        SELECT 
+            NVL(SUM(
+                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
+            ), 0)
+        FROM pl_cut_split_set_view v
+        WHERE v.pl_order_detail_id = p_wei.pl_order_detail_id
+          AND v.status_id = 5
+    )                                                 AS done_cal_pl_cut_split_set
+FROM pl_wait_weighing p_wei
+INNER JOIN pl_cut_split_set p_cut     ON p_wei.split_set_id = p_cut.id
+INNER JOIN pl_order_detail p_de       ON p_wei.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or              ON p_wei.pl_order_id = p_or.id
+LEFT JOIN grade g                     ON p_wei.grade_id = g.id
+LEFT JOIN p_size pz                   ON p_wei.size_id = pz.id
+LEFT JOIN qc_reel                     ON p_cut.qc_reel_id = qc_reel.id
+LEFT JOIN qc_reel_quality qc_re_qua   ON qc_reel.id = qc_re_qua.qc_reel_id;
+
+
+
+git pull https://github.com/suris571/asa.git
+
+
+ALTER TABLE PD_ROLL ADD SPLIT_SET_ID NUMBER;
+
+
+
+
+
+
+
+
+ต้องคุยก่อนค่อยทำ
+UPDATE PL_ORDER_DETAIL 
+SET CUT_STATUS_ID = 1 
+WHERE CUT_STATUS_ID IS NULL 
+  AND PL_ORDER_ID IN (
+      SELECT ID FROM PL_ORDER WHERE STATUS = 'ส่งให้ Rewinder'
+  );
+
+-- 2. กลุ่มงานเก่าอื่นๆ ที่ปิดไปแล้ว/ไม่เกี่ยวกับ Rewinder แล้ว ให้ปัดเป็น 5 (เสร็จสิ้น/ปิดงาน) ทั้งหมด
+UPDATE PL_ORDER_DETAIL 
+SET CUT_STATUS_ID = 5 
+WHERE CUT_STATUS_ID IS NULL;
+
+-- 3. ยืนยันการบันทึกข้อมูล
+COMMIT;
