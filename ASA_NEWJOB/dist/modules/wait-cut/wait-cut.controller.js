@@ -63,6 +63,34 @@ const startProduction = async (req, res) => {
                 data: result,
             });
         }
+        else if (type && type === "hold") {
+            console.log(`📡 [Controller] รับคำสั่ง HOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
+            // 1. เรียกใช้ Model ในการ Hold ใบงาน
+            const result = await wait_cut_model_1.WaitCutModel.holdOrderDetail(orderDetailId, orderId);
+            // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้ (เพื่อให้คิวถัดไปขยับขึ้นมา)
+            await (0, socket_1.FnNextCutSplitSet)(productionLineId);
+            // 🔊 3. Broadcast แจ้งเตือนทุกเครื่องใน Room เดียวกัน ให้รีเฟรชตาราง
+            targetRoom.emit("queue_structure_changed", { success: true });
+            return res.status(200).json({
+                success: true,
+                message: "พักการดำเนินงาน (HOLD) เรียบร้อยแล้ว",
+                data: result,
+            });
+        }
+        else if (type && type === "unhold") {
+            console.log(`📡 [Controller] รับคำสั่ง UNHOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
+            // 1. เรียกใช้งาน Model ปลด Hold
+            const result = await wait_cut_model_1.WaitCutModel.unholdOrderDetail(orderDetailId, orderId);
+            // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้
+            await (0, socket_1.FnNextCutSplitSet)(productionLineId);
+            // 🔊 3. Broadcast แจ้งเตือนทุกเครื่องใน Room เดียวกัน ให้รีเฟรชตาราง
+            targetRoom.emit("queue_structure_changed", { success: true });
+            return res.status(200).json({
+                success: true,
+                message: "ปลดการ HOLD เรียบร้อยแล้ว",
+                data: result,
+            });
+        }
         if (!qty || isNaN(Number(qty)) || Number(qty) <= 0) {
             return res.status(400).json({ success: false, message: "จำนวนเซ็ตไม่ถูกต้อง" });
         }
@@ -88,7 +116,7 @@ const startProduction = async (req, res) => {
 };
 exports.startProduction = startProduction;
 const startWeighing = async (req, res) => {
-    const { split_set_id, pl_order_id, pl_order_detail_id, type } = req.body;
+    const { split_set_id, pl_order_id, pl_order_detail_id, type, cut_length } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session
     const productionLineId = req.session.user?.productionLineId;
     const io = (0, socket_1.getIO)();
@@ -142,7 +170,7 @@ const startWeighing = async (req, res) => {
     try {
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
         let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
-        await wait_cut_model_1.WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId);
+        await wait_cut_model_1.WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId, cut_length);
         await wait_cut_model_1.WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
         // 🔊 ยิงเฉพาะเครื่อง
         splitSetTargetRoom.emit("queue_structure_changed", { success: true });
@@ -207,9 +235,10 @@ const saveRemarkController = async (req, res) => {
 };
 exports.saveRemarkController = saveRemarkController;
 const getQcReelListController = async (req, res) => {
+    const productionLineId = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     try {
         const search = req.query.search ? String(req.query.search).trim() : "%";
-        const data = await wait_cut_model_1.WaitCutModel.getReelList(search);
+        const data = await wait_cut_model_1.WaitCutModel.getReelList(search, productionLineId);
         return res.json({
             success: true,
             data: data,

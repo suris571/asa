@@ -348,12 +348,32 @@
             { "data": "size3", "defaultContent": "" },
             { "data": "size4", "defaultContent": "" },
             { 
-                "data": "lenght",
-                "render": function(data) {
-                    return data ? Number(data).toLocaleString() : '';
+                "data": "lenght", // หรือ "cut_length"
+                "render": function(data, type, row) {
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    
+                    // แปลงค่าเริ่มต้นให้มีคอมมา (เช่น 1000 -> 1,000)
+                    let formattedVal = '';
+                    if (data !== null && data !== undefined && data !== '') {
+                        formattedVal = Number(data).toLocaleString('en-US');
+                    }
+                    if(formattedVal === '0') {
+                        formattedVal = '';
+                    }
+                    const isDisabled = (setStatus === 5) ? 'disabled readonly' : '';
+
+                    return `
+                        <div class="d-flex justify-content-center align-items-center">
+                            <input type="text" 
+                                class="form-control form-control-sm text-center font-weight-bold input-cut-length" 
+                                style="max-width: 110px; border-color: #ced4da;"
+                                value="${formattedVal}"
+                                ${isDisabled}
+                                oninput="formatNumberWithComma(this)">
+                        </div>
+                    `;
                 }
             },
-
             // 🎯 คอลัมน์ปุ่ม "เสร็จสิ้น"
             {
                 "data": null,
@@ -477,6 +497,18 @@
         fetchFilteredQueue(); 
     });
   });
+
+    function formatNumberWithComma(input) {
+        // 1. ลบทุกตัวอักษรที่ไม่ใช่ตัวเลขออกก่อน
+        let rawValue = input.value.replace(/[^0-9]/g, '');
+        
+        // 2. แปลงเป็นรูปแบบมีคอมมา
+        if (rawValue) {
+            input.value = Number(rawValue).toLocaleString('en-US');
+        } else {
+            input.value = '';
+        }
+    }
   
   function fetchFilteredQueue() {
       const filterParams = {
@@ -486,39 +518,68 @@
       socket.emit('get_filtered_queue', filterParams);
   }
 
-  // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
-  function actionSetSuccess(split_set_id,pl_order_id,pl_order_detail_id) { 
-    // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
-    showLoader(); 
+    // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
+    function actionSetSuccess(split_set_id, pl_order_id, pl_order_detail_id) { 
+        // 🎯 1. ดึง Textbox แบบหาจากปุ่มบรรทัดเดียวกันเลย (ชัวร์ที่สุด 100% ไม่ต้องลุ้น data-id)
+        const btn = $(event.target).closest('button');
+        const row = btn.closest('tr');
+        const lengthInput = row.find('input.input-cut-length');
 
-    console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}`);
+        const lengthValue = lengthInput.val() ? lengthInput.val().trim() : '';
+        const cleanLength = Number(lengthValue.replace(/,/g, ''));
 
-    // 2. ยิง HTTP POST API ไปหลังบ้าน
-    fetch('/wait-cut/start-weighing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            split_set_id: split_set_id,
-            pl_order_id: pl_order_id,
-            pl_order_detail_id: pl_order_detail_id,
-        })
-    })
-    .then(response => response.json())
-    .then(res => {
-        if (res.success) {
-            // 🎯 หมายเหตุ: หน้าจอไม่ต้องสั่งโหลดตารางตรงนี้ล่วงหน้า เพราะเดี๋ยวท่อ Socket รวมจะตะโกนกลับมาสั่งโหลดให้พร้อมกันทุกคน!
-            console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
-        } else {
-            hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'สร้าง record ได้'}`);
+        // 🛑 2. Validation: ถ้ายังไม่กรอก หรือเป็น 0
+        if (!lengthValue || isNaN(cleanLength) || cleanLength <= 0) {
+            
+            // 🔴 เติม Class สไตล์ Bootstrap และใส่ Border แดงแบบบังคับ !important
+            lengthInput.addClass('is-invalid').css({
+                'border': '2px solid #dc3545 !important',
+                'background-color': '#f8d7da'
+            });
+            
+            lengthInput.focus();
+
+            alert("❌ กรุณาระบุ 'ความยาว' ให้ถูกต้องก่อนกดเสร็จสิ้น!");
+            return; 
         }
-    })
-    .catch(error => {
-        hideLoader();
-        console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
-    });
-  }
+
+        // 🟢 ถ้าผ่านแล้ว เคลียร์สีแดงออก
+        lengthInput.removeClass('is-invalid').css({
+            'border': '',
+            'background-color': ''
+        });
+
+        // 3. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว
+        showLoader(); 
+
+        console.log(`🚀 [Client REST Request] เสร็จสิ้นสร้างข้อมูลรับน้ำหนัก split_set_id ID: ${split_set_id}, ความยาว: ${cleanLength}`);
+
+        // 4. ยิง HTTP POST API ไปหลังบ้าน (แนบ cutLength ไปด้วย)
+        fetch('/wait-cut/start-weighing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                split_set_id: split_set_id,
+                pl_order_id: pl_order_id,
+                pl_order_detail_id: pl_order_detail_id,
+                cut_length: cleanLength // 👈 แนบความยาวที่ถอดคอมมาออกแล้วส่งไปพร้อมกันได้เลย
+            })
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                console.log('✅ หลังบ้านบันทึก record ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
+            } else {
+                hideLoader();
+                alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'ไม่สามารถบันทึกได้'}`);
+            }
+        })
+        .catch(error => {
+            hideLoader();
+            console.error("❌ API Error:", error);
+            alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+        });
+    }
 
     function actionSetHold(split_set_id,pl_order_id,pl_order_detail_id) { 
     // 1. ล็อกจอขึ้น Loading ทันทีป้องกันการกดรัว

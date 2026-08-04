@@ -420,7 +420,7 @@ class WaitCutModel {
             }
         }
     }
-    static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id, staff_id = 1) {
+    static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id, staff_id = 1, cut_length) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -434,12 +434,13 @@ class WaitCutModel {
             const previousStatus = currentStatusResult.rows?.[0]?.STATUS ? Number(currentStatusResult.rows[0].STATUS) : null;
             // 🔄 2. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น) 
             const updateStatusQuery = `
-                UPDATE PL_CUT_SPLIT_SET 
+                UPDATE PL_CUT_SPLIT_SET
                 SET status = 5,
-                    finish_at = SYSDATE 
+                    finish_at = SYSDATE,
+                    cut_length = :cut_length
                 WHERE id = :split_set_id
             `;
-            await conn.execute(updateStatusQuery, { split_set_id });
+            await conn.execute(updateStatusQuery, { split_set_id, cut_length });
             console.log(`📌 [Model] อัปเดตสถานะ PL_CUT_SPLIT_SET ID: ${split_set_id} เป็น 5 เรียบร้อยแล้ว (สถานะเดิม: ${previousStatus})`);
             // 🎯 3. เงื่อนไขสำคัญ: ถ้าสถานะเดิมเท่ากับ 4 (HOLD) ให้ข้ามการสร้างคิวรอชั่งน้ำหนักทันที!
             if (previousStatus === 4) {
@@ -554,7 +555,7 @@ class WaitCutModel {
             conn = await (0, database_1.getConnection)();
             const updateCurrentRow = `
                 UPDATE PL_CUT_SPLIT_SET 
-                SET status = 2,finish_at = NULL
+                SET status = 2,finish_at = NULL,cut_length = 0,sub_status = NULL
                 WHERE ID = :id
             `;
             await conn.execute(updateCurrentRow, { id: split_set_id });
@@ -738,7 +739,7 @@ class WaitCutModel {
                 await conn.close();
         }
     }
-    static async getReelList(keyword) {
+    static async getReelList(keyword, productionLineId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -761,11 +762,16 @@ class WaitCutModel {
                     target_roll_qty,
                     used_roll_qty
                 FROM pl_qc_reel_view
+                WHERE 1=1
             `;
             const bindVars = {};
+            if (productionLineId) {
+                sql += ` AND production_line_id = :productionLineId`;
+                bindVars.productionLineId = productionLineId;
+            }
             // 🎯 ถ้านับแล้วว่ามี Keyword ค่อยต่อ WHERE reel_no LIKE :search
             if (hasKeyword) {
-                sql += ` WHERE UPPER(reel_no) LIKE UPPER(:search)`;
+                sql += ` AND UPPER(reel_no) LIKE UPPER(:search)`;
                 bindVars.search = `%${cleanKeyword}%`;
             }
             // 📌 ใส่ ORDER BY เพื่อให้ผลลัพธ์เรียงลำดับอ่านง่ายเสมอ (ปรับตามคอลัมน์ที่ต้องการได้ค่ะ)
@@ -1093,6 +1099,115 @@ class WaitCutModel {
         }
         catch (error) {
             console.error("❌ Model Error [unHoldCutSplitSet]:", error);
+            throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async holdOrderDetail(orderDetailId, orderId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🔍 1. เช็กว่าใน PL_CUT_SPLIT_SET มีรายการที่ชั่งเสร็จสิ้นแล้ว (status = 3) หรือไม่?
+            const checkFinishedSql = `
+                SELECT COUNT(*) AS FINISHED_COUNT
+                FROM pl_cut_split_set
+                WHERE pl_order_detail_id = :orderDetailId
+                AND status = 5
+            `;
+            const checkResult = await conn.execute(checkFinishedSql, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            const finishedCount = checkResult.rows[0]?.FINISHED_COUNT || 0;
+            if (finishedCount === 0) {
+                // 🎯 เคสที่ 1: ยังไม่มีรายการไหนเสร็จสิ้นเลย -> สั่ง DELETE ทั้งหมดใน PL_CUT_SPLIT_SET
+                const deleteSplitSetSql = `
+                    DELETE FROM pl_cut_split_set
+                    WHERE pl_order_detail_id = :orderDetailId
+                `;
+                await conn.execute(deleteSplitSetSql, { orderDetailId });
+                // หมายเหตุ: สั่ง DELETE pl_wait_weighing ที่ผูกกันอยู่ย้อนหลังด้วย (ถ้ามี CASCADE ใน DB จะลบให้อัตโนมัติอยู่แล้ว)
+                const deleteWaitWeighingSql = `
+                    DELETE FROM pl_wait_weighing
+                    WHERE pl_order_detail_id = :orderDetailId
+                    AND status IS NULL
+                `;
+                await conn.execute(deleteWaitWeighingSql, { orderDetailId });
+            }
+            else {
+                // 🎯 เคสที่ 2: มีบางรายการเสร็จสิ้นไปแล้ว -> สั่ง UPDATE status = 4 เฉพาะรายการที่ยังเป็น status = 2
+                const updateSplitSetSql = `
+                    UPDATE pl_cut_split_set
+                    SET status = 4
+                    WHERE pl_order_detail_id = :orderDetailId
+                    AND status = 2
+                `;
+                await conn.execute(updateSplitSetSql, { orderDetailId });
+            }
+            // 🟢 2. อัปเดตสถานะใบงานย่อยหลัก PL_ORDER_DETAIL ให้เป็น status = 4 (Hold)
+            const updateMainDetailSql = `
+                UPDATE pl_order_detail
+                SET cut_status_id = 4
+                WHERE id = :orderDetailId
+            `;
+            const result = await conn.execute(updateMainDetailSql, { orderDetailId });
+            // 💾 Commit ทั้งหมด
+            await conn.commit();
+            return {
+                success: true,
+                finishedCount,
+                rowsAffected: result.rowsAffected
+            };
+        }
+        catch (error) {
+            if (conn) {
+                try {
+                    await conn.rollback();
+                }
+                catch (rbErr) { }
+            }
+            console.error("❌ Model Error [holdOrderDetail]:", error);
+            throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async unholdOrderDetail(orderDetailId, orderId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🟢 1. คืนค่ารายการใน PL_CUT_SPLIT_SET ที่โดน HOLD (status = 4) ให้กลับมาเป็นรอตัด (status = 2)
+            const updateSplitSetSql = `
+                UPDATE pl_cut_split_set
+                SET status = 2
+                WHERE pl_order_detail_id = :orderDetailId
+                AND status = 4
+            `;
+            await conn.execute(updateSplitSetSql, { orderDetailId });
+            // 🟢 2. ปรับสถานะใบงานย่อยหลัก PL_ORDER_DETAIL กลับเป็น 1 (รอสั่งตัด)
+            const updateMainDetailSql = `
+                UPDATE pl_order_detail
+                SET cut_status_id = 1
+                WHERE id = :orderDetailId
+            `;
+            const result = await conn.execute(updateMainDetailSql, { orderDetailId });
+            // 💾 Commit ทรานแซกชัน
+            await conn.commit();
+            return {
+                success: true,
+                rowsAffected: result.rowsAffected
+            };
+        }
+        catch (error) {
+            if (conn) {
+                try {
+                    await conn.rollback();
+                }
+                catch (rbErr) { }
+            }
+            console.error("❌ Model Error [unholdOrderDetail]:", error);
             throw error;
         }
         finally {

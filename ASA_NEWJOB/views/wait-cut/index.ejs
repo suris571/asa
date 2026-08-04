@@ -431,6 +431,7 @@
                     const rawStatus = row.cut_status_id;
                     const currentCutStatus = rawStatus ? parseInt(rawStatus) : 1;
                     const isCompleted = (row.status === 'เสร็จสิ้น' || currentCutStatus === 5);
+                    const isHold = (currentCutStatus === 4); // 👈 สถานะ HOLD
 
                     // 🎨 พาเลทสี
                     const styleCut     = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
@@ -449,7 +450,22 @@
                         `;
                     }
 
-                    // 🔒 กรณีที่ 2: ปุ่มสั่งตัดจะ "กดได้" เฉพาะเมื่อ status เป็น 1 หรือ ค่าว่าง (null/undefined) เท่านั้น
+                    // 🎯 กรณีที่ 2: ถ้าสถานะเป็น HOLD (status = 4) -> ปลด HOLD และ เสร็จสิ้น กดได้
+                    if (isHold) {
+                        return `
+                        <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
+                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleCut} opacity: 0.4; cursor: not-allowed;">สั่งตัด</button>
+                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleHold} opacity: 0.4; cursor: not-allowed;">HOLD</button>
+                            <button class="btn btn-sm font-weight-bold m-1" style="${styleUnhold}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'unhold')">ปลด HOLD</button>
+                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleSuccess}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'success')">เสร็จสิ้น</button>
+                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleReset} opacity: 0.4; cursor: not-allowed;">Reset</button>
+                            <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
+                            <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveDown(${row.pl_order_detail_id}, ${row.que})">ลง</button>
+                        </div>
+                        `;
+                    }
+
+                    // 🔒 กรณีที่ 3: สถานะปกติ (รอสั่งตัด / กำลังตัด / ตัดไม่ครบ) -> ปุ่ม ปลด HOLD โดน disabled
                     const canCut = (rawStatus === null || rawStatus === undefined || currentCutStatus === 1);
                     const isCutDisabled = canCut 
                         ? `style="${styleCut}"` 
@@ -458,8 +474,8 @@
                     return `
                     <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
                         <button class="btn btn-sm font-weight-bold m-1" ${isCutDisabled} onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty})">สั่งตัด</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleHold}" onclick="actionHold(${row.pl_order_detail_id}, ${row.pl_order_id})">HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleUnhold}" onclick="actionUnhold(${row.pl_order_detail_id}, ${row.pl_order_id})">ปลด HOLD</button>
+                        <button class="btn btn-sm font-weight-bold m-1" style="${styleHold}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'hold')">HOLD</button>
+                        <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleUnhold} opacity: 0.4; cursor: not-allowed;">ปลด HOLD</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleSuccess}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'success')">เสร็จสิ้น</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'reset')">Reset</button>
                         <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
