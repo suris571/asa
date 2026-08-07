@@ -343,16 +343,96 @@
             { "data": "blad2", "defaultContent": "" },
             { "data": "blad3", "defaultContent": "" },
             { "data": "blad4", "defaultContent": "" },
-            { "data": "size1", "defaultContent": "" },
-            { "data": "size2", "defaultContent": "" },
-            { "data": "size3", "defaultContent": "" },
-            { "data": "size4", "defaultContent": "" },
+
+            // 🎯 คอลัมน์ Size 1
             { 
-                "data": "lenght", // หรือ "cut_length"
+                "data": "size1", 
+                "defaultContent": "",
+                "render": function(data, type, row) {
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    if (setStatus === 5) return data || '';
+                    const id = row.split_set_id || row.splitSetId;
+
+                    return `
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 2" onclick="swapPosition(${id}, 1, 2)">▶</button>
+                        </div>
+                    `;
+                }
+            },
+            // 🎯 คอลัมน์ Size 2
+            { 
+                "data": "size2", 
+                "defaultContent": "",
+                "render": function(data, type, row) {
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    if (setStatus === 5) return data || '';
+                    const id = row.split_set_id || row.splitSetId;
+
+                    return `
+                        <div class="d-flex align-items-center justify-content-center">
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 1" onclick="swapPosition(${id}, 2, 1)">◀</button>
+                            <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 3" onclick="swapPosition(${id}, 2, 3)">▶</button>
+                        </div>
+                    `;
+                }
+            },
+            // 🎯 คอลัมน์ Size 3
+            { 
+                "data": "size3", 
+                "defaultContent": "",
+                "render": function(data, type, row) {
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    if (setStatus === 5) return data || '';
+                    const id = row.split_set_id || row.splitSetId;
+
+                    return `
+                        <div class="d-flex align-items-center justify-content-center">
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 2" onclick="swapPosition(${id}, 3, 2)">◀</button>
+                            <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 4" onclick="swapPosition(${id}, 3, 4)">▶</button>
+                        </div>
+                    `;
+                }
+            },
+            // 🎯 คอลัมน์ Size 4
+            { 
+                "data": "size4", 
+                "defaultContent": "",
+                "render": function(data, type, row) {
+                    const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
+                    if (setStatus === 5) return data || '';
+                    const id = row.split_set_id || row.splitSetId;
+
+                    return `
+                        <div class="d-flex align-items-center justify-content-center">
+                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                    title="สลับไปช่อง 3" onclick="swapPosition(${id}, 4, 3)">◀</button>
+                            <span class="font-weight-bold text-center d-inline-block" style="min-width: 24px;">${data || '&nbsp;'}</span>
+                        </div>
+                    `;
+                }
+            },
+
+            // 🎯 คอลัมน์ ความยาว
+            { 
+                "data": "lenght",
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
                     
-                    // แปลงค่าเริ่มต้นให้มีคอมมา (เช่น 1000 -> 1,000)
                     let formattedVal = '';
                     if (data !== null && data !== undefined && data !== '') {
                         formattedVal = Number(data).toLocaleString('en-US');
@@ -380,12 +460,10 @@
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
 
-                    // 🟢 ถ้าเสร็จสิ้นแล้ว (status = 5) เปลี่ยนเป็น Badge สีเขียวเด่นๆ
                     if (setStatus === 5) {
                         return `<span class="badge badge-success btn-sm p-2 btn-block font-weight-bold" style="font-size: 90%;">✓ เสร็จสิ้น</span>`; 
                     }
 
-                    // 🟡 สถานะอื่น (รวมถึง HOLD = 4) แสดงปุ่มเสร็จสิ้นให้กดได้
                     return `<button class="btn btn-sm btn-success font-weight-bold btn-block" 
                                 onclick="actionSetSuccess(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
                                 เสร็จสิ้น
@@ -397,15 +475,12 @@
                 "data": null,
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
-                    // 🟡 ติด HOLD อยู่ (status = 4) แสดง Badge คำว่า HOLD ชัดๆ
                     if (setStatus === 4) {
                         return `<span class="badge badge-dark btn-sm p-2 btn-block font-weight-bold" style="background-color: #5a6268; font-size: 90%;">⛔ HOLD</span>`;
                     }
-                    // 🟢 เสร็จสิ้นแล้ว (status = 5) จางปุ่มลงให้เห็นชัดว่ากดไม่ได้
                     if (setStatus === 5) {
                         return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" disabled style="opacity: 0.25; cursor: not-allowed;">HOLD</button>`;
                     }
-                    // ⚪ สถานะปกติ
                     return `<button class="btn btn-sm btn-secondary font-weight-bold btn-block" 
                                 onclick="actionSetHold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
                                 HOLD
@@ -417,14 +492,12 @@
                 "data": null,
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
-                    // 🟡 ติด HOLD อยู่ (status = 4) เน้นปุ่ม "ปลด HOLD" เป็นสีน้ำเงินให้เห็นชัดเจน
                     if (setStatus === 4) {
                         return `<button class="btn btn-sm btn-primary font-weight-bold btn-block shadow-sm" 
                                     onclick="actionSetUnhold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
                                     🔓 ปลด HOLD
                                 </button>`;
                     }
-                    // 🔒 สถานะอื่น จางปุ่มลงให้รู้ว่าใช้ไม่ได้
                     return `<button class="btn btn-sm btn-light border font-weight-bold btn-block text-muted" disabled style="opacity: 0.25; cursor: not-allowed;">
                                 ปลด HOLD
                             </button>`;
@@ -436,7 +509,6 @@
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
 
-                    // 🟢 1. สถานะต้องเป็น 5 (เสร็จสิ้น) เท่านั้น ถึงจะกด Reset ได้
                     if (setStatus === 5) {
                         return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" 
                                     onclick="actionSetReset(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
@@ -444,27 +516,22 @@
                                 </button>`;
                     }
 
-                    // 🔒 2. ถ้าสถานะไม่ใช่ 5 (ยังไม่เสร็จ) ให้ Disable ปุ่ม Reset ไว้
                     return `<button class="btn btn-sm btn-warning text-white font-weight-bold btn-block" disabled style="opacity: 0.35; cursor: not-allowed;">
                                 Reset
                             </button>`;
                 }
             }
         ],
-        // 🎨 จุดเด่นที่สุด: เพิ่มการไฮไลต์สีพื้นหลังทั้งแถว (Row Style) ตามสถานะ
         "createdRow": function(row, data, dataIndex) {
-            $(row).attr('data-split-id', data.splitSetId);
+            $(row).attr('data-split-id', data.split_set_id || data.splitSetId);
             const setStatus = data.status ? parseInt(data.status) : parseInt(data.cut_status_id);
             if (setStatus === 5) {
-                // 🟢 แถวที่เสร็จสิ้น: ปรับพื้นหลังเป็นสีเขียวอ่อน นุ่มตา
                 $(row).css('background-color', '#e6f4ea'); 
             } else if (setStatus === 4) {
-                // 🟡 แถวที่ติด HOLD: ปรับพื้นหลังเป็นสีส้ม/เทาเตือนสายตา
                 $(row).css('background-color', '#fff3cd'); 
             }
         }
     });
-
     socket.on('update_queue_table', function(res) {
         hideLoader();
         if (!res || !res.success || !res.data) return;
@@ -681,6 +748,61 @@
         console.error("❌ API Error:", error);
         alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
     });
+    }
+
+
+    async function swapPosition(splitSetId, posA, posB) {
+        const targetRow = queueTable.row(function (idx, data, node) {
+            const id = data.split_set_id || data.splitSetId;
+            return id == splitSetId;
+        });
+
+        if (!targetRow.length) return;
+
+        const rowData = targetRow.data();
+
+        try {
+            console.log(JSON.stringify({
+                    splitSetId: splitSetId,
+                    posA: posA,
+                    posB: posB
+                }));
+            if (typeof showLoader === 'function') showLoader();
+
+            // 🎯 1. ยิง AJAX ส่งตำแหน่ง posA และ posB ไปสลับค่าใน DB
+            const response = await $.ajax({
+                url: '/wait-cut/swap-split-set-size', // ปรับ URL ตาม Route ของกัปตันได้เลยค่ะ
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    splitSetId: splitSetId,
+                    posA: posA,
+                    posB: posB
+                })
+            });
+
+            if (response.success) {
+                // 🟢 2. พอหลังบ้านบันทึกสำเร็จ ค่อยสลับค่าใน DataTables แล้วสั่ง Redraw
+                const tempSize = rowData[`size${posA}`];
+                const tempSizeId = rowData[`size_id${posA}`];
+
+                rowData[`size${posA}`] = rowData[`size${posB}`];
+                rowData[`size_id${posA}`] = rowData[`size_id${posB}`];
+
+                rowData[`size${posB}`] = tempSize;
+                rowData[`size_id${posB}`] = tempSizeId;
+
+                // วาดตารางใหม่เฉพาะแถวนี้โดยไม่เปลี่ยนหน้า
+                targetRow.data(rowData).draw(false);
+            } else {
+                alert(`❌ ไม่สามารถสลับขนาดได้: ${response.message || ''}`);
+            }
+        } catch (err) {
+            console.error('💥 Error swapping position:', err);
+            alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+        } finally {
+            if (typeof hideLoader === 'function') hideLoader();
+        }
     }
 
 

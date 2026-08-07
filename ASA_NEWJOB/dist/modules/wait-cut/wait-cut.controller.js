@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
+exports.swapSplitSetSize = exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
 const wait_cut_model_1 = require("./wait-cut.model");
 const socket_1 = require("../../socket");
 const getWaitCutPage = async (req, res) => {
@@ -294,3 +294,25 @@ const saveQcCloseReelController = async (req, res) => {
     }
 };
 exports.saveQcCloseReelController = saveQcCloseReelController;
+const swapSplitSetSize = async (req, res) => {
+    const { splitSetId, posA, posB } = req.body;
+    const productionLineId = req.session.user?.productionLineId;
+    try {
+        // 1. สลับค่าใน DB
+        await wait_cut_model_1.WaitCutModel.swapSplitSetSize(splitSetId, posA, posB);
+        // 2. กระจายสัญญาณ Socket (หากไม่มี lineId ตัว FnNextCutSplitSet จะยิง Broadcast รวมให้อัตโนมัติ)
+        await (0, socket_1.FnNextCutSplitSet)(productionLineId);
+        // 3. ตอบกลับสถานะสำเร็จ
+        return res.status(200).json({
+            success: true,
+            message: "สลับขนาดเรียบร้อยแล้ว"
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "เกิดข้อผิดพลาดในการสลับขนาด"
+        });
+    }
+};
+exports.swapSplitSetSize = swapSplitSetSize;

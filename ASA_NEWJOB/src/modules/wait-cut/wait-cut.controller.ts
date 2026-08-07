@@ -321,3 +321,28 @@ export const saveQcCloseReelController = async (req: Request, res: Response) => 
         });
     }
 };
+
+
+export const swapSplitSetSize = async (req: Request, res: Response) => {
+    const { splitSetId, posA, posB } = req.body;
+    const productionLineId: any = req.session.user?.productionLineId;
+
+    try {
+        // 1. สลับค่าใน DB
+        await WaitCutModel.swapSplitSetSize(splitSetId, posA, posB);
+
+        // 2. กระจายสัญญาณ Socket (หากไม่มี lineId ตัว FnNextCutSplitSet จะยิง Broadcast รวมให้อัตโนมัติ)
+        await FnNextCutSplitSet(productionLineId);
+
+        // 3. ตอบกลับสถานะสำเร็จ
+        return res.status(200).json({
+            success: true,
+            message: "สลับขนาดเรียบร้อยแล้ว"
+        });
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "เกิดข้อผิดพลาดในการสลับขนาด"
+        });
+    }
+};

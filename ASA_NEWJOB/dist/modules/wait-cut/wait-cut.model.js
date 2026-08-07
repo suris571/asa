@@ -247,10 +247,32 @@ class WaitCutModel {
                 // 💡 สังเกต: ใช้ SQ_PL_CUT_SPLIT_SET.NEXTVAL หรือ Sequence ของตารางนี้ถ้ามี
                 const insertSplitQuery = `
                     INSERT INTO pl_cut_split_set (
-                        id, pl_order_id, pl_order_detail_id, set_no, cut_length, status, create_staff
-                    ) VALUES (
-                        sq_pl_cut_split_set.NEXTVAL, :orderId, :orderDetailId, :setNo, 0, 2, :staffId
-                    )
+                        id, 
+                        pl_order_id, 
+                        pl_order_detail_id, 
+                        set_no, 
+                        cut_length, 
+                        status, 
+                        create_staff,
+                        size_id1, 
+                        size_id2, 
+                        size_id3, 
+                        size_id4
+                    ) 
+                    SELECT 
+                        sq_pl_cut_split_set.NEXTVAL, 
+                        :orderId, 
+                        :orderDetailId, 
+                        :setNo, 
+                        0, 
+                        2, 
+                        :staffId,
+                        size1_id, 
+                        size2_id, 
+                        size3_id, 
+                        size4_id
+                    FROM pl_order_detail
+                    WHERE id = :orderDetailId
                 `;
                 for (let i = 0; i < qty; i++) {
                     const currentSet = i + 1;
@@ -263,7 +285,7 @@ class WaitCutModel {
                     });
                 }
             }
-            // 🎯 ขั้นตอนที่ 2: คำนวณหา cut_status_id ของ pl_order_detail ตามสถานะจริงของเซ็ตย่อยทั้งหมด
+            // 🎯 ขั้นตอนที่ 2: คำนวณหา ว่าทำเสร็จไปกี่เซ็ตแล้ว
             const checkStatusQuery = `
                 SELECT 
                     COUNT(*) AS TOTAL_SETS,
@@ -1208,6 +1230,49 @@ class WaitCutModel {
                 catch (rbErr) { }
             }
             console.error("❌ Model Error [unholdOrderDetail]:", error);
+            throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async swapSplitSetSize(splitSetId, posA, posB) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🟢 1. SELECT ค่าสดล่าสุดจาก DB และล็อกแถวป้องกัน Race Condition
+            const selectSql = `
+                SELECT size_id1, size_id2, size_id3, size_id4
+                FROM pl_cut_split_set
+                WHERE id = :splitSetId
+                FOR UPDATE
+            `;
+            const result = await conn.execute(selectSql, { splitSetId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            const row = result.rows[0];
+            if (!row)
+                throw new Error("ไม่พบข้อมูลรายการเซ็ตย่อย");
+            const valA = row[`SIZE_ID${posA}`];
+            const valB = row[`SIZE_ID${posB}`];
+            // 🟢 2. สลับตำแหน่งค่าใน DB
+            const updateSql = `
+                UPDATE pl_cut_split_set
+                SET size_id${posA} = :valB,
+                    size_id${posB} = :valA
+                WHERE id = :splitSetId
+            `;
+            await conn.execute(updateSql, { valA, valB, splitSetId });
+            await conn.commit();
+            return { success: true };
+        }
+        catch (error) {
+            if (conn) {
+                try {
+                    await conn.rollback();
+                }
+                catch (rbErr) { }
+            }
+            console.error("❌ Model Error [swapSplitSetSize]:", error);
             throw error;
         }
         finally {
