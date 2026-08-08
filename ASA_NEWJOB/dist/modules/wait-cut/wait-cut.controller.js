@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.swapSplitSetSize = exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
+exports.closeReel = exports.swapSplitSetSize = exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
 const wait_cut_model_1 = require("./wait-cut.model");
 const socket_1 = require("../../socket");
 const getWaitCutPage = async (req, res) => {
@@ -184,9 +184,13 @@ const startWeighing = async (req, res) => {
 };
 exports.startWeighing = startWeighing;
 const qcCloseReel = async (req, res) => {
+    const productionLineId = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     try {
-        const queueData = await wait_cut_model_1.WaitCutModel.getQcCloseReel();
-        res.render("wait-cut/index_qc_close_reel", { orders: queueData });
+        const queueData = await wait_cut_model_1.WaitCutModel.getQcCloseReel(null, null, null, productionLineId);
+        res.render("wait-cut/index_qc_close_reel", {
+            orders: queueData, // 👈 ใช้ชื่อคีย์ว่า orders
+            productionLineId: productionLineId
+        });
     }
     catch (error) {
         console.error("🔴 Controller พังจังหวะเรนเดอร์หน้าเว็บ:", error);
@@ -316,3 +320,28 @@ const swapSplitSetSize = async (req, res) => {
     }
 };
 exports.swapSplitSetSize = swapSplitSetSize;
+const closeReel = async (req, res) => {
+    const { id, reelNo } = req.body;
+    const staffId = req.session.user?.staff_id; // หรือ userId จาก session
+    if (!id) {
+        return res.status(400).json({
+            success: false,
+            message: "กรุณาระบุ ID ของ Reel"
+        });
+    }
+    try {
+        // 🎯 ยิงอัปเดตสถานะใน DB (เช่น ปรับ status = 0 หรือ 'CLOSED')
+        await wait_cut_model_1.WaitCutModel.closeReelStatus(id, staffId);
+        return res.status(200).json({
+            success: true,
+            message: "ปิด Reel เรียบร้อยแล้ว"
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "เกิดข้อผิดพลาดในการปิด Reel"
+        });
+    }
+};
+exports.closeReel = closeReel;

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getWaitCutPage, getWaitCutSplitSet , startProduction ,startWeighing , qcCloseReel,saveRemarkController,getQcReelListController,
-    saveQcCloseReelController,swapSplitSetSize
+    saveQcCloseReelController,swapSplitSetSize,closeReel
 } from './wait-cut.controller';
 
 const router = Router();
@@ -15,6 +15,7 @@ router.post('/start-production', startProduction);
 router.post('/swap-split-set-size', swapSplitSetSize);
 router.post('/start-weighing', startWeighing);
 router.get('/qc-close-reel', qcCloseReel);
+router.post('/close-reel', closeReel);
 router.post('/qc-close-reel/save-remark', saveRemarkController);
 router.get('/qc-close-reel/getModal-reel', getQcReelListController);
 router.post('/qc-close-reel/save-reel', saveQcCloseReelController);

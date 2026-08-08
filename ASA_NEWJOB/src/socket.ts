@@ -165,12 +165,12 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
 
         socket.on("get_filtered_queue", async (payload) => {
             try {
-                const { orderNo, productionLineId } = payload;
+                const { orderNo, productionLineId , status} = payload;
                 // ดึง lineId จาก payload หรือใช้ค่าที่ได้ตอนเชื่อมต่อ
                 const targetLineId = productionLineId || currentLineId;
 
                 // 🎯 เรียก Model ตัวใหม่ที่เราเพิ่ม pl_production_line_id เรียบร้อยแล้ว
-                const data = await WaitCutModel.getSplitSetQueueData(orderNo, targetLineId);
+                const data = await WaitCutModel.getSplitSetQueueData(orderNo, targetLineId, status);
 
                 socket.emit("update_queue_table", { success: true, data: data });
             } catch (error: any) {
@@ -189,7 +189,7 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
     const waitCutCoseReel = io.of("/socket/wait-cut/qc-close-reel");
     waitCutCoseReel.on("connection", (socket: Socket) => {
         console.log("🟢 พนักงานเปิด [หน้า QC CLOSE REEL] เชื่อมต่อเข้ามา ID:", socket.id);
-
+        const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/qc-close-reel");
         socket.on("get_filtered_queue", async (payload) => {
             try {
                 const { startDate, endDate } = payload;

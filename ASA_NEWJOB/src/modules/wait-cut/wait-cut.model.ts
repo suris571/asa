@@ -392,7 +392,7 @@ export class WaitCutModel {
         }
     }
     
-    static async getSplitSetQueueData(orderNo?: string | null, lineId?: string | number | null): Promise<any[]> {
+    static async getSplitSetQueueData(orderNo?: string | null, lineId?: string | number | null, status?: string | null): Promise<any[]> {
         let conn;
 
         try {
@@ -439,14 +439,19 @@ export class WaitCutModel {
             if (orderNo && orderNo.trim() !== '') {
                 sql += ` AND UPPER(order_no) LIKE :orderNo `;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
-                sql += ` AND split_status_id IN (2, 4, 5) `;
-            } else {
+                // sql += ` AND split_status_id IN (2, 4, 5) `;
+            } else if(!status) {
                 sql += ` AND split_status_id = 2 `;
+            }
+
+            if(status && typeof status === "string" && status.trim()) {
+                sql += ` AND split_status_id = :status `;
+                binds.status = Number(status);
             }
 
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-
+            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล Split Set Queue:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });
@@ -684,7 +689,8 @@ export class WaitCutModel {
     static async getQcCloseReel(
         orderNo?: string | null, 
         startDate?: string | null, 
-        endDate?: string | null
+        endDate?: string | null,
+        productionLineId?: string | number | null
     ): Promise<any[]> {
         let conn;
 
@@ -727,6 +733,11 @@ export class WaitCutModel {
 
             const binds: any = {};
 
+            if(productionLineId && productionLineId !== "null") {
+                sql += ` AND pl_production_line_id = :productionLineId`;
+                binds.productionLineId = Number(productionLineId);
+            }
+
             // 🔍 1. กรอง orderNo
             if (orderNo && orderNo.trim() !== '') {
                 sql += ` AND UPPER(order_no) LIKE :orderNo`;
@@ -750,7 +761,7 @@ export class WaitCutModel {
 
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-
+            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล QC Close Reel:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });
@@ -878,7 +889,7 @@ export class WaitCutModel {
             const bindVars: any = {};
 
             if (productionLineId) {
-                sql += ` AND production_line_id = :productionLineId`;
+                sql += ` AND PL_PRODUCTION_LINE_ID = :productionLineId`;
                 bindVars.productionLineId = productionLineId;
             }
 
@@ -1432,6 +1443,46 @@ export class WaitCutModel {
                 try { await conn.rollback(); } catch (rbErr) {}
             }
             console.error("❌ Model Error [swapSplitSetSize]:", error);
+            throw error;
+        } finally {
+            if (conn) await conn.close();
+        }
+    }
+
+    static async closeReelStatus(id: number | string, staffId?: number | string) {
+        let conn;
+        try {
+            conn = await getConnection();
+
+            // 🎯 UPDATE ค่า QTY ของ QC_REEL ให้เท่ากับ PD_ROLL_USED_QTY ใน PL_QC_REEL_VIEW
+            const updateSql = `
+                UPDATE qc_reel q
+                SET q.roll_qty = (
+                    SELECT v.pd_roll_used_qty
+                    FROM pl_qc_reel_view v
+                    WHERE v.id = q.id
+                )
+                WHERE q.id = :id
+            `;
+
+            const result: any = await conn.execute(
+                updateSql, 
+                { id }, 
+                { autoCommit: false }
+            );
+
+            if (result.rowsAffected === 0) {
+                throw new Error(`ไม่พบข้อมูล QC_REEL สำหรับ ID: ${id}`);
+            }
+
+            await conn.commit();
+            return { success: true, rowsAffected: result.rowsAffected };
+
+        } catch (error: any) {
+            if (conn) {
+                try { await conn.rollback(); } catch (rbErr) {}
+            }
+            console.error("❌ Model Error [closeReelStatus]:", error);
             throw error;
         } finally {
             if (conn) await conn.close();

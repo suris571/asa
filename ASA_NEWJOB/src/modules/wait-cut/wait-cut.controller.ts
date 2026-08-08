@@ -204,9 +204,13 @@ export const startWeighing = async (req: Request, res: Response) => {
 };
 
 export const qcCloseReel = async (req: Request, res: Response) => {
+    const productionLineId: any = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     try {
-        const queueData = await WaitCutModel.getQcCloseReel();
-        res.render("wait-cut/index_qc_close_reel", { orders: queueData });
+        const queueData = await WaitCutModel.getQcCloseReel(null, null, null, productionLineId);
+        res.render("wait-cut/index_qc_close_reel", { 
+            orders: queueData, // 👈 ใช้ชื่อคีย์ว่า orders
+            productionLineId: productionLineId 
+        });
     } catch (error) {
         console.error("🔴 Controller พังจังหวะเรนเดอร์หน้าเว็บ:", error);
         res.status(500).send("เกิดข้อผิดพลาดในการโหลดหน้าเว็บครับกัปตัน");
@@ -343,6 +347,33 @@ export const swapSplitSetSize = async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             message: error.message || "เกิดข้อผิดพลาดในการสลับขนาด"
+        });
+    }
+};
+
+export const closeReel = async (req: Request, res: Response) => {
+    const { id, reelNo } = req.body;
+    const staffId = req.session.user?.staff_id; // หรือ userId จาก session
+
+    if (!id) {
+        return res.status(400).json({ 
+            success: false, 
+            message: "กรุณาระบุ ID ของ Reel" 
+        });
+    }
+
+    try {
+        // 🎯 ยิงอัปเดตสถานะใน DB (เช่น ปรับ status = 0 หรือ 'CLOSED')
+        await WaitCutModel.closeReelStatus(id, staffId);
+
+        return res.status(200).json({
+            success: true,
+            message: "ปิด Reel เรียบร้อยแล้ว"
+        });
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "เกิดข้อผิดพลาดในการปิด Reel"
         });
     }
 };

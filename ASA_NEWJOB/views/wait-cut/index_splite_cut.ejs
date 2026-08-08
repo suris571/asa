@@ -200,6 +200,15 @@
                     <input type="text" id="searchOrderNo" placeholder="พิมพ์เลขที่ใบสั่งผลิต...">
                 </div>
 
+                <div class="custom-filter-item">
+                    <label for="searchStatus">🚦 สถานะ:</label>
+                    <select id="searchStatus" class="form-control form-control-sm">
+                        <option value="">-- เลือกสถาณะ --</option>
+                        <option value="5">เสร็จสิ้น</option>
+                        <option value="4">HOLD</option>
+                    </select>
+                </div>
+
                 <!-- ปุ่มกดสั่งการ -->
                 <div class="custom-filter-item ml-auto">
                     <button type="button" class="btn btn-sm btn-primary font-weight-bold" id="btnDoQuery">
@@ -264,7 +273,7 @@
     const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
     const socket = io('/socket/wait-cut/split-cut-set', {
         query: { 
-            productionLineId: userProductionLineId 
+            productionLineId: productionLineId 
         }
     }); 
    
@@ -552,6 +561,7 @@
 
     // ผูกคำสั่งกับปุ่มกดค้นหาหลักของระบบ
     $('#btnDoQuery').on('click', function() {
+        showLoader();
         fetchFilteredQueue();
     });
 
@@ -579,10 +589,12 @@
   
   function fetchFilteredQueue() {
       const filterParams = {
-          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null
+          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null,
+          status: $('#searchStatus').val() ? $('#searchStatus').val().trim() : null
       };
       console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
       socket.emit('get_filtered_queue', filterParams);
+      hideLoader();
   }
 
     // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
