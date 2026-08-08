@@ -154,7 +154,7 @@ const startWeighing = async (req, res) => {
     }
     else if (type == "unhold") {
         try {
-            let data = await wait_cut_model_1.WaitCutModel.unHoldCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
+            let data = await wait_cut_model_1.WaitCutModel.unHoldCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId);
             await wait_cut_model_1.WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id), staffId);
             // 🔊 ยิงเฉพาะเครื่อง
             splitSetTargetRoom.emit("queue_structure_changed", { success: true });
