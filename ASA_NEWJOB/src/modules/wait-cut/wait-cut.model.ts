@@ -1449,16 +1449,24 @@ export class WaitCutModel {
         }
     }
 
-    static async unHoldCutSplitSet(splitSetId: number, orderId: number, orderDetailId: number) {
+    static async unHoldCutSplitSet(
+        splitSetId: number, 
+        orderId: number, 
+        orderDetailId: number,
+        staffId?: number | string | null // 🎯 รับ staffId เพิ่มเติม
+    ) {
         let conn;
         try {
             conn = await getConnection();
+            const formattedStaffId = staffId ? Number(staffId) : null;
 
-            // 🎯 UPDATE สถานะของรายการเซ็ตย่อยกลับเป็น 2 (รอตัด) 
+            // 🎯 UPDATE สถานะของรายการเซ็ตย่อยกลับเป็น 2 (รอตัด) พร้อมบันทึกผู้แก้ไขและเวลา
             // โดยดักเงื่อนไขว่าจะต้องเป็นแถวที่มี status = 4 (HOLD) เท่านั้น
             const updateSql = `
                 UPDATE pl_cut_split_set
-                SET status = 2
+                SET status = 2,
+                    update_staff = :staffId,
+                    update_date = SYSDATE
                 WHERE id = :splitSetId
                 AND status = 4
             `;
@@ -1466,7 +1474,8 @@ export class WaitCutModel {
             const result = await conn.execute(
                 updateSql,
                 {
-                    splitSetId: splitSetId
+                    splitSetId: splitSetId,
+                    staffId: formattedStaffId
                 },
                 { autoCommit: true } // Commit ธุรกรรมลง Database ทันที
             );
