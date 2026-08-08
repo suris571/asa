@@ -145,9 +145,6 @@
 </div>
 
 <%- include('../partials/footer') %>
-<script src="/plugins/datatables/jquery.dataTables.min.js"></script>
-<script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
-<script src="/socket.io/socket.io.js"></script>
 <script>
     let weighingTable;
     let modalOrderTable;
@@ -155,7 +152,7 @@
     let urlPrintBarcode = 'http://localhost:4000/preview-label';
     const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
     let socket = io('/socket/weighing', {
-        query: { 
+        query: {
             productionLineId: userProductionLineId 
         }
     });
@@ -439,18 +436,19 @@
                     "render": function(data, type, row) {
                         // 🎯 1. Map ข้อมูลตามโครงสร้างที่กัปตันต้องการ (อันไหนไม่มีให้ fallback เป็น null)
                         const printParams = {
+                            id: row.id || null,
                             createdAt: row.createdAt || null,
-                            shift: row.part || null,             // ถ้าใน row ไม่มี จะได้ null
+                            part: row.part || null,             // ถ้าใน row ไม่มี จะได้ null
                             gradeName: row.gradeName || null,
                             model: row.model || null,
-                            size1: row.sizeName || null,          // แมปจาก sizeName
-                            diameter1: row.diameter || null,      // แมปจาก diameter
+                            size: row.sizeName || null,          // แมปจาก sizeName
+                            diameter: row.diameter || null,      // แมปจาก diameter
                             reelno: row.reel_no || null,          // แมปจาก reel_no
-                            weight1: row.weigh || null,           // แมปจาก weigh
+                            weight: row.weigh || null,           // แมปจาก weigh
                             status: row.status || null,
-                            remark: row.remark || null
+                            remark: row.remark || null,
+                            roll_no: row.rollNo || null
                         };
-
                         // 🎯 2. แปลงเป็น JSON String และ Escape เครื่องหมาย " ให้ใส่ใน attribute ของ HTML ได้ปลอดภัย
                         const jsonString = JSON.stringify(printParams).replace(/"/g, '&quot;');
 
@@ -646,7 +644,9 @@
         const rollNO = $('#searchRollNoInput').val() ? $('#searchRollNoInput').val().trim() : '';
 
         const filterParams = {
-            rollNO: rollNO !== '' ? rollNO : null
+            rollNO: rollNO !== '' ? rollNO : null,
+            startDate: $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : null,
+            endDate: $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : null,
         };
         console.log("📡 กำลังยิง Socket เพื่อดึงประวัติการชั่งน้ำหนักด้วย Filter:", filterParams);
         socket.emit('GetHistoryWeight', filterParams);

@@ -10,23 +10,37 @@
     <!-- 🎯 SECTION: Custom Filter Box (ถอดแบบจากรูปภาพตัวอย่างเป๊ะๆ) -->
     <!-- ------------------------------------------------------------- -->
     <div class="p-2 mb-2 bg-light border rounded shadow-sm">
-      <div class="row align-items-center">
-        <div class="col-md-6 d-flex align-items-center mb-2 mb-md-0">
-          <label for="searchRollNoInput" class="font-weight-bold mr-2 mb-0 text-nowrap">
-            🔍 Roll No:
-          </label>
-          <input type="text" id="searchRollNoInput" class="form-control form-control-sm" placeholder="พิมพ์เลข Roll No..." style="max-width: 250px;">
-        </div>
-        <div class="col-md-6 text-md-right">
-          <button type="button" id="btnSearchRollNo" class="btn btn-primary btn-sm font-weight-bold shadow-sm mr-1">
-            <i class="fas fa-search"></i> ค้นหาข้อมูล
-          </button>
-          <button type="button" id="btnResetRollNo" class="btn btn-outline-secondary btn-sm font-weight-bold shadow-sm">
-            ล้างคำค้นหา
-          </button>
-        </div>
-      </div>
+  <div class="row align-items-center">
+
+    <!-- 1. ค้นหา Roll No (ใช้ col-auto เพื่อย่อขนาดให้พอดีกล่อง) -->
+    <div class="col-auto d-flex align-items-center mb-2 mb-lg-0">
+      <label for="searchRollNoInput" class="font-weight-bold mr-2 mb-0 text-nowrap">
+        🔍 Roll No:
+      </label>
+      <!-- 🎯 ล็อคขนาดให้สั้นลงด้วย max-width: 150px -->
+      <input type="text" id="searchRollNoInput" class="form-control form-control-sm" placeholder="พิมพ์เลข..." style="max-width: 150px;">
     </div>
+
+    <!-- 2. ค้นหาวันที่ผลิตเสร็จ -->
+    <div class="col d-flex align-items-center mb-2 mb-lg-0">
+      <label class="font-weight-bold mr-2 mb-0 text-nowrap">📅 วันที่ผลิตเสร็จ:</label>
+      <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker text-center" value="<%= typeof startDate !== 'undefined' ? startDate : '' %>" readonly style="max-width: 130px;">
+      <span class="mx-2 font-weight-bold">ถึง</span>
+      <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker text-center" value="<%= typeof endDate !== 'undefined' ? endDate : '' %>" readonly style="max-width: 130px;">
+    </div>
+
+    <!-- 3. ปุ่มกดค้นหา / ล้างค่า -->
+    <div class="col-auto text-right">
+      <button type="button" id="btnSearchRollNo" class="btn btn-primary btn-sm font-weight-bold shadow-sm mr-1">
+        <i class="fas fa-search"></i> ค้นหา
+      </button>
+      <button type="button" id="btnResetRollNo" class="btn btn-outline-secondary btn-sm font-weight-bold shadow-sm">
+        ล้างคำค้นหา
+      </button>
+    </div>
+
+  </div>
+</div>
     <!-- ------------------------------------------------------------- -->
 
     <table id="weighingHistoryTable" class="table table-sm table-bordered table-striped text-center text-nowrap text-sm w-100 shadow-sm">

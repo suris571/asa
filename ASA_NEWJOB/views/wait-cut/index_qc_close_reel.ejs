@@ -220,10 +220,11 @@
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
                     <label>📅 วันที่ผลิตเสร็จ:</label>
-                    <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
-                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" 
+                        placeholder="DD-MM-YYYY" value="<%= typeof startDate !== 'undefined' ? startDate : '' %>" readonly>
                     <label>ถึง</label>
-                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" 
+                        placeholder="DD-MM-YYYY" value="<%= typeof endDate !== 'undefined' ? endDate : '' %>" readonly>
                 </div>
 
                 <div class="custom-filter-item">
@@ -295,13 +296,6 @@
 <%- include('./modal_qc') %>
 <%- include('../partials/footer') %>
 
-<script src="/plugins/datatables/jquery.dataTables.min.js"></script>
-<script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
-<script src="/socket.io/socket.io.js"></script>
-
 <script>
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
   let queueTable;
@@ -321,29 +315,6 @@
   socket.off('queue_structure_changed');
 
   $(function () {
-    // 2. ตั้งค่าการควบคุม DateRangePicker ให้ล็อกฟอร์แมต ค.ศ.
-    $('.date-picker').daterangepicker({
-        singleDatePicker: true,
-        showDropdowns: true,
-        autoUpdateInput: false,
-        autoApply: false, // เปิดแถบปุ่มไว้เพื่อให้มีปุ่ม "ล้างค่า"
-        locale: {
-            format: 'YYYY-MM-DD',
-            cancelLabel: 'ล้างค่า', 
-            daysOfWeek: ['อา','จ','อ','พ','พฤ','ศ','ส'],
-            monthNames: ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'],
-            firstDay: 1
-        }
-    });
-
-    $('.date-picker').on('apply.daterangepicker', function(ev, picker) {
-        $(this).val(picker.startDate.format('YYYY-MM-DD'));
-        $(this).data('daterangepicker').hide(); // เลือกวันปุ๊บ สั่งซ่อนหน้าต่างทันที ไม่ต้องกดปุ่มตกลง
-    });
-
-    $('.date-picker').on('cancel.daterangepicker', function(ev, picker) {
-        $(this).val(''); // เคลียร์กล่องข้อความอย่างเดียวตามสั่ง ไม่ยิง Query
-    });
 
     // 3. จัดระเบียบสายสัญญาณ Socket Listeners ให้อยู่ในจังหวะที่ DOM พร้อมใช้งานอย่างปลอดภัย
     socket.on('connect', function() {

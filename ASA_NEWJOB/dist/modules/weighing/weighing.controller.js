@@ -3,14 +3,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchweighinglist = exports.saveWeighingController = exports.getWeighingPage = void 0;
 const weighing_model_1 = require("./weighing.model");
 const socket_1 = require("../../socket");
+const Common_1 = require("../util/Common");
 const getWeighingPage = async (req, res) => {
     const productionLineId = req.session.user?.productionLineId;
     try {
+        const today = new Date();
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(today.getDate() - 2);
+        // 🎯 แปลงให้อยู่ในฟอร์แมต DD/MM/YYYY (ตรงกับ Model แล้ว)
+        const startDate = Common_1.Common.formatDateDDMMYYYY(twoDaysAgo); // ได้ผลลัพธ์เช่น "06/08/2026"
+        const endDate = Common_1.Common.formatDateDDMMYYYY(today); // ได้ผลลัพธ์เช่น "08/08/2026"
         // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
         const getNextWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId);
-        const historyWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history');
+        const historyWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate);
         // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
-        res.render('weighing/index', { nextData: getNextWeighing, historyData: historyWeighing });
+        res.render('weighing/index', {
+            nextData: getNextWeighing,
+            historyData: historyWeighing,
+            productionLineId: productionLineId,
+            startDate: startDate,
+            endDate: endDate
+        });
     }
     catch (error) {
         console.error("ระบบหน้าจอชั่งน้ำหนักขัดข้อง:", error);

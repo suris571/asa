@@ -8,7 +8,7 @@ declare module 'express-session' {
   interface SessionData {
     user?: { 
       username: string; 
-      role: 'admin' | 'operator'; 
+      role?: string; 
       name: string; 
       staff_id: number;          // เพิ่ม staff_id
       machineNo: number;         // เช่น 1 หรือ 2
@@ -18,14 +18,6 @@ declare module 'express-session' {
 }
 
 const router = Router();
-
-// 👥 1. ถังข้อมูลพนักงานจำลอง (Mock DB)
-const MOCK_USERS = [
-  { username: 'admin1', password: 'password123', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
-  { username: 'a', password: 'a', role: 'admin', name: 'หัวหน้ากะ (Admin)' },
-  { username: 'op1', password: 'password123', role: 'operator', name: 'พนักงานคุมเครื่อง PM1' },
-  { username: 'op2', password: 'password123', role: 'operator', name: 'พนักงานคุมเครื่อง PM2' }
-];
 
 // 🔓 หน้ากากหน้าจอ Login (GET: /login)
 router.get('/login', (req: Request, res: Response) => {
@@ -52,19 +44,17 @@ router.post('/login', async (req: Request, res: Response) => {
   const { username, password, machineNo } = req.body;
 
   // ค้นหารายชื่อในตรรกะคลังแสงจำลอง
-  const user = MOCK_USERS.find(u => u.username === username && u.password === password);
-
+  const user = await AuthModel.validateStaff(username, password);
   if (user) { 
     try {
       // 🎯 ดึง ID จริงจากตาราง PL_PRODUCTION_LINE โดยใช้ machineNo (เช่น 1 หรือ 2)
       const productionLineId = await AuthModel.getProductionLineIdByNo(Number(machineNo));
-
       // 🎯 ยัดสิทธิ์, ชื่อ, และข้อมูลเครื่องจักรลง Session
       req.session.user = {
-        username: user.username,
-        role: user.role as 'admin' | 'operator',
-        name: user.name,
-        staff_id: 1, // เพิ่ม staff_id ลงใน session
+        username: username,
+        role: "",
+        name: `${user.FIRST_NAME} ${user.LAST_NAME}`,
+        staff_id: user?.ID || 0, // เพิ่ม staff_id ลงใน session
         machineNo: Number(machineNo),
         productionLineId: productionLineId
       };

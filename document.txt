@@ -151,6 +151,9 @@ CREATE TABLE pl_cut_split_set (
     sub_status          VARCHAR2(50) NULL,
     set_no              VARCHAR2(50) NULL,
     create_staff        NUMBER NULL,
+    UPDATE_STAFF        NUMBER,
+    CREATE_DATE         DATE DEFAULT SYSDATE,
+    UPDATE_DATE         DATE,
     finish_at           DATE NULL,
     qc_reel_id          NUMBER NULL,
     remark              VARCHAR2(500) NULL
@@ -201,7 +204,9 @@ CREATE TABLE pl_wait_weighing (
     size_id            NUMBER NULL,
     grade_id           NUMBER NULL,
     create_staff       NUMBER NULL,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UPDATE_STAFF NUMBER,
+    UPDATE_DATE  DATE
 );
 
 -- 2. สร้าง Sequence สำหรับตาราง pl_wait_weighing

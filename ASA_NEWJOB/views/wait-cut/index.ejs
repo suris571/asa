@@ -197,9 +197,9 @@
                 <div class="custom-filter-item">
                     <label>📅 วันที่ผลิตเสร็จ:</label>
                     <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
-                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="DD-MM-YYYY" readonly>
                     <label>ถึง</label>
-                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="YYYY-MM-DD" readonly>
+                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="DD-MM-YYYY" readonly>
                 </div>
                 
                 <!-- 2. สถานะ -->
@@ -269,13 +269,6 @@
 
 <%- include('../partials/footer') %>
 
-<script src="/plugins/datatables/jquery.dataTables.min.js"></script>
-<script src="/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
-<script src="/socket.io/socket.io.js"></script>
-
 <script>
   // 1. ประกาศตัวแปรและเปิดสายสัญญาณชั้นนอกสุดตามหลักสากล
     let queueTable;
@@ -295,29 +288,6 @@
     socket.off('queue_structure_changed');
 
     $(function () {
-    // 2. ตั้งค่าการควบคุม DateRangePicker ให้ล็อกฟอร์แมต ค.ศ.
-    $('.date-picker').daterangepicker({
-        singleDatePicker: true,
-        showDropdowns: true,
-        autoUpdateInput: false,
-        autoApply: false, // เปิดแถบปุ่มไว้เพื่อให้มีปุ่ม "ล้างค่า"
-        locale: {
-            format: 'YYYY-MM-DD',
-            cancelLabel: 'ล้างค่า', 
-            daysOfWeek: ['อา','จ','อ','พ','พฤ','ศ','ส'],
-            monthNames: ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'],
-            firstDay: 1
-        }
-    });
-
-    $('.date-picker').on('apply.daterangepicker', function(ev, picker) {
-        $(this).val(picker.startDate.format('YYYY-MM-DD'));
-        $(this).data('daterangepicker').hide(); // เลือกวันปุ๊บ สั่งซ่อนหน้าต่างทันที ไม่ต้องกดปุ่มตกลง
-    });
-
-    $('.date-picker').on('cancel.daterangepicker', function(ev, picker) {
-        $(this).val(''); // เคลียร์กล่องข้อความอย่างเดียวตามสั่ง ไม่ยิง Query
-    });
 
     // 3. จัดระเบียบสายสัญญาณ Socket Listeners ให้อยู่ในจังหวะที่ DOM พร้อมใช้งานอย่างปลอดภัย
     socket.on('connect', function() {
@@ -329,10 +299,8 @@
     });
 
     socket.on('update_queue_table', function(res) {
-        hideLoader();
+        
         if (!res || !res.success || !res.data) return;
-        console.log("=================================")
-        console.log(res.data)
         if (queueTable) {
             // เช็กว่าพนักงานกำลังเอาเมาส์ชี้เล็งปุ่มจัดการคิวงานอยู่หรือไม่
             const isUserHoveringButtons = $('.queue-action-group:hover').length > 0;
@@ -350,6 +318,7 @@
                 queueTable.clear().rows.add(res.data).draw(false);
             }
         }
+        hideLoader();
     });
 
     socket.on('queue_structure_changed', function(res) {
@@ -425,65 +394,50 @@
                 }
             },
             {
-                "data": null,
-                "render": function(data, type, row) {
-                    // 🎯 ดึงสถานะปัจจุบัน
-                    const rawStatus = row.cut_status_id;
-                    const currentCutStatus = rawStatus ? parseInt(rawStatus) : 1;
-                    const isCompleted = (row.status === 'เสร็จสิ้น' || currentCutStatus === 5);
-                    const isHold = (currentCutStatus === 4); // 👈 สถานะ HOLD
+    "data": null,
+    "render": function(data, type, row) {
+        // 🎯 1. แปลงสถานะปัจจุบัน และค่า Flag
+        const status = row.cut_status_id ? parseInt(row.cut_status_id) : 1;
+        const isForceFinish = (row.is_force_finish === true || row.is_force_finish === 'true');
 
-                    // 🎨 พาเลทสี
-                    const styleCut     = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
-                    const styleHold    = 'background-color: #6c757d !important; border-color: #6c757d !important; color: #fff !important;';
-                    const styleUnhold  = 'background-color: #e2e6ea !important; border-color: #dae0e5 !important; color: #495057 !important;';
-                    const styleSuccess = 'background-color: #2b8a3e !important; border-color: #2b8a3e !important; color: #fff !important;';
-                    const styleReset   = 'background-color: #e67e22 !important; border-color: #e67e22 !important; color: #fff !important;';
-                    const styleQueue   = 'background-color: #f1f3f5 !important; border-color: #ced4da !important; color: #343a40 !important;';
+        // 🎨 พาเลทสีปุ่ม
+        const styleCut     = 'background-color: #3b7ddd !important; border-color: #3b7ddd !important; color: #fff !important;';
+        const styleHold    = 'background-color: #6c757d !important; border-color: #6c757d !important; color: #fff !important;';
+        const styleUnhold  = 'background-color: #e2e6ea !important; border-color: #dae0e5 !important; color: #495057 !important;';
+        const styleSuccess = 'background-color: #2b8a3e !important; border-color: #2b8a3e !important; color: #fff !important;';
+        const styleReset   = 'background-color: #e67e22 !important; border-color: #e67e22 !important; color: #fff !important;';
+        const styleQueue   = 'background-color: #f1f3f5 !important; border-color: #ced4da !important; color: #343a40 !important;';
+        const styleDisabled = 'opacity: 0.4; cursor: not-allowed;';
 
-                    // 🎯 กรณีที่ 1: ถ้าสถานะเสร็จสิ้นแล้ว (status = 5) ให้โชว์เฉพาะปุ่ม Reset ปุ่มเดียว
-                    if (isCompleted) {
-                        return `
-                        <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
-                            <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'reset')">Reset</button>
-                        </div>
-                        `;
-                    }
+        // 🧠 2. สรุปเงื่อนไขการกดปุ่มตามที่กัปตันกำหนด
+        const canCut     = (status === 1);                             // สั่งตัด: กดได้เฉพาะ รอสั่งตัด (1)
+        const canHold    = [1, 2, 3].includes(status);                // HOLD: กดได้เมื่อ รอสั่งตัด(1), รอตัด(2), ตัดไม่ครบ(3)
+        const canUnhold  = (status === 4);                             // ปลด HOLD: กดได้เฉพาะ HOLD (4)
+        const canSuccess = [1, 2, 3, 4].includes(status);             // เสร็จสิ้น: กดได้เมื่อสถานะเป็น 1, 2, 3, 4
+        const canReset   = (status === 5 && isForceFinish);           // Reset: กดได้เมื่อ เสร็จสิ้น(5) AND is_force_finish = true
+        const canMove    = (status !== 5);                             // ขึ้น/ลง: ย้ายคิวได้ถ้ายังไม่เสร็จสิ้น
 
-                    // 🎯 กรณีที่ 2: ถ้าสถานะเป็น HOLD (status = 4) -> ปลด HOLD และ เสร็จสิ้น กดได้
-                    if (isHold) {
-                        return `
-                        <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
-                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleCut} opacity: 0.4; cursor: not-allowed;">สั่งตัด</button>
-                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleHold} opacity: 0.4; cursor: not-allowed;">HOLD</button>
-                            <button class="btn btn-sm font-weight-bold m-1" style="${styleUnhold}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'unhold')">ปลด HOLD</button>
-                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleSuccess}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'success')">เสร็จสิ้น</button>
-                            <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleReset} opacity: 0.4; cursor: not-allowed;">Reset</button>
-                            <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
-                            <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveDown(${row.pl_order_detail_id}, ${row.que})">ลง</button>
-                        </div>
-                        `;
-                    }
+        // 🛠️ Helper สร้าง Style และ Attribute
+        const getAttr = (baseStyle, isEnabled) => {
+            return isEnabled 
+                ? `style="${baseStyle}"` 
+                : `disabled style="${baseStyle} ${styleDisabled}"`;
+        };
 
-                    // 🔒 กรณีที่ 3: สถานะปกติ (รอสั่งตัด / กำลังตัด / ตัดไม่ครบ) -> ปุ่ม ปลด HOLD โดน disabled
-                    const canCut = (rawStatus === null || rawStatus === undefined || currentCutStatus === 1);
-                    const isCutDisabled = canCut 
-                        ? `style="${styleCut}"` 
-                        : 'disabled style="' + styleCut + ' opacity: 0.55; cursor: not-allowed;"';
-
-                    return `
-                    <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
-                        <button class="btn btn-sm font-weight-bold m-1" ${isCutDisabled} onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty})">สั่งตัด</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleHold}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'hold')">HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" disabled style="${styleUnhold} opacity: 0.4; cursor: not-allowed;">ปลด HOLD</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleSuccess}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'success')">เสร็จสิ้น</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleReset}" onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id} , ${row.qty} ,'reset')">Reset</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveUp(${row.pl_order_detail_id}, ${row.que})">ขึ้น</button>
-                        <button class="btn btn-sm font-weight-bold m-1" style="${styleQueue}" onclick="moveDown(${row.pl_order_detail_id}, ${row.que})">ลง</button>
-                    </div>
-                    `;
-                }
-            }
+        // 🚀 3. เรนเดอร์กลุ่มปุ่มกด
+        return `
+        <div class="d-flex flex-nowrap justify-content-center align-items-center queue-action-group" style="white-space: nowrap !important;">
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleCut, canCut)} ${canCut ? `onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id}, ${row.qty})"` : ''}>สั่งตัด</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleHold, canHold)} ${canHold ? `onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id}, ${row.qty}, 'hold')"` : ''}>HOLD</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleUnhold, canUnhold)} ${canUnhold ? `onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id}, ${row.qty}, 'unhold')"` : ''}>ปลด HOLD</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleSuccess, canSuccess)} ${canSuccess ? `onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id}, ${row.qty}, 'success')"` : ''}>เสร็จสิ้น</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleReset, canReset)} ${canReset ? `onclick="actionCut(${row.pl_order_detail_id}, ${row.pl_order_id}, ${row.qty}, 'reset')"` : ''}>Reset</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleQueue, canMove)} ${canMove ? `onclick="moveUp(${row.pl_order_detail_id}, ${row.que})"` : ''}>ขึ้น</button>
+            <button class="btn btn-sm font-weight-bold m-1" ${getAttr(styleQueue, canMove)} ${canMove ? `onclick="moveDown(${row.pl_order_detail_id}, ${row.que})"` : ''}>ลง</button>
+        </div>
+        `;
+    }
+}
             ],
         "createdRow": function(row, data, dataIndex) {
             $(row).attr('data-id', data.pl_order_detail_id);
@@ -502,11 +456,13 @@
 
     // ผูกคำสั่งกับปุ่มกดค้นหาหลักของระบบ
     $('#btnDoQuery').on('click', function() {
+        showLoader();
         fetchFilteredQueue();
     });
 
     // ผูกคำสั่งกับปุ่มล้างคำค้น
     $('#btnClearQuery').on('click', function() {
+        showLoader();
         $('#filterMinDate').val('');
         $('#filterMaxDate').val('');
         $('#searchStatus').val('');

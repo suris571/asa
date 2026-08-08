@@ -1,15 +1,29 @@
 import { Request, Response } from 'express';
 import { WeighingModel } from './weighing.model';
 import { getIO, FnNextRoll, FnNextQcCloseReel, FnNextCutSplitSet } from "../../socket";
+import { Common } from '../util/Common';
 
 export const getWeighingPage = async (req: Request, res: Response) => {
     const productionLineId = req.session.user?.productionLineId;
     try {
+        const today = new Date();
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(today.getDate() - 2);
+
+        // 🎯 แปลงให้อยู่ในฟอร์แมต DD/MM/YYYY (ตรงกับ Model แล้ว)
+        const startDate = Common.formatDateDDMMYYYY(twoDaysAgo); // ได้ผลลัพธ์เช่น "06/08/2026"
+        const endDate = Common.formatDateDDMMYYYY(today);       // ได้ผลลัพธ์เช่น "08/08/2026"
         // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
         const getNextWeighing = await WeighingModel.getNextWeighing(productionLineId);
-        const historyWeighing = await WeighingModel.getNextWeighing(productionLineId, null ,'history');
+        const historyWeighing = await WeighingModel.getNextWeighing(productionLineId, null ,'history',null,startDate,endDate);
         // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
-        res.render('weighing/index', {nextData:getNextWeighing, historyData: historyWeighing});
+        res.render('weighing/index', {
+            nextData:getNextWeighing, 
+            historyData: historyWeighing,
+            productionLineId: productionLineId,
+            startDate: startDate,
+            endDate: endDate
+        });
     } catch (error) {
         console.error("ระบบหน้าจอชั่งน้ำหนักขัดข้อง:", error);
         res.status(500).send("เกิดข้อผิดพลาดภายในระบบวิศวกรรม");

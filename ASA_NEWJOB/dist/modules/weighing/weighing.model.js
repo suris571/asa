@@ -10,7 +10,7 @@ const oracledb_1 = __importDefault(require("oracledb"));
 // 💾 คลังข้อมูลจำลองประวัติการชั่งน้ำหนักในแรม (In-Memory)
 class WeighingModel {
     // ดึงประวัติที่ชั่งน้ำหนักแล้วทั้งหมดมารายงานผล
-    static async getNextWeighing(productionLineId, search = null, type = null, roll_no = null) {
+    static async getNextWeighing(productionLineId, search = null, type = null, roll_no = null, startDate = null, endDate = null) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -74,6 +74,16 @@ class WeighingModel {
             // 🛠️ แก้จุดที่ 2: ถ้าต้องการเอาแค่ 1 รายการ ให้จำกัด ROWNUM ใน WHERE ก่อนเข้า ORDER BY
             if (!isSearchMode && !type) {
                 sql += ` AND ROWNUM <= 1`;
+            }
+            if (startDate && startDate.trim() !== '') {
+                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
+                sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
+                binds.startDate = startDate.trim(); // เช่น "08/08/2026"
+            }
+            if (endDate && endDate.trim() !== '') {
+                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
+                sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
+                binds.endDate = endDate.trim(); // เช่น "10/08/2026"
             }
             // 🎯 5. จัดเรียงคิวแบบเดิมไว้ล่างสุด
             sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;

@@ -64,7 +64,7 @@ app.use(auth_middleware_js_1.requireAuth);
 app.use((req, res, next) => {
     res.locals.data = {
         username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
-        role: req.session.user?.role === 'admin' ? "หัวหน้าผู้ควบคุมงาน" : "พนักงานหน้างาน",
+        role: req.session.user?.role,
         pm1_pending: 5, // สถิติรอชุบชีวิตคิวรีจาก Oracle จริงในอนาคต
         pm2_pending: 3,
         pm_select: req.session.user?.machineNo,

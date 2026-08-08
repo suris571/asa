@@ -117,14 +117,14 @@ const initSocket = (httpServer) => {
     const weighingNamespace = io.of("/socket/weighing");
     weighingNamespace.on("connection", async (socket) => {
         console.log("🟢 พนักงานเปิด [หน้าชั่งน้ำหนัก] เชื่อมต่อเข้ามา ID:", socket.id);
-        const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/split-cut-set");
+        const currentLineId = setupMachineRoom(socket, "/socket/weighing");
         socket.on("get_next_roll", async () => {
             (0, exports.FnNextRoll)(currentLineId);
         });
         socket.on("GetHistoryWeight", async (payload) => {
-            const { rollNO } = payload;
+            const { rollNO, startDate, endDate } = payload;
             const productionLineId = currentLineId;
-            const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', rollNO);
+            const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', rollNO, startDate, endDate);
             socket.emit("update_history_table", { success: true, data: data });
         });
         socket.on("disconnect", () => {
@@ -165,8 +165,8 @@ const initSocket = (httpServer) => {
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/qc-close-reel");
         socket.on("get_filtered_queue", async (payload) => {
             try {
-                const { startDate, endDate } = payload;
-                const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(null, startDate, endDate);
+                const { startDate, endDate, status, orderNo } = payload;
+                const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(orderNo, startDate, endDate, currentLineId, status);
                 socket.emit("update_queue_table", { success: true, data: data });
             }
             catch (error) {

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { WaitCutModel } from "./wait-cut.model";
 import { getIO, FnNextRoll, FnNextQcCloseReel, FnNextCutSplitSet } from "../../socket";
+import { Common } from '../util/Common';
 
 export const getWaitCutPage = async (req: Request, res: Response) => {
     try {
@@ -30,6 +31,7 @@ export const startProduction = async (req: Request, res: Response) => {
     const { orderId, orderDetailId, qty, type } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     const productionLineId:any = req.session.user?.productionLineId;
+    const staffId:any = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
 
     if (!orderId || !orderDetailId) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน (กรุณาระบุ orderId และ orderDetailId)" });
@@ -43,7 +45,7 @@ export const startProduction = async (req: Request, res: Response) => {
         if (type && type === "success") {
             console.log(`📡 [Controller] รับคำสั่งบังคับเสร็จสิ้น สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
-            const result = await WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId);
+            const result = await WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId, staffId);
             await FnNextCutSplitSet(productionLineId);
 
             // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
@@ -57,7 +59,7 @@ export const startProduction = async (req: Request, res: Response) => {
         } else if (type && type === "reset") {
             console.log(`📡 [Controller] รับคำสั่ง Reset สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
-            const result = await WaitCutModel.forceResetOrderDetail(orderDetailId, orderId);
+            const result = await WaitCutModel.forceResetOrderDetail(orderDetailId, orderId, staffId);
 
             // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
             targetRoom.emit("queue_structure_changed", { success: true });
@@ -71,7 +73,7 @@ export const startProduction = async (req: Request, res: Response) => {
             console.log(`📡 [Controller] รับคำสั่ง HOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
             // 1. เรียกใช้ Model ในการ Hold ใบงาน
-            const result = await WaitCutModel.holdOrderDetail(orderDetailId, orderId);
+            const result = await WaitCutModel.holdOrderDetail(orderDetailId, orderId, staffId);
 
             // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้ (เพื่อให้คิวถัดไปขยับขึ้นมา)
             await FnNextCutSplitSet(productionLineId);
@@ -88,7 +90,7 @@ export const startProduction = async (req: Request, res: Response) => {
         console.log(`📡 [Controller] รับคำสั่ง UNHOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
 
         // 1. เรียกใช้งาน Model ปลด Hold
-        const result = await WaitCutModel.unholdOrderDetail(orderDetailId, orderId);
+        const result = await WaitCutModel.unholdOrderDetail(orderDetailId, orderId, staffId);
 
         // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้
         await FnNextCutSplitSet(productionLineId);
@@ -108,7 +110,6 @@ export const startProduction = async (req: Request, res: Response) => {
         }
 
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${orderDetailId}`);
-        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
         const createResult = await WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId);
         await FnNextCutSplitSet(productionLineId);
 
@@ -133,6 +134,7 @@ export const startWeighing = async (req: Request, res: Response) => {
     const { split_set_id, pl_order_id, pl_order_detail_id, type , cut_length } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session
     const productionLineId:any = req.session.user?.productionLineId;
+    const staffId:any = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     const io = getIO();
 
     // 🎯 เตรียม Target Room สำหรับยิงไปหน้า Split Set เฉพาะเครื่อง
@@ -140,8 +142,8 @@ export const startWeighing = async (req: Request, res: Response) => {
 
     if (type == "hold") {
         try {
-            let data = await WaitCutModel.holdCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
-            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
+            let data = await WaitCutModel.holdCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id),staffId);
+            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id),staffId);
 
             // 🔊 ยิงเฉพาะเครื่อง
             splitSetTargetRoom.emit("queue_structure_changed", { success: true });
@@ -154,8 +156,8 @@ export const startWeighing = async (req: Request, res: Response) => {
         }
     } else if (type == "reset") {
         try {
-            let data = await WaitCutModel.ResetCutSlitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
-            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
+            let data = await WaitCutModel.ResetCutSlitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id),staffId);
+            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id) ,staffId);
 
             // 🔊 ยิงเฉพาะเครื่อง
             splitSetTargetRoom.emit("queue_structure_changed", { success: true });
@@ -168,8 +170,8 @@ export const startWeighing = async (req: Request, res: Response) => {
         }
     } else if (type == "unhold") {
         try {
-            let data = await WaitCutModel.unHoldCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id));
-            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
+            let data = await WaitCutModel.unHoldCutSplitSet(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId);
+            await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id),staffId);
 
             // 🔊 ยิงเฉพาะเครื่อง
             splitSetTargetRoom.emit("queue_structure_changed", { success: true });
@@ -188,7 +190,6 @@ export const startWeighing = async (req: Request, res: Response) => {
 
     try {
         console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
-        let staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
         await WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId,cut_length);
         await WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
 
@@ -203,13 +204,28 @@ export const startWeighing = async (req: Request, res: Response) => {
     }
 };
 
+
+
 export const qcCloseReel = async (req: Request, res: Response) => {
-    const productionLineId: any = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
+    const productionLineId: any = req.session.user?.productionLineId;
+
     try {
-        const queueData = await WaitCutModel.getQcCloseReel(null, null, null, productionLineId);
+        const today = new Date();
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(today.getDate() - 2);
+
+        // 🎯 แปลงให้อยู่ในฟอร์แมต DD/MM/YYYY (ตรงกับ Model แล้ว)
+        const startDate = Common.formatDateDDMMYYYY(twoDaysAgo); // ได้ผลลัพธ์เช่น "06/08/2026"
+        const endDate = Common.formatDateDDMMYYYY(today);       // ได้ผลลัพธ์เช่น "08/08/2026"
+
+        // ส่ง startDate และ endDate เข้า Model
+        const queueData = await WaitCutModel.getQcCloseReel(null, startDate, endDate, productionLineId);
+
         res.render("wait-cut/index_qc_close_reel", { 
-            orders: queueData, // 👈 ใช้ชื่อคีย์ว่า orders
-            productionLineId: productionLineId 
+            orders: queueData,
+            productionLineId: productionLineId,
+            startDate: startDate,
+            endDate: endDate
         });
     } catch (error) {
         console.error("🔴 Controller พังจังหวะเรนเดอร์หน้าเว็บ:", error);
