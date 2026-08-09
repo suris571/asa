@@ -1,6 +1,6 @@
 SELECT 
-		p_or.id as pl_order_id,
-		p_de.id as pl_order_detail_id,
+    p_or.id as pl_order_id,
+    p_de.id as pl_order_detail_id,
     p_or.order_no,
     p_de.order_item,
     g1.grade AS grade1_name,
@@ -16,15 +16,28 @@ SELECT
     pz2.p_size AS size_2,
     pz3.p_size AS size_3,
     pz4.p_size AS size_4,
-    TO_CHAR(p_de.finish_date_time, 'YYYY-MM-DD') AS finish_date,
-    TO_CHAR(p_de.finish_date_time, 'HH24:MI') AS finish_time,
-		p_or.diameter,
+    TO_CHAR(p_de.FINISH_DATE_TIME, 'YYYY-MM-DD') AS finish_date,
+    TO_CHAR(p_de.FINISH_DATE_TIME, 'HH24:MI') AS finish_time,
+    p_or.diameter,
     p_or.status,
-		p_de.QUEUE_NO,
-		p_de.cut_status_id,
-		p_or.pl_production_line_id,
-		COMPLETED_SET_QTY,
-		COMPLETED_ROLL_QTY
+    p_de.QUEUE_NO,
+    p_de.cut_status_id,
+    p_or.pl_production_line_id,
+    COMPLETED_SET_QTY,
+    COMPLETED_ROLL_QTY,
+    
+    -- ���� คอลัมน์ใหม่: เช็กว่ามี sub_status = 'บังคับเสร็จสิ้น' ใน PL_CUT_SPLIT_SET อย่างน้อย 1 record หรือไม่
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM PL_CUT_SPLIT_SET ss
+            WHERE ss.pl_order_id = p_or.id 
+              AND ss.pl_order_detail_id = p_de.id
+              AND TRIM(ss.sub_status) = 'บังคับเสร็จสิ้น'
+        ) THEN 'true'
+        ELSE 'false'
+    END AS is_force_finish
+
 FROM pl_order p_or
 JOIN pl_order_detail p_de ON p_or.id = p_de.pl_order_id
 LEFT JOIN p_size pz1 ON p_de.size1_id = pz1.id

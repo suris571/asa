@@ -186,6 +186,7 @@ const startWeighing = async (req, res) => {
 exports.startWeighing = startWeighing;
 const qcCloseReel = async (req, res) => {
     const productionLineId = req.session.user?.productionLineId;
+    const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     try {
         const today = new Date();
         const twoDaysAgo = new Date();
@@ -211,6 +212,7 @@ exports.qcCloseReel = qcCloseReel;
 const saveRemarkController = async (req, res) => {
     try {
         const { items } = req.body;
+        const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -271,6 +273,7 @@ exports.getQcReelListController = getQcReelListController;
 const saveQcCloseReelController = async (req, res) => {
     try {
         const { splitSetId, reelId } = req.body;
+        const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
         // 1. Validation เบื้องต้น
         if (!splitSetId || !reelId) {
             return res.status(400).json({
@@ -279,7 +282,7 @@ const saveQcCloseReelController = async (req, res) => {
             });
         }
         // 2. เรียกใช้งาน Model
-        const result = await wait_cut_model_1.WaitCutModel.updateCloseReel(splitSetId, reelId);
+        const result = await wait_cut_model_1.WaitCutModel.updateCloseReel(splitSetId, reelId, staffId);
         // 🛑 3. เช็กว่า Model ทำงานสำเร็จหรือไม่ (ถ้าโควตาไม่พอ หรือไม่พบ ID จะเด้งเข้าเงื่อนไขนี้)
         if (!result.success) {
             return res.status(400).json({
@@ -311,9 +314,10 @@ exports.saveQcCloseReelController = saveQcCloseReelController;
 const swapSplitSetSize = async (req, res) => {
     const { splitSetId, posA, posB } = req.body;
     const productionLineId = req.session.user?.productionLineId;
+    const staffId = req.session.user?.staff_id; // หรือ userId จาก session
     try {
         // 1. สลับค่าใน DB
-        await wait_cut_model_1.WaitCutModel.swapSplitSetSize(splitSetId, posA, posB);
+        await wait_cut_model_1.WaitCutModel.swapSplitSetSize(splitSetId, posA, posB, staffId);
         // 2. กระจายสัญญาณ Socket (หากไม่มี lineId ตัว FnNextCutSplitSet จะยิง Broadcast รวมให้อัตโนมัติ)
         await (0, socket_1.FnNextCutSplitSet)(productionLineId);
         // 3. ตอบกลับสถานะสำเร็จ

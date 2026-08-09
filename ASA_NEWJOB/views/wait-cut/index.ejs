@@ -414,6 +414,7 @@
         const canHold    = [1, 2, 3].includes(status);                // HOLD: กดได้เมื่อ รอสั่งตัด(1), รอตัด(2), ตัดไม่ครบ(3)
         const canUnhold  = (status === 4);                             // ปลด HOLD: กดได้เฉพาะ HOLD (4)
         const canSuccess = [1, 2, 3, 4].includes(status);             // เสร็จสิ้น: กดได้เมื่อสถานะเป็น 1, 2, 3, 4
+        // const canReset   = (status === 5);           // Reset: กดได้เมื่อ เสร็จสิ้น(5) AND is_force_finish = true
         const canReset   = (status === 5 && isForceFinish);           // Reset: กดได้เมื่อ เสร็จสิ้น(5) AND is_force_finish = true
         const canMove    = (status !== 5);                             // ขึ้น/ลง: ย้ายคิวได้ถ้ายังไม่เสร็จสิ้น
 

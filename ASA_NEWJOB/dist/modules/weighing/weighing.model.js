@@ -137,10 +137,13 @@ class WeighingModel {
             }
         }
     }
-    static async updateWeighingResult(data, roll_no) {
+    static async updateWeighingResult(data, roll_no, staffId // 🎯 หรือรับผ่านพารามิเตอร์แยก
+    ) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
+            const currentStaffId = data.staffId || staffId;
+            const formattedStaffId = currentStaffId ? Number(currentStaffId) : null;
             // 🔍 STEP 1: SELECT หา pl_order_detail_id และ split_set_id จาก pl_wait_weighing
             const checkSql = `
                 SELECT pl_order_detail_id, split_set_id 
@@ -153,7 +156,7 @@ class WeighingModel {
             }
             const orderDetailId = checkResult.rows[0].PL_ORDER_DETAIL_ID;
             const splitSetId = checkResult.rows[0].SPLIT_SET_ID;
-            // 🎯 STEP 2: อัปเดตผลการชั่งน้ำหนักลงตาราง pl_wait_weighing
+            // 🎯 STEP 2: อัปเดตผลการชั่งน้ำหนักลงตาราง pl_wait_weighing พร้อมบันทึกผู้แก้ไขและเวลา
             const updateWeighSql = `
                 UPDATE pl_wait_weighing
                 SET 
@@ -161,7 +164,9 @@ class WeighingModel {
                     status = :status,
                     remark = :remark,
                     part = :part,
-                    roll_no = :roll_no
+                    roll_no = :roll_no,
+                    update_staff = :staffId,
+                    update_date = SYSDATE
                 WHERE id = :id
             `;
             const result = await conn.execute(updateWeighSql, {
@@ -170,17 +175,20 @@ class WeighingModel {
                 remark: data.remark,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
+                staffId: formattedStaffId,
                 id: data.id,
             }, { autoCommit: false });
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
             if (isSuccess && orderDetailId) {
-                // 🎯 STEP 3: อัปเดตจำนวนลูกย่อยสะสม COMPLETED_ROLL_QTY + 1
+                // 🎯 STEP 3: อัปเดตจำนวนลูกย่อยสะสม COMPLETED_ROLL_QTY + 1 พร้อมบันทึกผู้แก้ไข
                 const updateRollQtySql = `
                     UPDATE pl_order_detail
-                    SET completed_roll_qty = NVL(completed_roll_qty, 0) + 1
+                    SET completed_roll_qty = NVL(completed_roll_qty, 0) + 1,
+                        update_staff = :staffId,
+                        update_date = SYSDATE
                     WHERE id = :orderDetailId
                 `;
-                await conn.execute(updateRollQtySql, { orderDetailId }, { autoCommit: false });
+                await conn.execute(updateRollQtySql, { orderDetailId, staffId: formattedStaffId }, { autoCommit: false });
                 // 🎯 STEP 4: เช็กว่าใน split_set_id นี้ มีลูกย่อยที่ยังชั่งไม่เสร็จเหลืออยู่อีกไหม?
                 if (splitSetId) {
                     const checkRemainingSql = `
@@ -195,10 +203,12 @@ class WeighingModel {
                     if (remainingCount === 0) {
                         const updateSetQtySql = `
                             UPDATE pl_order_detail
-                            SET completed_set_qty = NVL(completed_set_qty, 0) + 1
+                            SET completed_set_qty = NVL(completed_set_qty, 0) + 1,
+                                update_staff = :staffId,
+                                update_date = SYSDATE
                             WHERE id = :orderDetailId
                         `;
-                        await conn.execute(updateSetQtySql, { orderDetailId }, { autoCommit: false });
+                        await conn.execute(updateSetQtySql, { orderDetailId, staffId: formattedStaffId }, { autoCommit: false });
                     }
                 }
                 // 🔒 Commit ธุรกรรมทั้งหมดพร้อมกันแบบ Atomic Transaction
@@ -454,10 +464,10 @@ class WeighingModel {
         try {
             conn = await (0, database_1.getConnection)();
             let result;
-            // 🎯 Step 2: เช็ก IF
+            const formattedStaffId = data.staffId ? Number(data.staffId) : -1;
             console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
-                // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert
+                // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert พร้อมบันทึก CREATE_STAFF
                 const insertFromQcSql = `
                     INSERT INTO PD_ROLL_QUALITY (
                         ID,
@@ -481,7 +491,7 @@ class WeighingModel {
                     SELECT 
                         SQ_PD_ROLL_QUALITY.NEXTVAL,
                         SYSDATE,
-                        -1,
+                        :staffId,
                         :pd_roll_id,
                         q.BASIS_WEIGHT,
                         q.BURSTING_STRENGHT,
@@ -497,17 +507,21 @@ class WeighingModel {
                         q.INKJET,
                         q.REMARKS
                     FROM qc_reel_quality q
-                    WHERE q.id = :qcReelQualityId   -- 🎯 แก้ไข: เปลี่ยนจาก q.qc_reel_quality_id เป็น q.id (หรือ q.qc_reel_id ตามโครงสร้างจริง)
+                    WHERE q.id = :qcReelQualityId
                 `;
-                result = await conn.execute(insertFromQcSql, { pd_roll_id: data.pd_roll_id, qcReelQualityId: data.qcReelQualityId }, { autoCommit: false });
+                result = await conn.execute(insertFromQcSql, {
+                    pd_roll_id: data.pd_roll_id,
+                    qcReelQualityId: data.qcReelQualityId,
+                    staffId: formattedStaffId
+                }, { autoCommit: false });
                 // เผื่อเคสมี qc_reel_quality_id ใน View แต่ไม่มีเรคคอร์ดใน qc_reel_quality จริงๆ
                 if (result.rowsAffected === 0) {
-                    result = await this.InsertDefaultNull(conn, data.pd_roll_id);
+                    result = await this.InsertDefaultNull(conn, data.pd_roll_id, formattedStaffId);
                 }
             }
             else {
                 // 🔴 CASE B: ไม่มี qc_reel_quality_id -> ยัด NULL ลงไปตรงๆ
-                result = await this.InsertDefaultNull(conn, data.pd_roll_id);
+                result = await this.InsertDefaultNull(conn, data.pd_roll_id, formattedStaffId);
             }
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
             if (isSuccess) {
@@ -530,22 +544,26 @@ class WeighingModel {
                 await conn.close();
         }
     }
-    // 🎯 Helper function ย่อยสำหรับยัดค่า NULL / Default
-    static async InsertDefaultNull(conn, pd_roll_id) {
+    // 🎯 Helper function ย่อยสำหรับยัดค่า NULL / Default พร้อมส่ง staffId
+    static async InsertDefaultNull(conn, pd_roll_id, staffId = -1) {
+        const formattedStaffId = staffId ? Number(staffId) : -1;
         const insertNullSql = `
             INSERT INTO PD_ROLL_QUALITY (
-                ID,CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,
+                ID, CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,
                 BASIS_WEIGHT, BURSTING_STRENGTH, RING_CRUSH, CONCORA, THICKNESS,
                 COBB, MOISTURE_CONTENT, CIE_LAB_L, CIE_LAB_A, CIE_LAB_B,
                 BOTTOM_SIDE, INKJET, REMARKS
             ) VALUES (
-                SQ_PD_ROLL_QUALITY.NEXTVAL,SYSDATE, -1, :pd_roll_id,
+                SQ_PD_ROLL_QUALITY.NEXTVAL, SYSDATE, :staffId, :pd_roll_id,
                 NULL, NULL, NULL, NULL, NULL,
                 NULL, NULL, NULL, NULL, NULL,
                 NULL, NULL, NULL
             )
         `;
-        return await conn.execute(insertNullSql, { pd_roll_id }, { autoCommit: false });
+        return await conn.execute(insertNullSql, {
+            pd_roll_id,
+            staffId: formattedStaffId
+        }, { autoCommit: false });
     }
 }
 exports.WeighingModel = WeighingModel;

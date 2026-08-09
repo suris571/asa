@@ -55,7 +55,7 @@ pl_order_detail
 
 imp system/12345678@localhost:1521/XE FILE=/opt/oracle/admin/XE/dpdump/akpc_Wed.DMP TABLES=\(PD_ROLL\) FROMUSER=AKPC TOUSER=C##FACTORY_DEV IGNORE=Y GRANTS=N INDEXES=N CONSTRAINTS=N
 
-
+FINISH_DATE_TIME  อันนี้ไม่ชัวว่ามีอยู่แล้วไหม
 
 ALTER TABLE PL_ORDER_DETAIL ADD (
 	QUEUE_NO NUMBER,

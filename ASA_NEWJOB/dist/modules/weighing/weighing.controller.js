@@ -38,10 +38,16 @@ const saveWeighingController = async (req, res) => {
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
         }
-        // 1. ทำความสะอาดข้อมูล
+        // 🎯 1. ทำความสะอาดค่า weight: ลบลูกน้ำออก -> ลบจุดทศนิยมและตัวเลขหลังจุดออก -> แปลงเป็น Integer
+        const cleanWeightString = String(weight ?? '0')
+            .replace(/,/g, '') // ลบเครื่องหมายลูกน้ำ , ออกทั้งหมด (เช่น "15,369.59" -> "15369.59")
+            .split('.')[0] // เอาเฉพาะข้อความส่วนหน้าจุดทศนิยม (เช่น "15369.59" -> "15369")
+            .trim();
+        const formattedWeight = parseInt(cleanWeightString, 10) || 0; // แปลงเป็น Number ชนิด Integer
+        // 2. จัดทำชุดข้อมูล Payload
         const payload = {
             id: Number(id),
-            weigh: parseFloat(weight) || 0,
+            weigh: formattedWeight, // ได้ค่าเป็น 15369 (Integer) แน่นอน
             status: status || 'PASS',
             remark: remark && remark.trim() !== '' ? remark.trim() : null,
             model: model && model.trim() !== '' ? model.trim() : null,
@@ -70,7 +76,7 @@ const saveWeighingController = async (req, res) => {
                 staffId: staffId
             });
         }
-        const isSuccess = await weighing_model_1.WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no);
+        const isSuccess = await weighing_model_1.WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId);
         // const isSuccess =   false; // เปลี่ยนเป็น false เพื่อทดสอบการตอบกลับเมื่อไม่สำเร็จ
         if (!isSuccess) {
             return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });

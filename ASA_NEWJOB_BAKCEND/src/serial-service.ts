@@ -95,7 +95,7 @@ export class SerialService {
     
     console.log(`📡 [Mock Mode] ระบบจำลองสายสตรีมเครื่องชั่งเปิดฉากทำงานแล้ว พ่นข้อมูลที่พอร์ต 4000...`);
     
-    let simulatedWeight = 0.0;
+    let simulatedWeight = 10000;
     let isIncreasing = true;
 
     this.mockTimer = setInterval(() => {
@@ -115,10 +115,10 @@ export class SerialService {
 
       const finalWeight = parseFloat(simulatedWeight.toFixed(2));
       // console.log(`🤖 [Mock ส่งออก] ตัวเลขจำลองหน้าร้าน: ${finalWeight} kg`);
-
+      let finalWeight1 = Math.trunc(finalWeight).toLocaleString('en-US');
       // พ่นออกท่อ Socket ชื่อเดียวกันเป๊ะๆ เพื่อให้หน้าเว็บแยกไม่ออกว่านี่คือของจริงหรือของปลอม!
       this.ioInstance.emit('weight_stream', {
-        weight: finalWeight,
+        weight: finalWeight1,
         stable: finalWeight > 0 && Math.random() > 0.7 // สุ่มสถานะนิ่งนิ่ง
       });
     }, 5000); // พ่นรัวๆ ทุก 0.5 วินาทีสะใจสายสตรีม

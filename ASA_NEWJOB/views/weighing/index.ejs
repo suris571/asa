@@ -408,9 +408,9 @@
                     "className": "font-weight-bold text-success",
                     "render": function(data) {
                         const val = Number(data) || 0;
-                        return val.toFixed(2);
+                    return Math.trunc(val).toLocaleString('en-US');
                     }
-                },
+                },    
                 { 
                     "data": "reel_no",
                     "className": "font-weight-bold",
@@ -444,7 +444,7 @@
                             size: row.sizeName || null,          // แมปจาก sizeName
                             diameter: row.diameter || null,      // แมปจาก diameter
                             reelno: row.reel_no || null,          // แมปจาก reel_no
-                            weight: row.weigh || null,           // แมปจาก weigh
+                            weight: row.weigh ? Math.trunc(Number(row.weigh)).toLocaleString('en-US') : null,           // แมปจาก weigh
                             status: row.status || null,
                             remark: row.remark || null,
                             roll_no: row.rollNo || null
@@ -525,7 +525,6 @@
             // data ประกอบด้วย { weight: ทศนิยม, stable: boolean }
             // console.log(`📥 ค่าน้ำหนักสตรีมโชว์บนหน้าเว็บ: ${data.stable} kg`);
 
-            $("#weight").val(data.weight.toFixed(2));
 
             const weightInput = $('#weight');
             const weightLabel = $('#weightLabel');
