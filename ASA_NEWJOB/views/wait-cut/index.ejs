@@ -480,7 +480,14 @@
         const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
 
         if (myIndex === 0) {
-            alert('งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!');
+            Swal.fire({
+                icon: 'warning',
+                title: 'คำเตือน',
+                text: "งานนี้อยู่บนสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับขึ้นได้อีก!",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
             return;
         }
 
@@ -506,7 +513,14 @@
         const myIndex = allData.findIndex(row => Number(row.pl_order_detail_id) === Number(myId));
 
         if (myIndex === allData.length - 1) {
-            alert('งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!');
+            Swal.fire({
+                icon: 'warning',
+                title: 'คำเตือน',
+                text: "งานนี้อยู่ล่างสุดของรายการทั้งหมดแล้ว ไม่สามารถขยับลงได้อีก!",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
             return;
         }
 
@@ -567,13 +581,27 @@
             console.log('✅ หลังบ้านบันทึกการผลิตสำเร็จ รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
         } else {
             hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'ไม่สามารถสั่งตัดได้'}`);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "💥 เกิดข้อผิดพลาดในการสั่งตัดงาน: " + (res.message || 'ไม่สามารถสั่งตัดได้'),
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         }
     })
     .catch(error => {
         hideLoader();
         console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: "💥 เกิดข้อผิดพลาดในการสั่งตัดงาน: " + error,
+            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+        });
     });
     }
 

@@ -136,7 +136,12 @@ export class WeighingModel {
                 binds.endDate = endDate.trim();
             }
 
-            sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+            if(type === "history") {
+                sql += ` ORDER BY id DESC`;
+            }else{
+                sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+            }
+            
 
             console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {

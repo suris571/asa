@@ -10,6 +10,7 @@ declare module 'express-session' {
       username: string; 
       role?: string; 
       name: string; 
+      permissions: number[];
       staff_id: number;          // เพิ่ม staff_id
       machineNo: number;         // เช่น 1 หรือ 2
       productionLineId: number;  // ID จริงจากตาราง PL_PRODUCTION_LINE
@@ -45,7 +46,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
   // ค้นหารายชื่อในตรรกะคลังแสงจำลอง
   const user = await AuthModel.validateStaff(username, password);
-  if (user) { 
+  console.log(user);
+  if (user && user.permissions && (user.permissions.includes(16800) || user.permissions.includes(16801) || user.permissions.includes(16802) || user.permissions.includes(16803) || user.permissions.includes(16804))) {
     try {
       // 🎯 ดึง ID จริงจากตาราง PL_PRODUCTION_LINE โดยใช้ machineNo (เช่น 1 หรือ 2)
       const productionLineId = await AuthModel.getProductionLineIdByNo(Number(machineNo));
@@ -53,9 +55,10 @@ router.post('/login', async (req: Request, res: Response) => {
       req.session.user = {
         username: username,
         role: "",
-        name: `${user.FIRST_NAME} ${user.LAST_NAME}`,
-        staff_id: user?.ID || 0, // เพิ่ม staff_id ลงใน session
+        name: `${user.first_name} ${user.last_name}`,
+        staff_id: user?.id || 0, // เพิ่ม staff_id ลงใน session
         machineNo: Number(machineNo),
+        permissions: user.permissions,
         productionLineId: productionLineId
       };
 
@@ -76,7 +79,7 @@ router.post('/login', async (req: Request, res: Response) => {
     console.log(`🔴 [AJAX] ล็อกอินล้มเหลว: ไอดีหรือรหัสผ่านผิดพลาด (Username: ${username})`);
     return res.status(401).json({ 
       success: false, 
-      error: '❌ รหัสผ่านไม่ถูกต้องหรือชื่อผู้ใช้ไม่ถูกต้อง' 
+      error: '❌ รหัสผ่านไม่ถูกต้องหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้' 
     });
   }
 });

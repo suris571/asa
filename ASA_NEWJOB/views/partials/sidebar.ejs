@@ -7,38 +7,53 @@
     <nav class="mt-2">
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
         
+        <% const perms = data.permissions || []; %>
+        <% const isAdmin = perms.includes(16800); %>
+
+        <!-- 16801: รายการรอผลิต -->
+        <% if (isAdmin || perms.includes(16801)) { %>
         <li class="nav-item">
           <a href="/wait-cut" class="nav-link">
             <i class="nav-icon fas fa-list-ol"></i>
             <p class="text-nowrap">รายการรอผลิต</p>
           </a>
         </li>
+        <% } %>
 
+        <!-- 16802: รายการรอผลิตแยกลูกกระดาษ -->
+        <% if (isAdmin || perms.includes(16802)) { %>
         <li class="nav-item">
           <a href="/wait-cut/split-cut-set" class="nav-link">
             <i class="nav-icon fas fa-list-ol"></i>
             <p class="text-nowrap">รายการรอผลิตแยกลูกกระดาษ</p>
           </a>
         </li>
+        <% } %>
 
+        <!-- 16803: QC ปิด Reel No. -->
+        <% if (isAdmin || perms.includes(16803)) { %>
         <li class="nav-item">
           <a href="/wait-cut/qc-close-reel" class="nav-link">
             <i class="nav-icon fas fa-cut"></i>
             <p class="text-nowrap">QC ปิด Reel No.</p>
           </a>
         </li>
+        <% } %>
 
+        <!-- 16804: รับน้ำหนักลูกกระดาษ -->
+        <% if (isAdmin || perms.includes(16804)) { %>
         <li class="nav-item">
           <a href="/weighing" class="nav-link">
             <i class="nav-icon fas fa-weight-hanging"></i>
             <p class="text-nowrap">รับน้ำหนักลูกกระดาษ</p>
           </a>
         </li>
+        <% } %>
 
-        <!-- 🔴 เพิ่มเส้นแบ่งเพื่อความสวยงาม -->
+        <!-- 🔴 เส้นแบ่ง ACCOUNT -->
         <li class="nav-header">ACCOUNT</li>
 
-        <!-- 🎯 เมนู Logout -->
+        <!-- 🎯 เมนู Logout (แสดงให้ทุกคนเห็น) -->
         <li class="nav-item">
           <a href="/auth/logout" class="nav-link text-danger">
             <i class="nav-icon fas fa-sign-out-alt"></i>

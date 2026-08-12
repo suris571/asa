@@ -2,6 +2,8 @@
 // 📦 1. SECTION: IMPORTS (EXTERNAL PACKAGES)
 // =========================================================
 import express from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { requireAuth } from './middleware/auth-middleware.js';
 import path from 'path';
 import { createServer } from 'http';
 import session from 'express-session';
@@ -14,11 +16,9 @@ import { initializePool, testDatabaseConnection } from './database.js';
 import authRoutes from './modules/authen/auth-routes.js';
 import waitCutRoutes from './modules/wait-cut/wait-cut.route.js';
 import weighingRoutes from './modules/weighing/weighing.route.js';
-import { requireAuth } from './middleware/auth-middleware.js';
+import { AuthModel } from './modules/authen/auth.model.js';
 
-// =========================================================
-// 🚀 3. SECTION: CORE SETUP & PARAMETERS
-// =========================================================
+
 const app = express();
 const httpServer = createServer(app);
 const PORT = 3000;
@@ -26,16 +26,11 @@ const PORT = 3000;
 // จุดชนวนเปิดท่อระบบจัดการ Socket.io
 initSocket(httpServer);
 
-// =========================================================
-// ⚙️ 4. SECTION: EXPRESS CONFIGURATIONS & STATIC
-// =========================================================
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../views'));
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/sweetalert2', express.static(path.join(__dirname, '../node_modules/sweetalert2/dist')));
-// =========================================================
-// 🛡️ 5. SECTION: GLOBAL MIDDLEWARES (PARSERS & SESSION)
-// =========================================================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -50,31 +45,28 @@ app.use(session({
   }
 }));
 
-// =========================================================
-// 🔓 6. SECTION: PUBLIC ROUTES (ห้ามติดล็อกเด็ดขาด)
-// =========================================================
 app.use('/', authRoutes); // ท่อสำหรับหน้า /login และ /logout
 
-// =========================================================
-// 🚧 7. SECTION: GLOBAL SECURITY GATE (แผงกั้นความปลอดภัย)
-// =========================================================
-// บังคับว่าหลังจากบรรทัดนี้ไป... ทุก Request ต้องมีตั๋วคุกกี้ 1 ปีติดตัวมาเท่านั้น!
 app.use(requireAuth); 
 
-// =========================================================
-// 🔒 8. SECTION: PROTECTED ROUTES (โซนปลอดภัย โดนล็อกออโต้)
-// =========================================================
-
-// ฟีดข้อมูลโปรไฟล์พนักงานขึ้นหน้าสเปกบอร์ด EJS (ใช้ข้อมูลจาก Session ของจริง)
-app.use((req, res, next) => {
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+    const staffId = req.session.user?.staff_id;
+    
+    // ดึงสิทธิ์สดใหม่จาก Oracle DB ณ วินาทีนั้นเลย
+    const freshPermissions = staffId 
+        ? await AuthModel.getPermissionsByStaffId(staffId) 
+        : [];
+    // ฝังลง res.locals เพื่อให้ทั้ง EJS และ Middleware เช็คสิทธิ์เห็นตรงกัน
     res.locals.data = {
         username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
         role: req.session.user?.role,
-        pm1_pending: 5, // สถิติรอชุบชีวิตคิวรีจาก Oracle จริงในอนาคต
+        pm1_pending: 5,
         pm2_pending: 3,
-        pm_select:req.session.user?.machineNo,
-        pm_select_ID:req.session.user?.productionLineId,
+        pm_select: req.session.user?.machineNo,
+        pm_select_ID: req.session.user?.productionLineId,
+        permissions: freshPermissions, // 👈 สิทธิ์ Real-time อัปเดตทันทีที่ DB เปลี่ยน
     };
+
     next();
 });
 
@@ -83,8 +75,8 @@ app.get('/', (req, res) => {
     res.render('index');
 });
 
-app.use('/wait-cut', waitCutRoutes);   // ระบบคิวงานตัด
-app.use('/weighing', weighingRoutes);   // ระบบเครื่องชั่งและพิมพ์บาร์โค้ด A4
+app.use('/wait-cut', waitCutRoutes);
+app.use('/weighing', weighingRoutes);
 
 // =========================================================
 // ⚡ 9. SECTION: APPLICATION ENGINE (จุดสตาร์ตระบบเครื่องยนต์)

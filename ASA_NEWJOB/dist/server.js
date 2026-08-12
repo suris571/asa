@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // 📦 1. SECTION: IMPORTS (EXTERNAL PACKAGES)
 // =========================================================
 const express_1 = __importDefault(require("express"));
+const auth_middleware_js_1 = require("./middleware/auth-middleware.js");
 const path_1 = __importDefault(require("path"));
 const http_1 = require("http");
 const express_session_1 = __importDefault(require("express-session"));
@@ -18,25 +19,16 @@ const database_js_1 = require("./database.js");
 const auth_routes_js_1 = __importDefault(require("./modules/authen/auth-routes.js"));
 const wait_cut_route_js_1 = __importDefault(require("./modules/wait-cut/wait-cut.route.js"));
 const weighing_route_js_1 = __importDefault(require("./modules/weighing/weighing.route.js"));
-const auth_middleware_js_1 = require("./middleware/auth-middleware.js");
-// =========================================================
-// 🚀 3. SECTION: CORE SETUP & PARAMETERS
-// =========================================================
+const auth_model_js_1 = require("./modules/authen/auth.model.js");
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const PORT = 3000;
 // จุดชนวนเปิดท่อระบบจัดการ Socket.io
 (0, socket_js_1.initSocket)(httpServer);
-// =========================================================
-// ⚙️ 4. SECTION: EXPRESS CONFIGURATIONS & STATIC
-// =========================================================
 app.set('view engine', 'ejs');
 app.set('views', path_1.default.join(__dirname, '../views'));
 app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 app.use('/sweetalert2', express_1.default.static(path_1.default.join(__dirname, '../node_modules/sweetalert2/dist')));
-// =========================================================
-// 🛡️ 5. SECTION: GLOBAL MIDDLEWARES (PARSERS & SESSION)
-// =========================================================
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, express_session_1.default)({
@@ -49,27 +41,23 @@ app.use((0, express_session_1.default)({
         httpOnly: true
     }
 }));
-// =========================================================
-// 🔓 6. SECTION: PUBLIC ROUTES (ห้ามติดล็อกเด็ดขาด)
-// =========================================================
 app.use('/', auth_routes_js_1.default); // ท่อสำหรับหน้า /login และ /logout
-// =========================================================
-// 🚧 7. SECTION: GLOBAL SECURITY GATE (แผงกั้นความปลอดภัย)
-// =========================================================
-// บังคับว่าหลังจากบรรทัดนี้ไป... ทุก Request ต้องมีตั๋วคุกกี้ 1 ปีติดตัวมาเท่านั้น!
 app.use(auth_middleware_js_1.requireAuth);
-// =========================================================
-// 🔒 8. SECTION: PROTECTED ROUTES (โซนปลอดภัย โดนล็อกออโต้)
-// =========================================================
-// ฟีดข้อมูลโปรไฟล์พนักงานขึ้นหน้าสเปกบอร์ด EJS (ใช้ข้อมูลจาก Session ของจริง)
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
+    const staffId = req.session.user?.staff_id;
+    // ดึงสิทธิ์สดใหม่จาก Oracle DB ณ วินาทีนั้นเลย
+    const freshPermissions = staffId
+        ? await auth_model_js_1.AuthModel.getPermissionsByStaffId(staffId)
+        : [];
+    // ฝังลง res.locals เพื่อให้ทั้ง EJS และ Middleware เช็คสิทธิ์เห็นตรงกัน
     res.locals.data = {
         username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
         role: req.session.user?.role,
-        pm1_pending: 5, // สถิติรอชุบชีวิตคิวรีจาก Oracle จริงในอนาคต
+        pm1_pending: 5,
         pm2_pending: 3,
         pm_select: req.session.user?.machineNo,
         pm_select_ID: req.session.user?.productionLineId,
+        permissions: freshPermissions, // 👈 สิทธิ์ Real-time อัปเดตทันทีที่ DB เปลี่ยน
     };
     next();
 });
@@ -77,8 +65,8 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
     res.render('index');
 });
-app.use('/wait-cut', wait_cut_route_js_1.default); // ระบบคิวงานตัด
-app.use('/weighing', weighing_route_js_1.default); // ระบบเครื่องชั่งและพิมพ์บาร์โค้ด A4
+app.use('/wait-cut', wait_cut_route_js_1.default);
+app.use('/weighing', weighing_route_js_1.default);
 // =========================================================
 // ⚡ 9. SECTION: APPLICATION ENGINE (จุดสตาร์ตระบบเครื่องยนต์)
 // =========================================================

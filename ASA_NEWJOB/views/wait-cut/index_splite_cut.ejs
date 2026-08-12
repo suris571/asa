@@ -640,7 +640,14 @@
             
             lengthInput.focus();
 
-            alert("❌ กรุณาระบุ 'ความยาว' ให้ถูกต้องก่อนกดเสร็จสิ้น!");
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ กรุณาระบุ 'ความยาว' ให้ถูกต้องก่อนกดเสร็จสิ้น!",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
             return; 
         }
 
@@ -672,13 +679,27 @@
                 console.log('✅ หลังบ้านบันทึก record ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
             } else {
                 hideLoader();
-                alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'ไม่สามารถบันทึกได้'}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "❌ เกิดข้อผิดพลาดจากระบบ: " + (res.message || 'ไม่สามารถบันทึกได้'),
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
             }
         })
         .catch(error => {
             hideLoader();
             console.error("❌ API Error:", error);
-            alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         });
     }
 
@@ -706,13 +727,28 @@
             console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
         } else {
             hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ เกิดข้อผิดพลาดจากระบบ: ${res.message || 'สร้าง record ได้'}`);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ เกิดข้อผิดพลาดจากระบบ: " + (res.message || 'สร้าง record ได้'),
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
+            
         }
     })
     .catch(error => {
         hideLoader();
         console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง",
+            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+        });
     });
     }
 
@@ -740,13 +776,27 @@
             console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
         } else {
             hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว`);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         }
     })
     .catch(error => {
         hideLoader();
         console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: "❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง",
+            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+        });
     });
   }
 
@@ -774,13 +824,27 @@
             console.log('✅ หลังบ้านบันทึกrecord ชั่งน้ำหนัก รอรับสัญญาณกระจายเสียงจากท่อ Socket...');
         } else {
             hideLoader(); // ถ้าไม่สำเร็จ ปลดล็อกจอแล้วแจ้งเตือน
-            alert(`❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว`);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ ไม่สามารถ reset ได้เนื่องจากมีการชั่งน้ำหนักไปแล้ว",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         }
     })
     .catch(error => {
         hideLoader();
         console.error("❌ API Error:", error);
-        alert("❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง");
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: "❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อสั่งตัดงานได้ กรุณาลองใหม่อีกครั้ง",
+            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+        });
     });
     }
 
@@ -829,11 +893,25 @@
                 // วาดตารางใหม่เฉพาะแถวนี้โดยไม่เปลี่ยนหน้า
                 targetRow.data(rowData).draw(false);
             } else {
-                alert(`❌ ไม่สามารถสลับขนาดได้: ${response.message || ''}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "💥 เกิดข้อผิดพลาดในการสลับขนาด: " + (response.message || ''),
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
             }
         } catch (err) {
             console.error('💥 Error swapping position:', err);
-            alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         } finally {
             if (typeof hideLoader === 'function') hideLoader();
         }

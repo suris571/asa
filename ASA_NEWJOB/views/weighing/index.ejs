@@ -220,7 +220,14 @@
             e.preventDefault();
             
             if (!$('#id').val()) {
-                alert("❌ เกิดข้อผิดพลาด: ไม่สามารถบันทึกได้เนื่องจากไม่มีรายการที่ถูกเลือก");
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: 'ไม่สามารถบันทึกได้เนื่องจากไม่มีรายการที่ถูกเลือก',
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
                 return;
             }
 
@@ -274,19 +281,38 @@
                         await sendDataToPrint({ url: urlPrintBarcode, body: formData });
                     } catch (printError) {
                         console.warn("⚠️ สั่งพิมพ์ไม่สำเร็จ:", printError);
-                        alert("💥 เกิดข้อผิดพลาดในการพิมพ์: " + printError);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'เกิดข้อผิดพลาด',
+                            text: "💥 เกิดข้อผิดพลาดในการพิมพ์: " + printError,
+                            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                        });
                     }
 
                 } else {
                     hideLoader();
-                    console.log("❌ เกิดข้อผิดพลาด: " + response.message);
-                    alert("❌ " + response.message);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: "❌ " + response.message,
+                        showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                        timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                        timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                    });
                 }
 
             } catch (err) {
                 hideLoader();
-                console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
-                alert("💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
             }
             hideLoader();
         });
@@ -331,7 +357,14 @@
             const orderNo = $('#orderNo').val().trim();
 
             if (!orderNo) {
-                alert('❌ กรุณาระบุเลขใบสั่งผลิตก่อน!');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "💥 กรุณาระบุเลขใบสั่งผลิตก่อน!",
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
                 return false;
             }
 
@@ -361,17 +394,38 @@
                         $('#orderQueueModal').modal('show');
                     } else {
                         modalOrderTable.clear().draw(false);
-                        alert(`⚠️ ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: ${orderNo}`);
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'คำเตือน',
+                            text: "💥 ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: " + orderNo,
+                            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                        });
                     }
                 } else {
                     modalOrderTable.clear().draw(false);
-                    alert(`⚠️ ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: ${orderNo}`);
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'คำเตือน',
+                        text: "💥 ไม่พบข้อมูลลูกม้วนย่อยภายใต้ใบสั่งผลิตเลขที่: " + orderNo,
+                        showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                        timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                        timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                    });
                 }
                 },
                 error: function(xhr, status, error) {
                     console.error("❌ ยิง API พัง:", error);
                     modalOrderTable.clear().draw(false);
-                    alert("❌ เกิดข้อผิดพลาดทางเทคนิค ไม่สามารถดึงข้อมูลได้");
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: "💥 เกิดข้อผิดพลาดทางเทคนิค ไม่สามารถดึงข้อมูลได้",
+                        showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                        timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                        timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                    });
                 },
                 complete: function() {
                     // 🔓 4. คืนค่าปุ่มกลับเป็นปกติ
@@ -530,8 +584,7 @@
                 if(response && response.data && $('#id').val() == response.data.id){
                     return
                 }
-                resetWeighingForm()
-                // alert('🎉 รายการรอชั่งน้ำหนักไม่มีในรายการแล้ว!');
+                resetWeighingForm();
             }
         });
         
@@ -729,7 +782,14 @@
             await sendDataToPrint({ url: urlPrintBarcode, body: data });
         } catch (error) {
             console.error("💥 สั่งพิมพ์บาร์โค้ดล้มเหลว:", error);
-            alert("💥 เกิดข้อผิดพลาดในการสั่งพิมพ์บาร์โค้ด: " + error);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "💥 เกิดข้อผิดพลาดในการสั่งพิมพ์บาร์โค้ด: " + error,
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         } finally {
             hideLoader();
         }

@@ -618,7 +618,14 @@
 
     async function closeReel(id, reelNo) {
         if (!id) {
-            alert("❌ ไม่พบข้อมูล ID ของ Reel");
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "💥 ไม่พบข้อมูล ID ของ Reel",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
             return;
         }
 
@@ -638,7 +645,14 @@
             });
 
             if (response.success) {
-                alert(`✅ ปิด Reel No. ${reelNo} เรียบร้อยแล้ว`);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'สำเร็จ',
+                    text: `✅ ปิด Reel No. ${reelNo} เรียบร้อยแล้ว`,
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
                 // 🎯 ถ้าระบบมีท่อ Socket สามารถเรียกใช้เพื่อกระจายข่าวสาร หรือโหลดตาราง modal ใหม่ได้ตรงนี้
                 if (typeof qcModalTable !== 'undefined') {
                     // ตัวอย่าง: ลบแถวที่ปิดแล้วออกจากตารางหน้าจอ
@@ -648,11 +662,25 @@
                     }
                 }
             } else {
-                alert(`❌ ไม่สามารถปิด Reel ได้: ${response.message || ''}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "💥 เกิดข้อผิดพลาดในการปิด Reel: " + (response.message || ''),
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
             }
         } catch (err) {
             console.error('💥 Error closing reel:', err);
-            alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         } finally {
             if (typeof hideLoader === 'function') hideLoader();
         }
@@ -735,7 +763,14 @@
                         // 🟢 AJAX สำเร็จ -> ส่ง response.data กลับไปให้ฟังก์ชัน A
                         resolve(response.data); 
                     } else {
-                        alert('❌ ไม่สามารถดึงข้อมูล Reel ได้: ' + (response.message || 'รูปแบบข้อมูลไม่ถูกต้อง'));
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'เกิดข้อผิดพลาด',
+                            text: "❌ ไม่สามารถดึงข้อมูล Reel ได้: " + (response.message || 'รูปแบบข้อมูลไม่ถูกต้อง'),
+                            showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                            timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                            timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                        });
                         
                         // 🔴 AJAX ไม่สำเร็จเนื่องจาก Logic หลังบ้าน -> แจ้ง reject
                         reject(response.message || 'รูปแบบข้อมูลไม่ถูกต้อง');
@@ -744,7 +779,14 @@
                 error: function (xhr, status, error) {
                     if (typeof hideLoader === 'function') hideLoader();
                     console.error("💥 AJAX Error [loadQcReelData]:", error);
-                    alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อดึงข้อมูล Reel ได้');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อดึงข้อมูล Reel ได้",
+                        showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                        timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                        timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                    });
                     
                     // 🔴 AJAX ไม่สำเร็จจาก Network/Server error -> แจ้ง reject
                     reject(error);
@@ -758,7 +800,14 @@
         const splitSetId = $('#selectedSplitSetId').val();
         const reelId = $('#selectedReelId').val();
         if (!splitSetId || !reelId) {
-            alert('กรุณาเลือกรายการ Reel ก่อนกดบันทึกครับ');
+            Swal.fire({
+                icon: 'warning',
+                title: 'คำเตือน',
+                text: "กรุณาเลือกรายการ Reel ก่อนกดบันทึกครับ",
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
             return;
         }
         const payload = {
@@ -775,7 +824,14 @@
             });
             if (typeof hideLoader === 'function') hideLoader();
             if (response && response.success) {
-                alert('✅ บันทึกเลือก Reel สำเร็จ!');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'บันทึกสำเร็จ',
+                    text: "✅ บันทึกเลือก Reel สำเร็จ!",
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
                 const targetRow = queueTable.row(function (idx, data, node) {
                     return data.split_set_id == splitSetId;
                 });
@@ -798,7 +854,14 @@
                     qcReelTable.ajax.reload(null, false);
                 }
             } else {
-                alert('❌ ' + (response.message || 'บันทึกไม่สำเร็จ'));
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: response.message || 'บันทึกไม่สำเร็จ',
+                    showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                    timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                    timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                });
             }
 
         } catch (err) {
@@ -811,8 +874,14 @@
             if (err.responseJSON && err.responseJSON.message) {
                 errorMsg = err.responseJSON.message; // จะได้ข้อความ "โควตาคงเหลือไม่พอ..." จาก Backend
             }
-
-            alert('⚠️ ' + errorMsg);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: errorMsg,
+                showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+            });
         }
     }
 
