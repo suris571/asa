@@ -14,7 +14,37 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🎯 1. Query หลักแบบเดิม
+            // 🎯 1. ดึงรายการ remark ย้อนหลัง 3 เดือนจาก pd_roll
+            let remarksList = [];
+            let holdCauseList = [];
+            if (type != "history") {
+                const remarkSql = `
+                    SELECT DISTINCT REMARKS 
+                    FROM pd_roll 
+                    WHERE create_date >= ADD_MONTHS(SYSDATE, -3)
+                    AND REMARKS IS NOT NULL 
+                    AND TRIM(REMARKS) IS NOT NULL
+                    ORDER BY REMARKS ASC
+                `;
+                const remarkResult = await conn.execute(remarkSql, {}, {
+                    outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+                });
+                remarksList = remarkResult.rows?.map(r => r.REMARKS) || [];
+                // 🎯 2. ดึงรายการ hold_cause ย้อนหลัง 3 เดือนจาก pd_roll
+                const holdCauseSql = `
+                    SELECT DISTINCT hold_cause 
+                    FROM pd_roll 
+                    WHERE create_date >= ADD_MONTHS(SYSDATE, -3)
+                    AND hold_cause IS NOT NULL 
+                    AND TRIM(hold_cause) IS NOT NULL
+                    ORDER BY hold_cause ASC
+                `;
+                const holdCauseResult = await conn.execute(holdCauseSql, {}, {
+                    outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+                });
+                holdCauseList = holdCauseResult.rows?.map(r => r.HOLD_CAUSE) || [];
+            }
+            // 🎯 3. Query หลัก (ตามเดิม)
             let sql = `
                 SELECT 
                     id                  AS "id",
@@ -46,7 +76,6 @@ class WeighingModel {
                 FROM pl_wait_weighing_view
                 WHERE 1 = 1
             `;
-            // 🛠️ แก้จุดที่ 1: เปลี่ยน TRIM(status) = '' เป็น status IS NULL (เพราะ Oracle มอง '' เป็น NULL)
             if (!type) {
                 sql += ` AND status IS NULL`;
             }
@@ -54,49 +83,41 @@ class WeighingModel {
                 sql += ` AND status IS NOT NULL`;
             }
             const binds = {};
-            // 🔍 2. กรองตาม ID เครื่อง
             if (productionLineId) {
                 sql += ` AND pl_production_line_id = :productionLineId`;
                 binds.productionLineId = productionLineId;
             }
             const isSearchMode = search && search.trim() !== "";
-            // 🔍 3. กรองตาม order_no
             if (isSearchMode) {
                 sql += ` AND UPPER(order_no) LIKE :search`;
                 binds.search = `%${search.trim().toUpperCase()}%`;
             }
             const rollSearchMode = roll_no && roll_no.trim() !== "";
-            // 🔍 4. กรองตาม roll_no
             if (rollSearchMode) {
                 sql += ` AND UPPER(roll_no) LIKE :roll_no`;
                 binds.roll_no = `%${roll_no.trim().toUpperCase()}%`;
             }
-            // 🛠️ แก้จุดที่ 2: ถ้าต้องการเอาแค่ 1 รายการ ให้จำกัด ROWNUM ใน WHERE ก่อนเข้า ORDER BY
             if (!isSearchMode && !type) {
                 sql += ` AND ROWNUM <= 1`;
             }
             if (startDate && startDate.trim() !== '') {
-                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
-                binds.startDate = startDate.trim(); // เช่น "08/08/2026"
+                binds.startDate = startDate.trim();
             }
             if (endDate && endDate.trim() !== '') {
-                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
-                binds.endDate = endDate.trim(); // เช่น "10/08/2026"
+                binds.endDate = endDate.trim();
             }
-            // 🎯 5. จัดเรียงคิวแบบเดิมไว้ล่างสุด
             sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
             console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const rows = result.rows || [];
-            // 🎯 Helper Function สำหรับแปลงวันที่ + คำนวณ remaining
+            // 🎯 Helper Function สำหรับแปลงข้อมูล + ยัด List เข้าไป
             const processRowData = (row) => {
                 if (!row)
                     return row;
-                // 📅 1. จัด Format วันที่
                 if (row.createdAt) {
                     const dateObj = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
                     if (!isNaN(dateObj.getTime())) {
@@ -108,13 +129,15 @@ class WeighingModel {
                 if (!row.part && !row.status) {
                     row.part = WeighingModel.getCurrentShift();
                 }
-                // 🧮 2. คำนวณ remaining = total - alreadyDone
                 const total = Number(row.total || 0);
                 const alreadyDone = Number(row.alreadyDone || 0);
                 row.remaining = Math.max(0, total - alreadyDone);
+                // 🎯 เพิ่ม remarks_list และ hold_cause_list ย้อนหลัง 3 เดือนลงในวัตถุ
+                row.remarks_list = remarksList;
+                row.hold_cause_list = holdCauseList;
                 return row;
             };
-            // 🎯 6. Return ข้อมูล
+            // 🎯 4. Return ข้อมูล
             if (isSearchMode || type === "history") {
                 return rows.map((row) => processRowData(row));
             }
@@ -372,6 +395,7 @@ class WeighingModel {
                     PL_PRODUCTION_LINE_ID,
                     QC_REEL_ID,
                     ROLL_NO,
+                    ROLL_NO_REF,
                     ROLL_BARCODE,
                     ROLL_DATE,
                     GRADE_ID,
@@ -385,6 +409,7 @@ class WeighingModel {
                     PL_ORDER_DETAIL_ID,
                     RETURN_OLD_ROLL,
                     R_ROLL,
+                    HOLD_CAUSE,
                     SPLIT_SET_ID
                 )
                 SELECT
@@ -397,19 +422,21 @@ class WeighingModel {
                     v.pl_production_line_id,                    -- PL_PRODUCTION_LINE_ID
                     NVL(:qc_reel_id, 0),                        -- QC_REEL_ID
                     :roll_no,                                   -- ROLL_NO
+                    :roll_no,                                   -- ROLL_NO
                     :roll_no,                                   -- ROLL_BARCODE
                     SYSDATE,                                    -- ROLL_DATE
                     v.grade_id,                                 -- GRADE_ID
                     v.size_id,                                  -- P_SIZE_ID
                     v.model,                                    -- MODEL
                     :weigh,                                     -- WEIGHT
-                    NVL(v.diameter, 0),                         -- DIAMETER
+                    NVL(:diameter, 0),                         -- DIAMETER
                     :status,                                    -- STATUS
                     'No',                                       -- STOCK_STATUS
                     :remark,                                    -- REMARKS
                     v.pl_order_detail_id,                       -- PL_ORDER_DETAIL_ID
                     'N',                                        -- RETURN_OLD_ROLL
                     :roll,                                      -- R_ROLL
+                    :hold_cause,                                -- HOLD_CAUSE
                     v.split_set_id                              -- split_set_id
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
@@ -422,8 +449,12 @@ class WeighingModel {
                 staffId: data.staffId || 1,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
+                roll_no_ref: roll_no,
+                roll_no_barcode: roll_no,
                 qc_reel_id: data.qc_reel_id || 0,
                 roll: data.roll,
+                diameter: data.diameter || null,
+                hold_cause: data.hold_cause || null,
             };
             const result = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;

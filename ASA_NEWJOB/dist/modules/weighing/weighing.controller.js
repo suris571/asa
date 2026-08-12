@@ -5,7 +5,7 @@ const weighing_model_1 = require("./weighing.model");
 const socket_1 = require("../../socket");
 const Common_1 = require("../util/Common");
 const getWeighingPage = async (req, res) => {
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     try {
         const today = new Date();
         const twoDaysAgo = new Date();
@@ -16,6 +16,7 @@ const getWeighingPage = async (req, res) => {
         // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
         const getNextWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId);
         const historyWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate);
+        console.log("🚀 ประวัติการชั่งน้ำหนักย้อนหลัง 2 วัน:", historyWeighing);
         // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
         res.render('weighing/index', {
             nextData: getNextWeighing,
@@ -33,7 +34,7 @@ const getWeighingPage = async (req, res) => {
 exports.getWeighingPage = getWeighingPage;
 const saveWeighingController = async (req, res) => {
     try {
-        const { id, weight, status, remark, model } = req.body;
+        const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
         let staffId = req.session.user?.staff_id || 1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
@@ -52,6 +53,8 @@ const saveWeighingController = async (req, res) => {
             remark: remark && remark.trim() !== '' ? remark.trim() : null,
             model: model && model.trim() !== '' ? model.trim() : null,
             staffId: staffId,
+            diameter: diameter && diameter.trim() !== '' ? diameter.trim() : null,
+            hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
         };
         const waitWeighingInfo = await weighing_model_1.WeighingModel.GetWaitWeighingInfoById(payload.id);
         if (!waitWeighingInfo) {
@@ -67,6 +70,8 @@ const saveWeighingController = async (req, res) => {
             staffId: payload.staffId,
             qc_reel_id: waitWeighingInfo.QC_REEL_ID,
             roll: waitWeighingInfo.ROLL,
+            diameter: payload.diameter,
+            hold_cause: payload.hold_cause,
         });
         if (insertPD_ROLL?.id) {
             await weighing_model_1.WeighingModel.InsertPD_ROLL_QUALITY({
@@ -81,7 +86,7 @@ const saveWeighingController = async (req, res) => {
         if (!isSuccess) {
             return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
         }
-        const productionLineId = req.session.user?.productionLineId;
+        const productionLineId = Number(req.session.user?.productionLineId);
         const io = (0, socket_1.getIO)();
         // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/weighing").to(`machine_room_${productionLineId}`) : io.of("/socket/weighing");
@@ -100,7 +105,7 @@ const saveWeighingController = async (req, res) => {
 };
 exports.saveWeighingController = saveWeighingController;
 const fetchweighinglist = async (req, res) => {
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     try {
         const search = req.query.order_no ? String(req.query.order_no).trim() : '%';
         console.log(search);

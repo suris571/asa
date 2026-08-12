@@ -141,11 +141,12 @@ const initSocket = (httpServer) => {
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/split-cut-set");
         socket.on("get_filtered_queue", async (payload) => {
             try {
-                const { orderNo, productionLineId, status } = payload;
+                const { orderNo, productionLineId, status, startDate, endDate } = payload;
                 // ดึง lineId จาก payload หรือใช้ค่าที่ได้ตอนเชื่อมต่อ
                 const targetLineId = productionLineId || currentLineId;
+                console.log(`📌 [Socket] ดึงข้อมูลคิวรอตัดแยก Set ${JSON.stringify(payload)}`);
                 // 🎯 เรียก Model ตัวใหม่ที่เราเพิ่ม pl_production_line_id เรียบร้อยแล้ว
-                const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo, targetLineId, status);
+                const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo, targetLineId, status, startDate, endDate);
                 socket.emit("update_queue_table", { success: true, data: data });
             }
             catch (error) {
@@ -166,6 +167,7 @@ const initSocket = (httpServer) => {
         socket.on("get_filtered_queue", async (payload) => {
             try {
                 const { startDate, endDate, status, orderNo } = payload;
+                console.log(`📌 [Socket] ดึงข้อมูลคิว QC CLOSE REEL ${JSON.stringify(payload)}`);
                 const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(orderNo, startDate, endDate, currentLineId, status);
                 socket.emit("update_queue_table", { success: true, data: data });
             }

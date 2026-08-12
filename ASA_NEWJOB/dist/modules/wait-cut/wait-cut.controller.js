@@ -6,7 +6,7 @@ const socket_1 = require("../../socket");
 const Common_1 = require("../util/Common");
 const getWaitCutPage = async (req, res) => {
     try {
-        const productionLineId = req.session.user?.productionLineId;
+        const productionLineId = Number(req.session.user?.productionLineId);
         const queueData = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, null, null, null, null, productionLineId);
         const statusList = await wait_cut_model_1.WaitCutModel.getAllCutStatuses();
         res.render("wait-cut/index", { orders: queueData, statusList });
@@ -19,7 +19,7 @@ const getWaitCutPage = async (req, res) => {
 exports.getWaitCutPage = getWaitCutPage;
 const getWaitCutSplitSet = async (req, res) => {
     try {
-        const productionLineId = req.session.user?.productionLineId;
+        const productionLineId = Number(req.session.user?.productionLineId);
         const queueData = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(null, productionLineId);
         const statusList = await wait_cut_model_1.WaitCutModel.getAllCutStatuses();
         res.render("wait-cut/index_splite_cut", { orders: queueData, statusList });
@@ -33,7 +33,7 @@ exports.getWaitCutSplitSet = getWaitCutSplitSet;
 const startProduction = async (req, res) => {
     const { orderId, orderDetailId, qty, type } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     if (!orderId || !orderDetailId) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน (กรุณาระบุ orderId และ orderDetailId)" });
@@ -119,7 +119,7 @@ exports.startProduction = startProduction;
 const startWeighing = async (req, res) => {
     const { split_set_id, pl_order_id, pl_order_detail_id, type, cut_length } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     const io = (0, socket_1.getIO)();
     // 🎯 เตรียม Target Room สำหรับยิงไปหน้า Split Set เฉพาะเครื่อง
@@ -185,7 +185,7 @@ const startWeighing = async (req, res) => {
 };
 exports.startWeighing = startWeighing;
 const qcCloseReel = async (req, res) => {
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     const staffId = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     try {
         const today = new Date();
@@ -228,6 +228,7 @@ const saveRemarkController = async (req, res) => {
         }
         const isSuccess = await wait_cut_model_1.WaitCutModel.saveRemarks(validItems);
         if (isSuccess) {
+            await (0, socket_1.FnNextQcCloseReel)();
             return res.json({
                 success: true,
                 message: `บันทึกหมายเหตุสำเร็จเรียบร้อย (${validItems.length} รายการ)`,
@@ -251,7 +252,7 @@ const saveRemarkController = async (req, res) => {
 };
 exports.saveRemarkController = saveRemarkController;
 const getQcReelListController = async (req, res) => {
-    const productionLineId = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
+    const productionLineId = Number(req.session.user?.productionLineId); // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     try {
         const search = req.query.search ? String(req.query.search).trim() : "%";
         const data = await wait_cut_model_1.WaitCutModel.getReelList(search, productionLineId);
@@ -313,7 +314,7 @@ const saveQcCloseReelController = async (req, res) => {
 exports.saveQcCloseReelController = saveQcCloseReelController;
 const swapSplitSetSize = async (req, res) => {
     const { splitSetId, posA, posB } = req.body;
-    const productionLineId = req.session.user?.productionLineId;
+    const productionLineId = Number(req.session.user?.productionLineId);
     const staffId = req.session.user?.staff_id; // หรือ userId จาก session
     try {
         // 1. สลับค่าใน DB

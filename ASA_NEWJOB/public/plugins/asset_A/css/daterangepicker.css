@@ -408,3 +408,21 @@
     clear: none !important;
   }
 }
+
+
+
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    font-size: 25px !important;        /* ขยายขนาดตัว x (ปรับเพิ่ม/ลดตามชอบ) */
+    font-weight: bold !important;      /* ทำตัวหนาเพื่อให้เห็นชัดขึ้น */
+    color: #dc3545 !important;         /* ใส่สีแดงให้สังเกตง่าย (เปลี่ยนเป็น #6c757d ถ้าชอบสีเทา) */
+    margin-right: 6px !important;      /* เว้นระยะห่างจากลูกศรขวา */
+    cursor: pointer !important;
+    margin-top: -12px!important;  /* ปรับให้ตัว x อยู่กึ่งกลางแนวตั้งของ Select2 */
+}
+
+/* 🎯 เพิ่มเอฟเฟกต์ตอนเอาเมาส์ไปชี้ (Hover) */
+.select2-container--default .select2-selection--single .select2-selection__clear:hover {
+    color: #bd2130 !important;
+    transform: scale(1.25);            /* ขยายใหญ่อีกนิดตอนเมาส์ชี้ */
+    transition: transform 0.1s ease;
+}

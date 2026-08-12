@@ -235,9 +235,9 @@
                 <div class="custom-filter-item">
                     <label for="searchStatus">🚦 สถานะ:</label>
                     <select id="searchStatus" class="form-control form-control-sm">
-                        <option value="1">รอปิด</option>
-                        <option value="2">ปิดแล้ว</option>
-                        <option value="">ทั้งหมด</option>
+                        <option value="open">รอปิด</option>
+                        <option value="closed">ปิดแล้ว</option>
+                        <option value="qc_all">ทั้งหมด</option>
                     </select>
                 </div>
 
@@ -388,18 +388,33 @@
                 data: "remark",
                 defaultContent: "",
                 render: function (data, type, row) {
-                    // 🎯 ถ้าเป็นการ Render เพื่อแสดงผลในตาราง (type === 'display')
                     if (type === 'display') {
-                        const remarkValue = data ? data : '';
-                        
-                        // 🎯 คาย <input type="text"> ออกมา พร้อมใส่ value และ data-id (ดึงจาก row.id)
-                        return `<input type="text" 
-                                    class="form-control form-control-sm remark-input" 
-                                    data-id="${row.split_set_id}" 
-                                    value="${remarkValue}" 
-                                    placeholder="ระบุหมายเหตุ...">`;
+                        const remarkValue = data ? String(data).trim() : '';
+                        const presetOptions = Array.isArray(row.list_remark) ? row.list_remark : [];
+
+                        let optionsHtml = `<option value=""></option>`;
+                        let hasMatchedPreset = false;
+
+                        presetOptions.forEach(opt => {
+                            const optStr = String(opt).trim();
+                            const isSelected = (optStr === remarkValue);
+                            if (isSelected) hasMatchedPreset = true;
+
+                            optionsHtml += `<option value="${optStr}" ${isSelected ? 'selected' : ''}>${optStr}</option>`;
+                        });
+
+                        if (remarkValue !== '' && !hasMatchedPreset) {
+                            optionsHtml += `<option value="${remarkValue}" selected>${remarkValue}</option>`;
+                        }
+
+                        // 🎯 เพิ่ม data-original="${remarkValue}" เพื่อเก็บค่าตั้งต้นไว้เปรียบเทียบ
+                        return `<select class="form-control form-control-sm qc-remark-select" 
+                                        data-id="${row.split_set_id}" 
+                                        data-original="${remarkValue}" 
+                                        style="width: 100%;">
+                                    ${optionsHtml}
+                                </select>`;
                     }
-                    // ถ้าเป็นประเภทอื่น (เช่น sort, filter) ให้คายค่า data ปกติออกไป
                     return data;
                 }
             }
@@ -407,6 +422,15 @@
         "createdRow": function(row, data, dataIndex) {
             // ผูก Primary Key ของตาราง pl_cut_split_set ไว้ที่แถว
             $(row).attr('data-split-id', data.splitSetId);
+        },
+        drawCallback: function (settings) {
+            $(this.api().table().container()).find('.qc-remark-select').select2({
+                tags: true,
+                placeholder: 'ระบุหมายเหตุ...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $(document.body) // 🎯 บังคับให้คำนวณพื้นที่อิงตาม Body ของหน้าเว็บ
+            });
         }
     });
     
@@ -431,6 +455,7 @@
 
     // ผูกคำสั่งกับปุ่มกดค้นหาหลักของระบบ
     $('#btnDoQuery').on('click', function() {
+        showLoader();
         fetchFilteredQueue();
     });
 
@@ -444,31 +469,47 @@
     });
 
 
-    $('#btnSaveAllRemark').on('click', async function() {
+    $('#btnSaveAllRemark').off('click').on('click', async function() {
         const payloadList = [];
 
-        // 🎯 1. วนลูปตรวจทุกช่อง .remark-input ในตาราง (รวมถึงหน้าที่โดน Pagination ซ่อนอยู่ถ้าใช้ DataTables)
-        $('.remark-input').each(function() {
-            const input = $(this);
-            const id = input.data('id');
-            const remarkVal = input.val().trim();
+        // 🎯 วนลูปตรวจทุกแถวใน DataTables
+        queueTable.$('.qc-remark-select').each(function() {
+            const select = $(this);
+            const id = select.attr('data-id');
+            const originalVal = (select.attr('data-original') || '').trim(); // ค่าเดิมจาก DB
+            const currentVal = (select.val() || '').trim();                 // ค่าปัจจุบันบนหน้าจอ
 
-            // 🎯 2. กรองเอาเฉพาะแถวที่มีการกรอกข้อความ (ไม่เป็นค่าว่าง)
-            if (remarkVal !== '') {
+            // 🟢 เช็กเฉพาะแถวที่ค่าปัจจุบัน "ไม่เท่ากับ" ค่าเดิม (มีการแก้ไข หรือถูกล้างค่าออก)
+            if (currentVal !== originalVal) {
                 payloadList.push({
                     id: id,
-                    remark: remarkVal
+                    remark: currentVal // ส่งค่าใหม่ไป (ถ้าโดนลบออก currentVal จะเป็น "" ซึ่ง Backend จะนำไป Update เป็น NULL/ค่าว่าง)
                 });
             }
         });
 
-        console.log("📤 รายการที่จะส่งไปอัปเดต:", payloadList);
+        console.log("📤 รายการที่มีการแก้ไข:", payloadList);
+
         if (payloadList.length === 0) {
-            alert('กรุณากรอกหมายเหตุอย่างน้อย 1 รายการก่อนกดบันทึกครับ');
+            Swal.fire({
+                icon: 'info',
+                title: 'ไม่มีการเปลี่ยนแปลง',
+                text: 'ไม่พบรายการหมายเหตุที่ถูกแก้ไขหรือเปลี่ยนแปลงค่ะ'
+            });
             return;
         }
+
+        Swal.fire({
+            title: 'กำลังบันทึกข้อมูล...',
+            text: `กำลังประมวลผล ${payloadList.length} รายการ กรุณารอ สักครู่`,
+            allowOutsideClick: false, // ห้ามคลิกพื้นหลังเพื่อปิด
+            allowEscapeKey: false,   // ห้ามกด ESC เพื่อปิด
+            didOpen: () => {
+                Swal.showLoading();  // เปิดใช้งานไอคอนหมุน Loading
+            }
+        });
+
         try {
-            // 🎯 4. ส่ง Array ก้อนนี้ไปหา Backend (พอร์ต 3000)
             const response = await $.ajax({
                 url: '/wait-cut/qc-close-reel/save-remark',
                 type: 'POST',
@@ -477,15 +518,26 @@
             });
 
             if (response.success) {
-                alert(`✅ บันทึกหมายเหตุสำเร็จ ${payloadList.length} รายการ!`);
-                // โหลดตารางใหม่ หรืออัปเดตสถานะหน้าจอ
+                Swal.fire({
+                    icon: 'success',
+                    title: 'สำเร็จ',
+                    text: `บันทึกการเปลี่ยนแปลงสำเร็จ!`
+                });
             } else {
-                alert('❌ เกิดข้อผิดพลาด: ' + response.message);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: response.message
+                });
             }
 
         } catch (err) {
             console.error("💥 ยิงอัปเดต Remark ล้มเหลว:", err);
-            alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+            Swal.fire({
+                icon: 'error',
+                title: 'ผิดพลาด',
+                text: 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'
+            });
         }
     });
 

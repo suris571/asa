@@ -1,6 +1,12 @@
 <%- include('../partials/header') %>
 <%- include('../partials/sidebar') %>
 <style>
+    input[readonly], 
+    textarea[readonly] {
+        cursor: not-allowed !important;
+        background-color: #e9ecef !important;
+        opacity: 0.8;
+    }
   /* 1. บังคับแผงควบคุมชั้นนอกสุดให้เรียงตัวเป็นแนวขวางบรรทัดเดียว ไม่ให้หักหล่น */
     .dataTables_wrapper .row:first-child {
         display: flex !important;
@@ -104,6 +110,8 @@
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     text-align: center;
 }
+
+
 </style>
 
 <div id="pageLoader" class="loading-overlay" style="display: none;">
@@ -166,7 +174,8 @@
     socket.off('historyUpdate');
 
     async function sendDataToPrint(data) {
-        return $.ajax({
+        try {
+            return $.ajax({
             url: data.url,
             method: 'POST',
             contentType: 'application/json',
@@ -182,6 +191,13 @@
                 console.log("🏁 กระบวนการยิงพิมพ์จบลงแล้ว (Status: " + status + ")");
             }
         });
+        return true;
+        } catch (error) {
+            return Promise.reject(error);
+        } finally {
+            return true; // 🔒 ป้องกัน Promise ถูกค้างคา
+        }
+        
     }
 
     $(function () {
@@ -209,25 +225,24 @@
             }
 
             const selectedStatus = $('input[name="status"]:checked').val();
-            const remarkInput = $('#remark');
-            const remarkValue = remarkInput.val().trim();
+            const hold_cause_remarkInput = $('#hold_cause');
+            const hold_cause_remarkValue = hold_cause_remarkInput.val().trim();
+            const select2Selection = hold_cause_remarkInput.next('.select2-container').find('.select2-selection');
 
-            if (selectedStatus === 'HOLD' && remarkValue === '') {
-                remarkInput.css({
+            if (selectedStatus?.toUpperCase() === 'HOLD' && hold_cause_remarkValue === '') {
+                // 🔴 ทำกรอบสีแดงบนกล่อง Select2
+                select2Selection.css({
                     'border-color': '#dc3545',
                     'background-color': '#f8d7da',
                     'box-shadow': '0 0 0 0.2rem rgba(220, 53, 69, 0.25)'
                 });
-                remarkInput.focus();
+                
+                // 🎯 สั่งเปิด Dropdown ให้พนักงานพิมพ์เลือกได้ทันที (ใช้แทน .focus())
+                hold_cause_remarkInput.select2('open');
                 return;
             }
 
-            remarkInput.css({
-                'border-color': '',
-                'background-color': '',
-                'box-shadow': ''
-            });
-
+            ClearRedColor();
             const formData = {};
             $(this).serializeArray().forEach(item => {
                 formData[item.name] = item.value;
@@ -259,6 +274,7 @@
                         await sendDataToPrint({ url: urlPrintBarcode, body: formData });
                     } catch (printError) {
                         console.warn("⚠️ สั่งพิมพ์ไม่สำเร็จ:", printError);
+                        alert("💥 เกิดข้อผิดพลาดในการพิมพ์: " + printError);
                     }
 
                 } else {
@@ -272,6 +288,7 @@
                 console.error("💥 ยิงบันทึก DB ล้มเหลว:", err);
                 alert("💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
             }
+            hideLoader();
         });
 
 
@@ -485,6 +502,8 @@
                 { "orderable": false, "targets": 7 }
             ]
         });
+
+        
         
         socket.on('queue_updated', function(response) {
             console.log("⚡ ได้รับข้อมูลคิวถัดไปจาก Socket:", response);
@@ -501,10 +520,10 @@
                 $('#part').val(nextData.part);
                 
                 // ล้างช่องกรอกรอชั่งลูกใหม่
-                $('#remark').val('');
+                initWeighingSelect2(nextData.hold_cause_list, nextData.remarks_list);
                 
                 // คืนค่า CSS ให้ช่อง Remark (กรณีโดนกรอบแดงค้างไว้)
-                $('#remark').css({ 'border-color': '', 'background-color': '', 'box-shadow': '' });
+                ClearRedColor();
 
             } else {
                 // 🛑 ไม่มีคิวเหลือในระบบแล้ว
@@ -565,10 +584,10 @@
             $('#part').val('');
             
             // ล้างช่องกรอกรอชั่งลูกใหม่
-            $('#remark').val('');
+            $('#remark, #hold_cause').val('').trigger('change');
 
             // 3. (Optional) คืนค่า CSS ขอบแดงช่อง Remark เผื่อมีค้างไว้
-            $('#remark').css({ 'border-color': '', 'background-color': '', 'box-shadow': '' });
+            ClearRedColor();
         }
 
 
@@ -635,9 +654,51 @@
             fetchFilteredHistory();
         });
 
+        const initialHoldList   = <%- JSON.stringify(nextData?.hold_cause_list || []) %>;
+        const initialRemarkList = <%- JSON.stringify(nextData?.remarks_list || []) %>;
 
+        initWeighingSelect2(initialHoldList, initialRemarkList);
 
     });//ready fn
+
+    function ClearRedColor() {
+        $('#hold_cause, #remark')
+                .next('.select2-container')
+                .find('.select2-selection')
+                .css({
+                    'border-color': '',
+                    'background-color': '',
+                    'box-shadow': ''
+                });
+    }
+
+    function initWeighingSelect2(holdCauseList = [], remarksList = []) {
+        const $holdSelect = $('#hold_cause').empty().append('<option value=""></option>');
+        holdCauseList.forEach(val => {
+            $holdSelect.append(new Option(val, val, false, false));
+        });
+
+        const $remarkSelect = $('#remark').empty().append('<option value=""></option>');
+        remarksList.forEach(val => {
+            $remarkSelect.append(new Option(val, val, false, false));
+        });
+
+        $('#hold_cause').select2({
+            tags: true,
+            placeholder: "กรณีเลือก HOLD ระบุหมายเหตุตรงนี้...",
+            allowClear: true,
+            width: '100%'
+        });
+
+        $('#remark').select2({
+            tags: true,
+            placeholder: "หมายเหตุเพิ่มเติม...",
+            allowClear: true,
+            width: '100%'
+        });
+    }
+
+
     // 💾 ประกาศตัวแปรเก็บอินสแตนซ์ตารางไว้ในขอบเขตนอกสุดของสคริปต์
     function fetchFilteredHistory() {
         const rollNO = $('#searchRollNoInput').val() ? $('#searchRollNoInput').val().trim() : '';
@@ -664,8 +725,16 @@
 
         // 2. ส่งข้อมูลไปยังท่อพิมพ์บาร์โค้ด (พอร์ต 4000)
         showLoader()
-        await sendDataToPrint({ url: urlPrintBarcode, body: data });
-        hideLoader()
+        try {
+            await sendDataToPrint({ url: urlPrintBarcode, body: data });
+        } catch (error) {
+            console.error("💥 สั่งพิมพ์บาร์โค้ดล้มเหลว:", error);
+            alert("💥 เกิดข้อผิดพลาดในการสั่งพิมพ์บาร์โค้ด: " + error);
+        } finally {
+            hideLoader();
+        }
+        // await sendDataToPrint({ url: urlPrintBarcode, body: data });
+        // hideLoader()
     }
 
 

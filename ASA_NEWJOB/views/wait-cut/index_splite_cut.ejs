@@ -194,6 +194,14 @@
 
             <div class="custom-filter-container">
 
+                <div class="custom-filter-item">
+                    <label>📅 วันที่ผลิตเสร็จ:</label>
+                    <!-- เปลี่ยนเป็น type="text" และใส่คลาส date-picker พร้อมเปิด readonly ดักไว้ -->
+                    <input type="text" id="filterMinDate" class="form-control form-control-sm date-picker" placeholder="DD-MM-YYYY" readonly>
+                    <label>ถึง</label>
+                    <input type="text" id="filterMaxDate" class="form-control form-control-sm date-picker" placeholder="DD-MM-YYYY" readonly>
+                </div>
+
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
                     <label for="searchOrderNo">🔍 เลขที่ใบสั่งผลิต:</label>
@@ -203,7 +211,7 @@
                 <div class="custom-filter-item">
                     <label for="searchStatus">🚦 สถานะ:</label>
                     <select id="searchStatus" class="form-control form-control-sm">
-                        <option value="">-- เลือกสถาณะ --</option>
+                        <option value="">รอสั่งตัด</option>
                         <option value="5">เสร็จสิ้น</option>
                         <option value="4">HOLD</option>
                     </select>
@@ -270,6 +278,7 @@
         }
     }); 
    
+    const hasVal = (v) => v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== '-';
 
   // 🔒 ไม้ตายล้างท่อ: เคลียร์ Listener ตกค้างเก่าก่อนผูกใหม่ ป้องกันการยิงเบิ้ลในความจำ (Memory Leak)
   socket.off('connect');
@@ -278,29 +287,6 @@
   socket.off('queue_structure_changed');
 
   $(function () {
-    // 2. ตั้งค่าการควบคุม DateRangePicker ให้ล็อกฟอร์แมต ค.ศ.
-    $('.date-picker').daterangepicker({
-        singleDatePicker: true,
-        showDropdowns: true,
-        autoUpdateInput: false,
-        autoApply: false, // เปิดแถบปุ่มไว้เพื่อให้มีปุ่ม "ล้างค่า"
-        locale: {
-            format: 'YYYY-MM-DD',
-            cancelLabel: 'ล้างค่า', 
-            daysOfWeek: ['อา','จ','อ','พ','พฤ','ศ','ส'],
-            monthNames: ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'],
-            firstDay: 1
-        }
-    });
-
-    $('.date-picker').on('apply.daterangepicker', function(ev, picker) {
-        $(this).val(picker.startDate.format('YYYY-MM-DD'));
-        $(this).data('daterangepicker').hide(); // เลือกวันปุ๊บ สั่งซ่อนหน้าต่างทันที ไม่ต้องกดปุ่มตกลง
-    });
-
-    $('.date-picker').on('cancel.daterangepicker', function(ev, picker) {
-        $(this).val(''); // เคลียร์กล่องข้อความอย่างเดียวตามสั่ง ไม่ยิง Query
-    });
 
     // 3. จัดระเบียบสายสัญญาณ Socket Listeners ให้อยู่ในจังหวะที่ DOM พร้อมใช้งานอย่างปลอดภัย
     socket.on('connect', function() {
@@ -319,6 +305,7 @@
             fetchFilteredQueue(); 
         }
     });
+
 
     // 4. ดึงข้อมูลชุดแรกจาก Server มาเรนเดอร์ตารางตอนเปิดหน้าเว็บ
     const serverData = <%- JSON.stringify(orders) %>;
@@ -345,7 +332,6 @@
             { "data": "blad2", "defaultContent": "" },
             { "data": "blad3", "defaultContent": "" },
             { "data": "blad4", "defaultContent": "" },
-
             // 🎯 คอลัมน์ Size 1
             { 
                 "data": "size1", 
@@ -355,12 +341,20 @@
                     if (setStatus === 5) return data || '';
                     const id = row.split_set_id || row.splitSetId;
 
+                    const has1 = hasVal(row.size1);
+                    const has2 = hasVal(row.size2);
+
+                    // แสดงปุ่มไปทางขวาเฉพาะเมื่อช่อง 1 และช่อง 2 มีข้อมูลทั้งคู่
+                    const btnNext = (has1 && has2) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 2" onclick="swapPosition(${id}, 1, 2)">▶</button>` 
+                        : '';
+
                     return `
                         <div class="d-flex align-items-center justify-content-center">
                             <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 2" onclick="swapPosition(${id}, 1, 2)">▶</button>
+                            ${btnNext}
                         </div>
                     `;
                 }
@@ -374,15 +368,27 @@
                     if (setStatus === 5) return data || '';
                     const id = row.split_set_id || row.splitSetId;
 
+                    const has1 = hasVal(row.size1);
+                    const has2 = hasVal(row.size2);
+                    const has3 = hasVal(row.size3);
+
+                    const btnPrev = (has2 && has1) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 1" onclick="swapPosition(${id}, 2, 1)">◀</button>` 
+                        : '';
+                        
+                    const btnNext = (has2 && has3) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 3" onclick="swapPosition(${id}, 2, 3)">▶</button>` 
+                        : '';
+
                     return `
                         <div class="d-flex align-items-center justify-content-center">
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 1" onclick="swapPosition(${id}, 2, 1)">◀</button>
+                            ${btnPrev}
                             <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 3" onclick="swapPosition(${id}, 2, 3)">▶</button>
+                            ${btnNext}
                         </div>
                     `;
                 }
@@ -396,15 +402,27 @@
                     if (setStatus === 5) return data || '';
                     const id = row.split_set_id || row.splitSetId;
 
+                    const has2 = hasVal(row.size2);
+                    const has3 = hasVal(row.size3);
+                    const has4 = hasVal(row.size4);
+
+                    const btnPrev = (has3 && has2) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 2" onclick="swapPosition(${id}, 3, 2)">◀</button>` 
+                        : '';
+
+                    const btnNext = (has3 && has4) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 4" onclick="swapPosition(${id}, 3, 4)">▶</button>` 
+                        : '';
+
                     return `
                         <div class="d-flex align-items-center justify-content-center">
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 2" onclick="swapPosition(${id}, 3, 2)">◀</button>
+                            ${btnPrev}
                             <span class="font-weight-bold text-center d-inline-block mr-1" style="min-width: 24px;">${data || '&nbsp;'}</span>
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 4" onclick="swapPosition(${id}, 3, 4)">▶</button>
+                            ${btnNext}
                         </div>
                     `;
                 }
@@ -418,17 +436,23 @@
                     if (setStatus === 5) return data || '';
                     const id = row.split_set_id || row.splitSetId;
 
+                    const has3 = hasVal(row.size3);
+                    const has4 = hasVal(row.size4);
+
+                    const btnPrev = (has4 && has3) 
+                        ? `<button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
+                                style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
+                                title="สลับไปช่อง 3" onclick="swapPosition(${id}, 4, 3)">◀</button>` 
+                        : '';
+
                     return `
                         <div class="d-flex align-items-center justify-content-center">
-                            <button type="button" class="btn p-0 border-0 text-secondary opacity-50 mr-1" 
-                                    style="font-size: 11px; line-height: 1; color: #a0a6ab !important; background: transparent;" 
-                                    title="สลับไปช่อง 3" onclick="swapPosition(${id}, 4, 3)">◀</button>
+                            ${btnPrev}
                             <span class="font-weight-bold text-center d-inline-block" style="min-width: 24px;">${data || '&nbsp;'}</span>
                         </div>
                     `;
                 }
             },
-
             // 🎯 คอลัมน์ ความยาว
             { 
                 "data": "lenght",
@@ -560,6 +584,7 @@
 
     // ผูกคำสั่งกับปุ่มล้างคำค้น
     $('#btnClearQuery').on('click', function() {
+        showLoader();
         $('#filterMinDate').val('');
         $('#filterMaxDate').val('');
         $('#searchStatus').val('');
@@ -580,15 +605,19 @@
         }
     }
   
-  function fetchFilteredQueue() {
-      const filterParams = {
-          orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null,
-          status: $('#searchStatus').val() ? $('#searchStatus').val().trim() : null
-      };
-      console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
-      socket.emit('get_filtered_queue', filterParams);
-      hideLoader();
-  }
+    function fetchFilteredQueue() {
+        const rawStartDate = $('#filterMinDate').val() ? $('#filterMinDate').val().trim() : '';
+        const rawEndDate = $('#filterMaxDate').val() ? $('#filterMaxDate').val().trim() : '';
+        const filterParams = {
+            startDate: rawStartDate !== '' ? rawStartDate : null,
+            endDate: rawEndDate !== '' ? rawEndDate : null,
+            orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null,
+            status: $('#searchStatus').val() ? $('#searchStatus').val().trim() : null
+        };
+        console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
+        socket.emit('get_filtered_queue', filterParams);
+        hideLoader();
+    }
 
     // เผื่อฟังก์ชันปุ่มสถานะอื่นๆ รอไว้ไม่ให้เกิดข้อผิดพลาด
     function actionSetSuccess(split_set_id, pl_order_id, pl_order_detail_id) { 

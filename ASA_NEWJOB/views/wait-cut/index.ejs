@@ -205,14 +205,14 @@
                 <!-- 2. สถานะ -->
                 <div class="custom-filter-item">
                     <label for="searchStatus">🚦 สถานะ:</label>
-                    <select id="searchStatus" class="form-control form-control-sm">
-                        <option value="">-- เลือกสถาณะ --</option>
+                    <!-- 🎯 เพิ่ม style="min-width: 280px;" เพื่อขยายความกว้าง -->
+                    <select id="searchStatus" class="form-control form-control-sm" style="min-width: 280px;">
+                        <option value="ALL">รอสั่งตัด+รอตัด+ตัดไม่ครบ+HOLD</option>
                         <% if (typeof statusList !== 'undefined' && statusList.length > 0) { %>
                             <% statusList.forEach(function(item) { %>
                                 <option value="<%= item.id %>"><%= item.status %></option>
                             <% }); %>
                         <% } %>
-                        <option value="ALL">รอสั่งตัด+รอตัด+ตัดไม่ครบ+HOLD</option>
                     </select>
                 </div>
 
@@ -466,7 +466,7 @@
         showLoader();
         $('#filterMinDate').val('');
         $('#filterMaxDate').val('');
-        $('#searchStatus').val('');
+        $('#searchStatus').val('ALL');
         $('#searchOrderNo').val('');
         fetchFilteredQueue(); 
     });

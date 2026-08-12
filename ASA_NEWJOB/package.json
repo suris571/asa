@@ -17,7 +17,8 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "oracledb": "^5.5.0",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "sweetalert2": "^11.26.25"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

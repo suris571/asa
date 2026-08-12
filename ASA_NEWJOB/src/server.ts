@@ -32,7 +32,7 @@ initSocket(httpServer);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../views'));
 app.use(express.static(path.join(__dirname, '../public')));
-
+app.use('/sweetalert2', express.static(path.join(__dirname, '../node_modules/sweetalert2/dist')));
 // =========================================================
 // 🛡️ 5. SECTION: GLOBAL MIDDLEWARES (PARSERS & SESSION)
 // =========================================================

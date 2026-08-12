@@ -376,7 +376,7 @@ class WaitCutModel {
             }
         }
     }
-    static async getSplitSetQueueData(orderNo, lineId, status) {
+    static async getSplitSetQueueData(orderNo, lineId, status, startDate, endDate) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -423,6 +423,17 @@ class WaitCutModel {
             else if (!status) {
                 sql += ` AND split_status_id = 2 `;
             }
+            // 🔍 กรองตามช่วงวันที่
+            if (startDate && startDate.trim() !== '') {
+                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
+                sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
+                binds.startDate = startDate.trim(); // เช่น "08/08/2026"
+            }
+            if (endDate && endDate.trim() !== '') {
+                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
+                sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
+                binds.endDate = endDate.trim(); // เช่น "10/08/2026"
+            }
             if (status && typeof status === "string" && status.trim()) {
                 sql += ` AND split_status_id = :status `;
                 binds.status = Number(status);
@@ -430,6 +441,7 @@ class WaitCutModel {
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
             console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล Split Set Queue:", sql);
+            console.log("orderNo:", orderNo, "lineId:", lineId, "status:", status, "startDate:", startDate, "endDate:", endDate);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -673,7 +685,21 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🎯 Query ข้อมูลจาก View รวม 3 ตาราง (แก้ Alias คำสงวน "date" และ "time")
+            // 🎯 1. ดึงรายการ remark ที่ไม่ซ้ำกัน ย้อนหลัง 3 เดือนจาก finish_at
+            const remarkSql = `
+                SELECT DISTINCT remark 
+                FROM pl_cut_split_set_view 
+                WHERE finish_at >= ADD_MONTHS(SYSDATE, -3)
+                AND remark IS NOT NULL 
+                AND TRIM(remark) IS NOT NULL
+                ORDER BY remark ASC
+            `;
+            const remarkResult = await conn.execute(remarkSql, {}, {
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+            });
+            // แปลงผลลัพธ์เป็น Array ของ String เช่น ["ผ่านเกณฑ์", "ชำรุด", "ขนาดไม่ได้มาตรฐาน"]
+            const listRemark = remarkResult.rows?.map(r => r.REMARK) || [];
+            // 🎯 2. Query ข้อมูลหลักตามเงื่อนไขเดิม
             let sql = `
                 SELECT 
                     split_set_id        AS SPLIT_SET_ID,
@@ -712,35 +738,29 @@ class WaitCutModel {
                 binds.productionLineId = Number(productionLineId);
             }
             if (status && status !== null && status !== "null") {
-                if (status === "1") {
+                if (status === "open") {
                     sql += ` AND reel_no IS NULL`;
                 }
-                else if (status === "2") {
-                    sql += ` AND TRIM(qc_reel_id) IS NOT NULL`;
+                else if (status === "closed") {
+                    sql += ` AND qc_reel_id IS NOT NULL`;
                 }
             }
-            else if (!endDate && !startDate) {
+            else {
                 sql += ` AND reel_no IS NULL`;
             }
-            // 🔍 1. กรอง orderNo
             if (orderNo && orderNo.trim() !== '') {
                 sql += ` AND UPPER(order_no) LIKE :orderNo`;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
             }
-            // 📅 2. กรองช่วงวันที่ finish_at
             if (startDate && startDate.trim() !== '') {
-                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
-                binds.startDate = startDate.trim(); // เช่น "08/08/2026"
+                binds.startDate = startDate.trim();
             }
             if (endDate && endDate.trim() !== '') {
-                // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
-                binds.endDate = endDate.trim(); // เช่น "10/08/2026"
+                binds.endDate = endDate.trim();
             }
-            // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล QC Close Reel:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -753,6 +773,7 @@ class WaitCutModel {
                         number: i,
                         order_no: row.ORDER_NO,
                         orderItem: row.ORDER_ITEM,
+                        reel_no: row.REEL_NO,
                         grade1: row.GRADE1_NAME,
                         grade2: row.GRADE2_NAME,
                         grade3: row.GRADE3_NAME,
@@ -773,9 +794,10 @@ class WaitCutModel {
                         pl_order_id: row.PL_ORDER_ID,
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
-                        date: row.DATE_STR, // ดึงค่าจาก Alias ใหม่
-                        time: row.TIME_STR, // ดึงค่าจาก Alias ใหม่
-                        remark: row.REMARK
+                        date: row.DATE_STR,
+                        time: row.TIME_STR,
+                        remark: row.REMARK,
+                        list_remark: listRemark // 🎯 ยัด Array หมายเหตุย้อนหลัง 3 เดือนเข้าทุกวัตถุ
                     });
                 }
             }
@@ -1062,10 +1084,19 @@ class WaitCutModel {
                 const remainingCount = checkRemainingResult.rows[0]?.REMAINING_COUNT || 0;
                 if (Number(remainingCount) === 0) {
                     // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
+                    // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
+                    // const updateOrderSql = `
+                    //     UPDATE pl_order
+                    //     SET 
+                    //         status = :status,
+                    //         FINISH_ORDER = SYSDATE,
+                    //         UPDATE_STAFF = :staffId,
+                    //         UPDATE_DATE = SYSDATE
+                    //     WHERE id = :orderId
+                    // `;
                     const updateOrderSql = `
                         UPDATE pl_order
                         SET 
-                            status = :status,
                             FINISH_ORDER = SYSDATE,
                             UPDATE_STAFF = :staffId,
                             UPDATE_DATE = SYSDATE

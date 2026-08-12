@@ -160,9 +160,11 @@ CREATE TABLE pl_cut_split_set (
 );
 
 
-CREATE SEQUENCE seq_pl_cut_split_set
-START WITH 1
-INCREMENT BY 1;
+CREATE SEQUENCE SQ_PL_CUT_SPLIT_SET
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
 
 
 CREATE OR REPLACE TRIGGER trg_pl_cut_split_set_id
@@ -203,8 +205,9 @@ CREATE TABLE pl_wait_weighing (
     blade_size         NUMBER NULL,
     size_id            NUMBER NULL,
     grade_id           NUMBER NULL,
+    CREATE_DATE DATE DEFAULT SYSDATE,
     create_staff       NUMBER NULL,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at         DATE DEFAULT SYSDATE,
     UPDATE_STAFF NUMBER,
     UPDATE_DATE  DATE
 );
@@ -233,47 +236,73 @@ END;
 
 CREATE OR REPLACE VIEW PL_CUT_SPLIT_SET_VIEW AS
 SELECT 
-    p_cut.id                    AS split_set_id,
+    p_cut.id AS split_set_id,
     p_cut.pl_order_id,
     p_cut.pl_order_detail_id,
+    p_cut.qc_reel_id,
+        
     p_or.order_no,
     p_de.order_item,
-    g1.grade                    AS grade1_name,
-    g2.grade                    AS grade2_name,
-    g3.grade                    AS grade3_name,
-    g4.grade                    AS grade4_name,
+    g1.grade AS grade1_name,
+    g2.grade AS grade2_name,
+    g3.grade AS grade3_name,
+    g4.grade AS grade4_name,
     p_cut.set_no,
-    p_de.over_size1             AS blad1,
-    p_de.over_size2             AS blad2,
-    p_de.over_size3             AS blad3,
-    p_de.over_size4             AS blad4,
-    pz1.p_size                  AS size_1,
-    pz2.p_size                  AS size_2,
-    pz3.p_size                  AS size_3,
-    pz4.p_size                  AS size_4,
+    p_de.over_size1 AS blad1,
+    p_de.over_size2 AS blad2,
+    p_de.over_size3 AS blad3,
+    p_de.over_size4 AS blad4,
+        
+    pz1.p_size AS size_1,
+    pz2.p_size AS size_2,
+    pz3.p_size AS size_3,
+    pz4.p_size AS size_4,
+        
     p_cut.cut_length,
-    p_cut.status                AS split_status_id,
+    p_cut.status AS split_status_id,
+        
     p_de.queue_no,
-    p_de.cut_status_id          AS main_cut_status_id,
+    p_de.cut_status_id AS main_cut_status_id,
     qc_reel.reel_no,
     p_cut.remark,
     p_cut.finish_at,
     c_stat.status_name,
-    c_stat.id                   AS status_id,
-    p_or.pl_production_line_id
+    c_stat.id AS status_id,
+    p_or.pl_production_line_id,
+    NVL(w_all.wait_weighing_qty, 0) AS wait_weighing_qty,
+    NVL(w_pending.reel_use_qty, 0) AS reel_use_qty
+
 FROM pl_cut_split_set p_cut
-INNER JOIN pl_order_detail p_de   ON p_cut.pl_order_detail_id = p_de.id
-INNER JOIN pl_order p_or          ON p_cut.pl_order_id = p_or.id
-LEFT JOIN p_size pz1              ON p_de.size1_id = pz1.id
-LEFT JOIN p_size pz2              ON p_de.size2_id = pz2.id
-LEFT JOIN p_size pz3              ON p_de.size3_id = pz3.id
-LEFT JOIN p_size pz4              ON p_de.size4_id = pz4.id
-LEFT JOIN grade g1                ON p_de.grade1_id = g1.id
-LEFT JOIN grade g2                ON p_de.grade2_id = g2.id
-LEFT JOIN grade g3                ON p_de.grade3_id = g3.id
-LEFT JOIN grade g4                ON p_de.grade4_id = g4.id
-LEFT JOIN cut_statuses c_stat     ON p_cut.status = c_stat.id
-LEFT JOIN qc_reel                 ON p_cut.qc_reel_id = qc_reel.id;
+INNER JOIN pl_order_detail p_de ON p_cut.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or ON p_cut.pl_order_id = p_or.id
+LEFT JOIN p_size pz1 ON p_cut.size_id1 = pz1.id
+LEFT JOIN p_size pz2 ON p_cut.size_id2 = pz2.id
+LEFT JOIN p_size pz3 ON p_cut.size_id3 = pz3.id
+LEFT JOIN p_size pz4 ON p_cut.size_id4 = pz4.id
+LEFT JOIN grade g1 ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2 ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4 ON p_de.grade4_id = g4.id
+LEFT JOIN CUT_STATUSES c_stat ON p_cut.status = c_stat.id
+LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
+LEFT JOIN (
+    SELECT 
+        split_set_id,
+        COUNT(*) AS wait_weighing_qty
+    FROM pl_wait_weighing
+    WHERE split_set_id IS NOT NULL
+    GROUP BY split_set_id
+) w_all ON p_cut.id = w_all.split_set_id
+
+LEFT JOIN (
+    SELECT 
+        split_set_id,
+        COUNT(*) AS reel_use_qty
+    FROM pl_wait_weighing
+    WHERE split_set_id IS NOT NULL
+      AND status IS NULL
+    GROUP BY split_set_id
+) w_pending ON p_cut.id = w_pending.split_set_id
 
 
 
@@ -283,40 +312,53 @@ LEFT JOIN qc_reel                 ON p_cut.qc_reel_id = qc_reel.id;
 
 CREATE OR REPLACE VIEW PL_ORDER_VIEW AS
 SELECT 
-    p_or.id                                         AS pl_order_id,
-    p_de.id                                         AS pl_order_detail_id,
+    p_or.id as pl_order_id,
+    p_de.id as pl_order_detail_id,
     p_or.order_no,
     p_de.order_item,
-    g1.grade                                        AS grade1_name,
-    g2.grade                                        AS grade2_name,
-    g3.grade                                        AS grade3_name,
-    g4.grade                                        AS grade4_name,
+    g1.grade AS grade1_name,
+    g2.grade AS grade2_name,
+    g3.grade AS grade3_name,
+    g4.grade AS grade4_name,
     p_de.qty,
-    p_de.over_size1                                 AS blad1,
-    p_de.over_size2                                 AS blad2,
-    p_de.over_size3                                 AS blad3,
-    p_de.over_size4                                 AS blad4,
-    pz1.p_size                                      AS size_1,
-    pz2.p_size                                      AS size_2,
-    pz3.p_size                                      AS size_3,
-    pz4.p_size                                      AS size_4,
-    TO_CHAR(p_de.finish_date_time, 'YYYY-MM-DD')    AS finish_date,
-    TO_CHAR(p_de.finish_date_time, 'HH24:MI')       AS finish_time,
+    p_de.over_size1 AS blad1,
+    p_de.over_size2 AS blad2,
+    p_de.over_size3 AS blad3,
+    p_de.over_size4 AS blad4,
+    pz1.p_size AS size_1,
+    pz2.p_size AS size_2,
+    pz3.p_size AS size_3,
+    pz4.p_size AS size_4,
+    TO_CHAR(p_de.FINISH_DATE_TIME, 'YYYY-MM-DD') AS finish_date,
+    TO_CHAR(p_de.FINISH_DATE_TIME, 'HH24:MI') AS finish_time,
     p_or.diameter,
     p_or.status,
-    p_de.queue_no,
+    p_de.QUEUE_NO,
     p_de.cut_status_id,
-    p_or.pl_production_line_id
+    p_or.pl_production_line_id,
+    COMPLETED_SET_QTY,
+    COMPLETED_ROLL_QTY,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM PL_CUT_SPLIT_SET ss
+            WHERE ss.pl_order_id = p_or.id 
+              AND ss.pl_order_detail_id = p_de.id
+              AND TRIM(ss.sub_status) = 'บังคับเสร็จสิ้น'
+        ) THEN 'true'
+        ELSE 'false'
+    END AS is_force_finish
+
 FROM pl_order p_or
 JOIN pl_order_detail p_de ON p_or.id = p_de.pl_order_id
-LEFT JOIN p_size pz1       ON p_de.size1_id = pz1.id
-LEFT JOIN p_size pz2       ON p_de.size2_id = pz2.id
-LEFT JOIN p_size pz3       ON p_de.size3_id = pz3.id
-LEFT JOIN p_size pz4       ON p_de.size4_id = pz4.id
-LEFT JOIN grade g1        ON p_de.grade1_id = g1.id
-LEFT JOIN grade g2        ON p_de.grade2_id = g2.id
-LEFT JOIN grade g3        ON p_de.grade3_id = g3.id
-LEFT JOIN grade g4        ON p_de.grade4_id = g4.id;
+LEFT JOIN p_size pz1 ON p_de.size1_id = pz1.id
+LEFT JOIN p_size pz2 ON p_de.size2_id = pz2.id
+LEFT JOIN p_size pz3 ON p_de.size3_id = pz3.id
+LEFT JOIN p_size pz4 ON p_de.size4_id = pz4.id
+LEFT JOIN grade g1 ON p_de.grade1_id = g1.id
+LEFT JOIN grade g2 ON p_de.grade2_id = g2.id
+LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
+LEFT JOIN grade g4 ON p_de.grade4_id = g4.id
 
 
 
@@ -330,9 +372,40 @@ SELECT
     g.grade,
     TO_CHAR(q.qc_date, 'DD/MM/YYYY') AS date_str,
     q.status,
-    q.dcs_reel_no
+    q.dcs_reel_no,
+		q.PL_PRODUCTION_LINE_ID,
+    q.roll_qty AS target_roll_qty,
+    
+    NVL(p_roll.pd_roll_qty, 0) AS pd_roll_used_qty,
+    
+    NVL(p_set.pending_allocated_qty, 0) AS set_allocated_qty,
+    
+    (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0)) AS used_roll_qty,
+    (NVL(q.roll_qty, 0) - (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0))) AS remaining,
+    
+    'open' AS roll_status
+
 FROM qc_reel q
-LEFT JOIN grade g ON q.grade_id = g.id;
+LEFT JOIN grade g ON q.grade_id = g.id
+LEFT JOIN (
+    SELECT 
+        qc_reel_id, 
+        COUNT(*) AS pd_roll_qty
+    FROM pd_roll
+    WHERE qc_reel_id IS NOT NULL
+    GROUP BY qc_reel_id
+) p_roll ON q.id = p_roll.qc_reel_id
+
+LEFT JOIN (
+    SELECT 
+        qc_reel_id, 
+        SUM(reel_use_qty) AS pending_allocated_qty
+    FROM pl_cut_split_set_view
+    WHERE qc_reel_id IS NOT NULL
+    GROUP BY qc_reel_id
+) p_set ON q.id = p_set.qc_reel_id
+
+WHERE (NVL(p_roll.pd_roll_qty, 0) + NVL(p_set.pending_allocated_qty, 0)) < NVL(q.roll_qty, 0)
 
 
 
@@ -351,31 +424,33 @@ SELECT
     p_wei.pl_order_id,
     p_wei.pl_order_detail_id,
     p_wei.split_set_id,
-    p_wei.part,
+		p_wei.part,
     p_or.model,
     p_wei.weigh,
     p_wei.status,
     p_wei.remark,
     p_wei.created_at,
+
     p_wei.roll,
-    p_wei.roll_no,
-    p_wei.blade_size                                  AS blad,
-    g.grade                                           AS grade_name,
-    g.id                                              AS grade_id,
-    pz.p_size                                         AS size_name,
-    pz.id                                             AS size_id,
+		p_wei.roll_no,
+    p_wei.blade_size AS blad,
+    g.grade AS grade_name,
+		g.id AS grade_id,
+    pz.p_size AS size_name,
+		pz.id AS size_id,
+		
     p_or.order_no,
     p_de.order_item,
     p_cut.set_no,
     p_cut.cut_length,
     p_cut.finish_at,
     qc_reel.reel_no,
-    qc_reel.id                                        AS qc_reel_id,
-    qc_re_qua.id                                      AS qc_reel_quality_id,
+		qc_reel.id AS qc_reel_id,
+		qc_re_qua.id AS qc_reel_quality_id,
     p_de.queue_no,
-    p_de.cut_status_id                                AS main_cut_status_id,
+    p_de.cut_status_id AS main_cut_status_id,
     p_or.diameter,
-    p_or.pl_production_line_id,
+		p_or.pl_production_line_id,
     (
         SELECT 
             SUM(
@@ -387,15 +462,15 @@ SELECT
         FROM pl_cut_split_set_view v
         WHERE v.pl_order_id = p_wei.pl_order_id
         GROUP BY v.pl_order_id
-    )                                                 AS total,
-    (
+    ) AS total,
+		(
         SELECT COUNT(*)
         FROM pl_wait_weighing w
         WHERE w.pl_order_id = p_wei.pl_order_id
           AND w.status IS NOT NULL 
           AND TRIM(w.status) IS NOT NULL
-    )                                                 AS already_done,
-    (
+    ) AS already_done,
+		(
         SELECT 
             NVL(SUM(
                 (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
@@ -406,15 +481,16 @@ SELECT
         FROM pl_cut_split_set_view v
         WHERE v.pl_order_detail_id = p_wei.pl_order_detail_id
           AND v.status_id = 5
-    )                                                 AS done_cal_pl_cut_split_set
+    ) AS done_cal_pl_cut_split_set
+
 FROM pl_wait_weighing p_wei
-INNER JOIN pl_cut_split_set p_cut     ON p_wei.split_set_id = p_cut.id
-INNER JOIN pl_order_detail p_de       ON p_wei.pl_order_detail_id = p_de.id
-INNER JOIN pl_order p_or              ON p_wei.pl_order_id = p_or.id
-LEFT JOIN grade g                     ON p_wei.grade_id = g.id
-LEFT JOIN p_size pz                   ON p_wei.size_id = pz.id
-LEFT JOIN qc_reel                     ON p_cut.qc_reel_id = qc_reel.id
-LEFT JOIN qc_reel_quality qc_re_qua   ON qc_reel.id = qc_re_qua.qc_reel_id;
+INNER JOIN pl_cut_split_set p_cut ON p_wei.split_set_id = p_cut.id
+INNER JOIN pl_order_detail p_de ON p_wei.pl_order_detail_id = p_de.id
+INNER JOIN pl_order p_or ON p_wei.pl_order_id = p_or.id
+LEFT JOIN grade g ON p_wei.grade_id = g.id
+LEFT JOIN p_size pz ON p_wei.size_id = pz.id
+LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
+LEFT JOIN qc_reel_quality qc_re_qua ON qc_reel.id = qc_re_qua.qc_reel_id;
 
 
 

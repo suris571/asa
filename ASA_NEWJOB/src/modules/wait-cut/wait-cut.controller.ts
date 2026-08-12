@@ -5,7 +5,7 @@ import { Common } from '../util/Common';
 
 export const getWaitCutPage = async (req: Request, res: Response) => {
     try {
-        const productionLineId = req.session.user?.productionLineId;
+        const productionLineId = Number(req.session.user?.productionLineId);
         const queueData = await WaitCutModel.getAllWaitingAndWeighing(null, null, null, null, null, productionLineId);
         const statusList = await WaitCutModel.getAllCutStatuses();
         res.render("wait-cut/index", { orders: queueData, statusList });
@@ -17,7 +17,7 @@ export const getWaitCutPage = async (req: Request, res: Response) => {
 
 export const getWaitCutSplitSet = async (req: Request, res: Response) => {
     try {
-        const productionLineId = req.session.user?.productionLineId;
+        const productionLineId = Number(req.session.user?.productionLineId);
         const queueData = await WaitCutModel.getSplitSetQueueData(null, productionLineId);
         const statusList = await WaitCutModel.getAllCutStatuses();
         res.render("wait-cut/index_splite_cut", { orders: queueData, statusList });
@@ -30,7 +30,7 @@ export const getWaitCutSplitSet = async (req: Request, res: Response) => {
 export const startProduction = async (req: Request, res: Response) => {
     const { orderId, orderDetailId, qty, type } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
-    const productionLineId:any = req.session.user?.productionLineId;
+    const productionLineId:any = Number(req.session.user?.productionLineId);
     const staffId:any = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
 
     if (!orderId || !orderDetailId) {
@@ -133,7 +133,7 @@ export const startProduction = async (req: Request, res: Response) => {
 export const startWeighing = async (req: Request, res: Response) => {
     const { split_set_id, pl_order_id, pl_order_detail_id, type , cut_length } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session
-    const productionLineId:any = req.session.user?.productionLineId;
+    const productionLineId:any = Number(req.session.user?.productionLineId);
     const staffId:any = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
     const io = getIO();
 
@@ -207,7 +207,7 @@ export const startWeighing = async (req: Request, res: Response) => {
 
 
 export const qcCloseReel = async (req: Request, res: Response) => {
-    const productionLineId: any = req.session.user?.productionLineId;
+    const productionLineId: any = Number(req.session.user?.productionLineId);
     const staffId:any = req.session.user?.staff_id || -1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
 
     try {
@@ -258,6 +258,7 @@ export const saveRemarkController = async (req: Request, res: Response) => {
         const isSuccess = await WaitCutModel.saveRemarks(validItems);
 
         if (isSuccess) {
+            await FnNextQcCloseReel();
             return res.json({
                 success: true,
                 message: `บันทึกหมายเหตุสำเร็จเรียบร้อย (${validItems.length} รายการ)`,
@@ -279,7 +280,7 @@ export const saveRemarkController = async (req: Request, res: Response) => {
 };
 
 export const getQcReelListController = async (req: Request, res: Response) => {
-    const productionLineId: any = req.session.user?.productionLineId; // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
+    const productionLineId: any = Number(req.session.user?.productionLineId); // ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     try {
         const search = req.query.search ? String(req.query.search).trim() : "%";
 
@@ -349,7 +350,7 @@ export const saveQcCloseReelController = async (req: Request, res: Response) => 
 
 export const swapSplitSetSize = async (req: Request, res: Response) => {
     const { splitSetId, posA, posB } = req.body;
-    const productionLineId: any = req.session.user?.productionLineId;
+    const productionLineId: any = Number(req.session.user?.productionLineId);
     const staffId = req.session.user?.staff_id; // หรือ userId จาก session
 
     try {

@@ -9,12 +9,12 @@ class Common {
      */
     static formatNumber(val, decimals = 0) {
         if (val === null || val === undefined || val === '')
-            return '-';
+            return '';
         // แปลงให้เป็น Number (กรณีรับมาเป็น String)
         const num = Number(val);
         // ถ้าแปลงแล้วไม่ใช่ตัวเลข (NaN) ให้คืนค่าเดิมหรือ '-'
         if (isNaN(num))
-            return '-';
+            return '';
         // Format ใส่ลูกน้ำตามมาตรฐานไทย
         return new Intl.NumberFormat('th-TH', {
             minimumFractionDigits: decimals,

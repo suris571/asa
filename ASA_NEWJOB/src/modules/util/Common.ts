@@ -5,13 +5,13 @@ export class Common {
  * @param decimals จำนวนตำแหน่งทศนิยม (Default = 0)
  */
     public static formatNumber(val: number | string | null | undefined, decimals: number = 0): string { 
-        if (val === null || val === undefined || val === '') return '-';
+        if (val === null || val === undefined || val === '') return '';
 
         // แปลงให้เป็น Number (กรณีรับมาเป็น String)
         const num = Number(val);
 
         // ถ้าแปลงแล้วไม่ใช่ตัวเลข (NaN) ให้คืนค่าเดิมหรือ '-'
-        if (isNaN(num)) return '-';
+        if (isNaN(num)) return '';
 
         // Format ใส่ลูกน้ำตามมาตรฐานไทย
         return new Intl.NumberFormat('th-TH', {

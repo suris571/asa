@@ -28,6 +28,7 @@ async function generateBarcode(text) {
     }
 }
 const app = express();
+app.use(express.static('public')); // ⚓ 0. เปิดสิทธิ์ให้หน้าเว็บหลักเข้าถึงไฟล์ EJS ได้
 // ⚓ 1. ปลดล็อก CORS เปิดสิทธิ์ให้เบราว์เซอร์หน้าเว็บหลักยิงข้ามพอร์ตมาคุยได้ไร้รอยต่อ
 app.use(cors({
     origin: "*", // หรือใส่พิกัดเว็บหลักของกัปตัน เช่น 'http://localhost:3000' เพื่อความปลอดภัยสูงสุด
@@ -76,6 +77,10 @@ app.post("/preview-label", async (req, res) => {
     //     roll_no, // 2
     // } = {"id":"254","createdAt":"31/07/2026","part":"บ่าย","gradeName":"CA125","model":"FF","size":"46","diameter":"48","reelno":"113001920","weight":"29.06","status":"Pass","remark":"852","roll_no":"0123456789"}
     let savedPdfPath;
+    let res_status = "HOLD";
+    if (status && status != "HOLD" && status != "Hold" && status != "hold") {
+        res_status = "";
+    }
     if (mode != "view") {
         try {
             // 1. เจนบาร์โค้ดสตริงก่อน
@@ -89,7 +94,7 @@ app.post("/preview-label", async (req, res) => {
                 diameter: diameter,
                 date: createdAt,
                 barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
-                status: status,
+                status: res_status,
             });
             await PrintService.printPdfFile(savedPdfPath);
             try {
@@ -124,7 +129,7 @@ app.post("/preview-label", async (req, res) => {
             diameter: diameter,
             date: createdAt,
             barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
-            status: status,
+            status: res_status,
         });
     }
 });

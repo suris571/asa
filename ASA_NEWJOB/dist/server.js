@@ -33,6 +33,7 @@ const PORT = 3000;
 app.set('view engine', 'ejs');
 app.set('views', path_1.default.join(__dirname, '../views'));
 app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
+app.use('/sweetalert2', express_1.default.static(path_1.default.join(__dirname, '../node_modules/sweetalert2/dist')));
 // =========================================================
 // 🛡️ 5. SECTION: GLOBAL MIDDLEWARES (PARSERS & SESSION)
 // =========================================================
