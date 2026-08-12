@@ -108,7 +108,7 @@ class WeighingModel {
                 sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
                 binds.endDate = endDate.trim();
             }
-            if (type === "history") {
+            if (type == "history") {
                 sql += ` ORDER BY id DESC`;
             }
             else {
@@ -427,8 +427,8 @@ class WeighingModel {
                     v.pl_production_line_id,                    -- PL_PRODUCTION_LINE_ID
                     NVL(:qc_reel_id, 0),                        -- QC_REEL_ID
                     :roll_no,                                   -- ROLL_NO
-                    :roll_no,                                   -- ROLL_NO
-                    :roll_no,                                   -- ROLL_BARCODE
+                    :roll_no_ref,                               -- ROLL_NO_REF
+                    :roll_no_barcode,                           -- ROLL_BARCODE
                     SYSDATE,                                    -- ROLL_DATE
                     v.grade_id,                                 -- GRADE_ID
                     v.size_id,                                  -- P_SIZE_ID

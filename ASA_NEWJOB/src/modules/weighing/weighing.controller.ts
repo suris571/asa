@@ -16,7 +16,6 @@ export const getWeighingPage = async (req: Request, res: Response) => {
         // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
         const getNextWeighing = await WeighingModel.getNextWeighing(productionLineId);
         const historyWeighing = await WeighingModel.getNextWeighing(productionLineId, null ,'history',null,startDate,endDate);
-        console.log("🚀 ประวัติการชั่งน้ำหนักย้อนหลัง 2 วัน:", historyWeighing);
         // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
         res.render('weighing/index', {
             nextData:getNextWeighing, 
