@@ -460,6 +460,7 @@ export class WaitCutModel {
                     cut_length          AS CUT_LENGTH,
                     split_status_id     AS CUT_STATUS_ID,
                     queue_no            AS QUEUE_NO,
+                    main_cut_status_id  AS MAIN_CUT_STATUS_ID,
                     pl_production_line_id AS PL_PRODUCTION_LINE_ID
                 FROM pl_cut_split_set_view
                 WHERE 1=1
@@ -536,6 +537,7 @@ export class WaitCutModel {
                         pl_order_id: row.PL_ORDER_ID,
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
+                        main_cut_status_id: row.MAIN_CUT_STATUS_ID,
                         pl_production_line_id: row.PL_PRODUCTION_LINE_ID
                     });
                 }
@@ -1631,56 +1633,75 @@ export class WaitCutModel {
     }
 
     static async unHoldCutSplitSet(
-        splitSetId: number, 
-        orderId: number, 
-        orderDetailId: number,
-        staffId?: number | string | null // 🎯 รับ staffId เพิ่มเติม
-    ) {
-        let conn;
-        try {
-            conn = await getConnection();
-            const formattedStaffId = staffId ? Number(staffId) : null;
+            splitSetId: number, 
+            orderId: number, 
+            orderDetailId: number,
+            staffId?: number | string | null
+        ) {
+            let conn;
+            try {
+                conn = await getConnection();
+                const formattedStaffId = staffId ? Number(staffId) : null;
 
-            // 🎯 UPDATE สถานะของรายการเซ็ตย่อยกลับเป็น 2 (รอตัด) พร้อมบันทึกผู้แก้ไขและเวลา
-            // โดยดักเงื่อนไขว่าจะต้องเป็นแถวที่มี status = 4 (HOLD) เท่านั้น
-            const updateSql = `
-                UPDATE pl_cut_split_set
-                SET status = 2,
-                    update_staff = :staffId,
-                    update_date = SYSDATE
-                WHERE id = :splitSetId
-                AND status = 4
-            `;
+                // 🎯 1. ตรวจสอบสถานะของใบสั่งตัดหลัก (PL_ORDER_DETAIL) ก่อน
+                // สมมติว่าต้องการเช็คว่า cut_status_id ต้องไม่เท่ากับ 5 (หรือตามค่าสถานะ HOLD ของใบสั่งหลักคุณ)
+                const checkMainOrderQuery = `
+                    SELECT cut_status_id 
+                    FROM pl_order_detail 
+                    WHERE id = :orderDetailId
+                `;
+                const mainOrderResult: any = await conn.execute(
+                    checkMainOrderQuery, 
+                    { orderDetailId: orderDetailId }, 
+                    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+                );
 
-            const result = await conn.execute(
-                updateSql,
-                {
+                const mainCutStatus = mainOrderResult.rows[0]?.CUT_STATUS_ID;
+
+                // ถ้าใบสั่งตัดหลักอยู่ในสถานะ HOLD (เช่น เท่ากับ 5 หรือ 4 ตามโครงสร้างตารางคุณ) ให้ดีด Error ออกทันที
+                if (mainCutStatus === 4) { // ปรับเลข 5 ให้ตรงกับสถานะ HOLD ของ PL_ORDER_DETAIL จริงในระบบ
+                    throw new Error(`ไม่สามารถปลด HOLD ได้ เนื่องจากใบสั่งตัดหลัก (Order Detail) อยู่ในสถานะ HOLD`);
+                }
+
+                // 🎯 2. UPDATE สถานะของรายการเซ็ตย่อยกลับเป็น 2 (รอตัด)
+                const updateSql = `
+                    UPDATE pl_cut_split_set
+                    SET status = 2,
+                        update_staff = :staffId,
+                        update_date = SYSDATE
+                    WHERE id = :splitSetId
+                    AND status = 4
+                `;
+
+                const result = await conn.execute(
+                    updateSql,
+                    {
+                        splitSetId: splitSetId,
+                        staffId: formattedStaffId
+                    },
+                    { autoCommit: true }
+                );
+
+                // 🛡️ เช็คว่ามีแถวถูกอัปเดตหรือไม่
+                if (result.rowsAffected === 0) {
+                    throw new Error(`ไม่สามารถปลด HOLD ได้ เนื่องจากรายการนี้ไม่อยู่ในสถานะ HOLD (status != 4) หรือไม่พบข้อมูล`);
+                }
+
+                return {
                     splitSetId: splitSetId,
-                    staffId: formattedStaffId
-                },
-                { autoCommit: true } // Commit ธุรกรรมลง Database ทันที
-            );
+                    orderId: orderId,
+                    orderDetailId: orderDetailId,
+                    rowsAffected: result.rowsAffected,
+                    message: "Successfully unheld set status back to waiting (2)"
+                };
 
-            // 🛡️ เช็คว่ามีแถวถูกอัปเดตหรือไม่ (ถ้าไม่มีแสดงว่าไม่อยู่ในสถานะ HOLD หรือหาไม่พบ)
-            if (result.rowsAffected === 0) {
-                throw new Error(`ไม่สามารถปลด HOLD ได้ เนื่องจากรายการนี้ไม่อยู่ในสถานะ HOLD (status != 4) หรือไม่พบข้อมูล`);
+            } catch (error) {
+                console.error("❌ Model Error [unHoldCutSplitSet]:", error);
+                throw error;
+            } finally {
+                if (conn) await conn.close();
             }
-
-            return {
-                splitSetId: splitSetId,
-                orderId: orderId,
-                orderDetailId: orderDetailId,
-                rowsAffected: result.rowsAffected,
-                message: "Successfully unheld set status back to waiting (2)"
-            };
-
-        } catch (error) {
-            console.error("❌ Model Error [unHoldCutSplitSet]:", error);
-            throw error;
-        } finally {
-            if (conn) await conn.close();
         }
-    }
 
     static async holdOrderDetail(
         orderDetailId: number | string, 

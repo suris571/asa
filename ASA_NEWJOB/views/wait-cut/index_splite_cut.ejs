@@ -518,13 +518,20 @@
                 "data": null,
                 "render": function(data, type, row) {
                     const setStatus = row.status ? parseInt(row.status) : parseInt(row.cut_status_id);
-                    if (setStatus === 4) {
+                    const mainCutStatus = parseInt(row.main_cut_status_id);
+
+                    // 🎯 เช็กเงื่อนไข: ต้องเป็นสถานะ 4 และ ใบสั่งตัดหลักต้องไม่เป็นสถานะ 5
+                    if (setStatus === 4 && mainCutStatus !== 4) {
                         return `<button class="btn btn-sm btn-primary font-weight-bold btn-block shadow-sm" 
                                     onclick="actionSetUnhold(${row.split_set_id}, ${row.pl_order_id}, ${row.pl_order_detail_id})">
                                     🔓 ปลด HOLD
                                 </button>`;
                     }
-                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block text-muted" disabled style="opacity: 0.25; cursor: not-allowed;">
+
+                    // เพิ่ม title บอกเหตุผลตอนโดน disabled (ถ้าใบสั่งหลักถูก HOLD) เพื่อ UX ที่ดี
+                    const tooltip = (mainCutStatus === 4) ? 'title="ไม่สามารถปลด HOLD ได้ เนื่องจากใบสั่งตัดหลักถูก HOLD อยู่"' : '';
+
+                    return `<button class="btn btn-sm btn-light border font-weight-bold btn-block text-muted" disabled ${tooltip} style="opacity: 0.25; cursor: not-allowed;">
                                 ปลด HOLD
                             </button>`;
                 }
