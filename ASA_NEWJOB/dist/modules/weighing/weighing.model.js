@@ -352,7 +352,7 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🟢 ใช้ Expression ตรงกับ Index (Oracle จะดึงค่า MAX จาก Index ทันทีโดยไม่ต้องอ่านตารางจริง)
+            // 🟢 ดึง MAX ตรงจาก Index (เร็วระดับ < 1 ms)
             const sql = `
                 SELECT NVL(MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)), 0) + 1 AS NEXT_ROLL_NO
                 FROM PD_ROLL
@@ -376,7 +376,11 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            let roll_no = await WeighingModel.getMaxRollNo(); // 🎯 ดึง roll_no ล่าสุด +1
+            // 🟢 1. ดึง ID ล่าสุดจาก Sequence มารอก่อน (< 1 ms) ไม่ต้องไปรัน SELECT MAX(ID) ทีหลัง
+            const seqResult = await conn.execute(`SELECT sq_pd_roll.nextval AS NEW_ID FROM DUAL`, [], { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            const newPdRollId = seqResult.rows[0]?.NEW_ID;
+            // 🟢 2. ดึง roll_no จาก Index ตัวใหม่ (< 1 ms)
+            let roll_no = await WeighingModel.getMaxRollNo();
             const insertPDQuery = `
                 INSERT INTO PD_ROLL (
                     ID,
@@ -406,35 +410,36 @@ class WeighingModel {
                     SPLIT_SET_ID
                 )
                 SELECT
-                    sq_pd_roll.nextval,
-                    SYSDATE,                                    -- CREATE_DATE
-                    :staffId,                                   -- CREATE_STAFF
-                    :part,                                      -- PART
-                    'จากการตัด Split',                           -- ROLL_FROM
-                    v.pl_order_id,                              -- PL_ORDER_ID
-                    v.pl_production_line_id,                    -- PL_PRODUCTION_LINE_ID
-                    NVL(:qc_reel_id, 0),                        -- QC_REEL_ID
-                    :roll_no,                                   -- ROLL_NO
-                    :roll_no_ref,                               -- ROLL_NO_REF
-                    :roll_no_barcode,                           -- ROLL_BARCODE
-                    SYSDATE,                                    -- ROLL_DATE
-                    v.grade_id,                                 -- GRADE_ID
-                    v.size_id,                                  -- P_SIZE_ID
-                    v.model,                                    -- MODEL
-                    :weigh,                                     -- WEIGHT
-                    NVL(:diameter, 0),                         -- DIAMETER
-                    :status,                                    -- STATUS
-                    'No',                                       -- STOCK_STATUS
-                    :remark,                                    -- REMARKS
-                    v.pl_order_detail_id,                       -- PL_ORDER_DETAIL_ID
-                    'N',                                        -- RETURN_OLD_ROLL
-                    :roll,                                      -- R_ROLL
-                    :hold_cause,                                -- HOLD_CAUSE
-                    v.split_set_id                              -- split_set_id
+                    :newPdRollId,                               -- 🟢 3. ใช้ ID ที่ดึงเตรียมไว้
+                    SYSDATE,
+                    :staffId,
+                    :part,
+                    'จากการตัด Split',
+                    v.pl_order_id,
+                    v.pl_production_line_id,
+                    NVL(:qc_reel_id, 0),
+                    :roll_no,
+                    :roll_no_ref,
+                    :roll_no_barcode,
+                    SYSDATE,
+                    v.grade_id,
+                    v.size_id,
+                    v.model,
+                    :weigh,
+                    NVL(:diameter, 0),
+                    :status,
+                    'No',
+                    :remark,
+                    v.pl_order_detail_id,
+                    'N',
+                    :roll,
+                    :hold_cause,
+                    v.split_set_id
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
             `;
             const bindVars = {
+                newPdRollId: newPdRollId,
                 id_pl_wait_weight: data.id_pl_wait_weight,
                 weigh: data.weigh,
                 status: data.status || "PASS",
@@ -452,18 +457,10 @@ class WeighingModel {
             const result = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
             if (isSuccess) {
-                // 🎯 2. ดึง MAX(ID) โดยกรองตรงจาก pl_order_id ที่ส่งเข้ามาได้เลย!
-                const getMaxIdSql = `
-                    SELECT MAX(ID) AS NEW_ID 
-                    FROM PD_ROLL 
-                    WHERE PL_ORDER_ID = :pl_order_id
-                `;
-                const maxIdResult = await conn.execute(getMaxIdSql, { pl_order_id: data.pl_order_id }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
-                const newId = maxIdResult.rows[0]?.NEW_ID;
                 await conn.commit();
-                // 🎯 Return เป็น Object กลับไปใช้งานต่อ
+                // 🟢 4. คืนค่า newPdRollId ได้ทันที ไม่ต้องรัน SELECT MAX(ID) ให้ช้าอีกต่อไป
                 return {
-                    id: newId,
+                    id: newPdRollId,
                     roll_no: roll_no,
                 };
             }
@@ -475,7 +472,6 @@ class WeighingModel {
         catch (error) {
             if (conn)
                 await conn.rollback();
-            // console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL]:", error);
             throw error;
         }
         finally {
