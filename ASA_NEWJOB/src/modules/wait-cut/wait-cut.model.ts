@@ -287,7 +287,7 @@ export class WaitCutModel {
      * @param orderDetailId รหัสรายละเอียดออเดอร์
      * @param qty จำนวนเซ็ตที่ต้องการสร้าง
      */
-    static async createOrderSplitSet(orderId: number, orderDetailId: number, qty: number, staff_id: number | null = 1): Promise<boolean> {
+    static async createOrderSplitSet(orderId: number, orderDetailId: number, qty: number, staff_id: number | null): Promise<boolean> {
         let conn;
 
         try {
@@ -564,7 +564,7 @@ export class WaitCutModel {
         split_set_id: number, 
         pl_order_id: number, 
         pl_order_detail_id: number, 
-        staff_id: number | null = 1, 
+        staff_id: number | null, 
         cut_length: number
     ): Promise<boolean> {
         let conn;
@@ -1358,7 +1358,7 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
-            const formattedStaffId = staffId ? Number(staffId) : -1;
+            const formattedStaffId = staffId;
 
             // 🎯 Step 1: อัปเดตทุก Set ใน PL_CUT_SPLIT_SET ที่ยังไม่เสร็จ
             const updateSetsSql = `
@@ -1711,7 +1711,7 @@ export class WaitCutModel {
         let conn;
         try {
             conn = await getConnection();
-            const formattedStaffId = staffId ? Number(staffId) : -1; // ถ้าไม่ได้ส่ง staffId มา ให้ใช้ค่า -1 เป็นค่า default
+            const formattedStaffId = staffId; 
 
             // 🔍 1. เช็กว่าใน PL_CUT_SPLIT_SET มีรายการที่ชั่งเสร็จสิ้นแล้ว (status = 5) หรือไม่?
             const checkFinishedSql = `
@@ -1803,7 +1803,7 @@ export class WaitCutModel {
         let conn;
         try {
             conn = await getConnection();
-            const formattedStaffId = staffId ? Number(staffId) : -1; // ถ้าไม่ได้ส่ง staffId มา ให้ใช้ค่า -1 เป็นค่า default
+            const formattedStaffId = staffId; 
 
             // 🟢 1. คืนค่ารายการใน PL_CUT_SPLIT_SET ที่โดน HOLD (status = 4) ให้กลับมาเป็นรอตัด (status = 2) พร้อมบันทึกผู้แก้ไข
             const updateSplitSetSql = `

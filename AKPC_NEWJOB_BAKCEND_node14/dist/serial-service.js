@@ -4,26 +4,51 @@ exports.SerialService = void 0;
 const SerialPort = require('serialport');
 const ReadlineParser = require('@serialport/parser-readline');
 class SerialService {
-    static initialize(io, portName = 'COM1', baudRate = 9600) {
+    static initialize(io, portName = 'COM1', baudRate = 2400) {
         try {
             this.ioInstance = io;
+            // 🟢 1. เคลียร์ Timer สำหรับการเชื่อมต่อใหม่ถ้ามีค้างอยู่
+            if (this.reconnectTimer) {
+                clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+            }
+            // 🟢 2. เคลียร์พอร์ตและ Parser ตัวเก่าทิ้งอย่างเด็ดขาด ป้องกันการ Emit เบิ้ล
+            if (this.parser) {
+                this.parser.removeAllListeners();
+                this.parser = null;
+            }
             if (this.port) {
+                this.port.removeAllListeners();
                 if (this.port.isOpen) {
                     this.port.close();
                 }
-                this.port.removeAllListeners();
+                this.port = null;
             }
-            console.log(`[SerialPort] Connecting to port: ${portName}...`);
-            // 🟢 ส่ง Callback การเปิดพอร์ตเข้าไปใน Constructor ของ SerialPort v9 โดยตรง
-            this.port = new SerialPort(portName, { baudRate: baudRate }, (err) => {
+            console.log(`[SerialPort] Connecting to port: ${portName} (BaudRate: ${baudRate}, DataBits: 7)...`);
+            this.port = new SerialPort(portName, {
+                baudRate: baudRate,
+                dataBits: 7,
+                stopBits: 1,
+                parity: 'none'
+            }, (err) => {
                 if (err) {
                     const msg = (err === null || err === void 0 ? void 0 : err.message) || String(err);
                     console.error(`[SerialPort Error] Cannot open ${portName}: ${msg}`);
                     if (this.ioInstance) {
                         this.ioInstance.emit('weight_stream', {
+                            weight: 0,
+                            stable: false,
                             status: 'fail',
                             message: `Cannot open ${portName}: ${msg}`
                         });
+                    }
+                    // 🟢 สั่ง Reconnect เมื่อเปิดไม่ผ่าน พร้อมเคลียร์ค่า Timer
+                    console.log(`[SerialPort] Retrying to connect ${portName} in 5 seconds...`);
+                    if (!this.reconnectTimer) {
+                        this.reconnectTimer = setTimeout(() => {
+                            this.reconnectTimer = null; // รีเซ็ตก่อนเรียกใหม่
+                            SerialService.initialize(io, portName, baudRate);
+                        }, 5000);
                     }
                     return;
                 }
@@ -32,15 +57,16 @@ class SerialService {
             this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
             this.parser.on('data', (rawData) => {
                 try {
-                    console.log(`[SerialPort Stream] rawData: ${JSON.stringify(rawData)}`);
-                    const match = rawData.match(/[-+]?\d+(\.\d+)?/);
+                    // console.log(`[SerialPort Stream] rawData: ${JSON.stringify(rawData)}`);
+                    const match = rawData.match(/[+|-]?\s*(\d+(?:\.\d*)?)\s*kg/i);
                     if (match && this.ioInstance) {
-                        const currentWeight = parseFloat(match[0]);
+                        const currentWeight = Math.trunc(parseFloat(match[1]));
                         if (!isNaN(currentWeight)) {
-                            console.log(`[SerialPort Stream] Weight: ${currentWeight} kg`);
+                            const isStable = rawData.includes('\u0002S') || rawData.includes('S000G');
+                            console.log(`>>> [READY TO EMIT] Weight: ${currentWeight} kg | Stable: ${isStable}`);
                             this.ioInstance.emit('weight_stream', {
-                                weight: currentWeight,
-                                stable: rawData.includes('ST'),
+                                weight: currentWeight.toLocaleString('en-US'),
+                                stable: isStable,
                                 status: 'success',
                                 message: 'success'
                             });
@@ -56,6 +82,8 @@ class SerialService {
                 console.error(`[SerialPort Error] Runtime error: ${msg}`);
                 if (this.ioInstance) {
                     this.ioInstance.emit('weight_stream', {
+                        weight: 0,
+                        stable: false,
                         status: 'fail',
                         message: 'Serial Port runtime error: ' + msg
                     });
@@ -65,9 +93,19 @@ class SerialService {
                 console.warn(`[SerialPort Warning] Port was closed!`);
                 if (this.ioInstance) {
                     this.ioInstance.emit('weight_stream', {
+                        weight: 0,
+                        stable: false,
                         status: 'fail',
                         message: 'Serial Port was closed'
                     });
+                }
+                // 🟢 สั่ง Reconnect เมื่อสายหลุด พร้อมเคลียร์ค่า Timer
+                console.log(`[SerialPort] Will attempt to reconnect to ${portName} in 5 seconds...`);
+                if (!this.reconnectTimer) {
+                    this.reconnectTimer = setTimeout(() => {
+                        this.reconnectTimer = null; // รีเซ็ตก่อนเรียกใหม่
+                        SerialService.initialize(io, portName, baudRate);
+                    }, 5000);
                 }
             });
         }
@@ -96,7 +134,7 @@ class SerialService {
                     isIncreasing = true;
                 }
             }
-            const finalWeight = parseFloat(simulatedWeight.toFixed(2));
+            const finalWeight = Math.trunc(simulatedWeight);
             this.ioInstance.emit('weight_stream', {
                 weight: finalWeight,
                 stable: finalWeight > 0 && Math.random() > 0.7,
@@ -111,4 +149,5 @@ SerialService.port = null;
 SerialService.parser = null;
 SerialService.ioInstance = null;
 SerialService.mockTimer = null;
+SerialService.reconnectTimer = null; // 🟢 ตัวแปรจับเวลาสำหรับ Auto-Reconnect
 //# sourceMappingURL=serial-service.js.map

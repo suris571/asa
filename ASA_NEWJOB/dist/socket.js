@@ -78,6 +78,7 @@ const initSocket = (httpServer) => {
         console.log("🟢 พนักงานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:", socket.id);
         // 🎯 เรียกใช้ฟังก์ชันกลาง: ดึง ID เครื่อง และจับเข้า Room อัตโนมัติ
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut");
+        // {startDate: null, endDate: null, status: 'ALL', orderNo: null, productionLineId: '161'}
         socket.on("get_filtered_queue", async (payload) => {
             try {
                 // ใช้ currentLineId จาก connection หรือ payload ก็ได้

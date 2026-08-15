@@ -15,11 +15,13 @@ const getWeighingPage = async (req, res) => {
         const endDate = Common_1.Common.formatDateDDMMYYYY(today);
         // 🎯 ดึงแบบ Parallel พร้อมจับเวลา
         console.time("[TIME] 1. Fetching DB");
-        const [getNextWeighing, historyWeighing] = await Promise.all([
+        let [getNextWeighing, historyWeighing] = await Promise.all([
             weighing_model_1.WeighingModel.getNextWeighing(productionLineId),
             weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate)
         ]);
         console.timeEnd("[TIME] 1. Fetching DB");
+        // let getNextWeighing: any[] = [];
+        // let historyWeighing: any[] = [];
         console.time("[TIME] 2. Render EJS");
         res.render('weighing/index', {
             nextData: getNextWeighing,
@@ -38,22 +40,22 @@ const getWeighingPage = async (req, res) => {
 };
 exports.getWeighingPage = getWeighingPage;
 const saveWeighingController = async (req, res) => {
+    const totalStart = performance.now();
+    console.log(`[PERF START] saveWeighingController execution initiated`);
     try {
         const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
-        const staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        const staffId = req.session.user?.staff_id;
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
         }
-        // 🎯 1. ทำความสะอาดค่า weight: ลบลูกน้ำออก -> ลบจุดทศนิยมและตัวเลขหลังจุดออก -> แปลงเป็น Integer
         const cleanWeightString = String(weight ?? '0')
-            .replace(/,/g, '') // ลบเครื่องหมายลูกน้ำ , ออกทั้งหมด (เช่น "15,369.59" -> "15369.59")
-            .split('.')[0] // เอาเฉพาะข้อความส่วนหน้าจุดทศนิยม (เช่น "15369.59" -> "15369")
+            .replace(/,/g, '')
+            .split('.')[0]
             .trim();
-        const formattedWeight = parseInt(cleanWeightString, 10) || 0; // แปลงเป็น Number ชนิด Integer
-        // 2. จัดทำชุดข้อมูล Payload
+        const formattedWeight = parseInt(cleanWeightString, 10) || 0;
         const payload = {
             id: Number(id),
-            weigh: formattedWeight, // ได้ค่าเป็น 15369 (Integer) แน่นอน
+            weigh: formattedWeight,
             status: status || 'PASS',
             remark: remark && remark.trim() !== '' ? remark.trim() : null,
             model: model && model.trim() !== '' ? model.trim() : null,
@@ -61,11 +63,15 @@ const saveWeighingController = async (req, res) => {
             diameter: diameter && diameter.trim() !== '' ? diameter.trim() : null,
             hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
         };
+        // ⏱️ Step 1: Measure GetWaitWeighingInfoById
+        const step1Start = performance.now();
         const waitWeighingInfo = await weighing_model_1.WeighingModel.GetWaitWeighingInfoById(payload.id);
+        console.log(`[PERF] Step 1: GetWaitWeighingInfoById took ${(performance.now() - step1Start).toFixed(2)} ms`);
         if (!waitWeighingInfo) {
             return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลในระบบ' });
         }
-        // 2. เรียก Model สั่ง อัปเดตลง Database
+        // ⏱️ Step 2: Measure InsertPD_ROLL
+        const step2Start = performance.now();
         const insertPD_ROLL = await weighing_model_1.WeighingModel.InsertPD_ROLL({
             id_pl_wait_weight: payload.id,
             weigh: payload.weigh,
@@ -78,25 +84,32 @@ const saveWeighingController = async (req, res) => {
             diameter: payload.diameter,
             hold_cause: payload.hold_cause,
         });
+        console.log(`[PERF] Step 2: InsertPD_ROLL took ${(performance.now() - step2Start).toFixed(2)} ms`);
+        // ⏱️ Step 3: Measure InsertPD_ROLL_QUALITY
         if (insertPD_ROLL?.id) {
+            const step3Start = performance.now();
             await weighing_model_1.WeighingModel.InsertPD_ROLL_QUALITY({
                 id_pl_wait_weight: payload.id,
                 pd_roll_id: insertPD_ROLL.id,
                 qcReelQualityId: waitWeighingInfo.QC_REEL_QUALITY_ID,
                 staffId: staffId
             });
+            console.log(`[PERF] Step 3: InsertPD_ROLL_QUALITY took ${(performance.now() - step3Start).toFixed(2)} ms`);
         }
+        // ⏱️ Step 4: Measure updateWeighingResult
+        const step4Start = performance.now();
         const isSuccess = await weighing_model_1.WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId);
-        // const isSuccess =   false; // เปลี่ยนเป็น false เพื่อทดสอบการตอบกลับเมื่อไม่สำเร็จ
+        console.log(`[PERF] Step 4: updateWeighingResult took ${(performance.now() - step4Start).toFixed(2)} ms`);
         if (!isSuccess) {
             return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
         }
         const productionLineId = Number(req.session.user?.productionLineId);
         const io = (0, socket_1.getIO)();
-        // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/weighing").to(`machine_room_${productionLineId}`) : io.of("/socket/weighing");
         targetRoom.emit("historyUpdate", { success: true });
-        // 3. ตอบกลับหน้าบ้าน
+        // ⏱️ Total Execution Time
+        const totalDuration = (performance.now() - totalStart).toFixed(2);
+        console.log(`[PERF END] Total saveWeighingController duration: ${totalDuration} ms`);
         return res.json({
             success: true,
             roll_no: insertPD_ROLL.roll_no,
@@ -104,7 +117,7 @@ const saveWeighingController = async (req, res) => {
         });
     }
     catch (error) {
-        console.error("❌ Controller Save Error:", error);
+        console.error("[PERF ERROR] Controller Save Error:", error);
         return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์" });
     }
 };

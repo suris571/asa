@@ -34,11 +34,11 @@ export class WeighingModel {
             let holdCauseList: string[] = [];
             if(type != "history") {
                 const remarkSql = `
-                    SELECT DISTINCT REMARKS 
+                    SELECT REMARKS 
                     FROM pd_roll 
                     WHERE create_date >= ADD_MONTHS(SYSDATE, -1)
-                    AND REMARKS IS NOT NULL 
                     AND TRIM(REMARKS) IS NOT NULL
+                    GROUP BY REMARKS
                     ORDER BY REMARKS ASC
                 `;
                 const remarkResult = await conn.execute(remarkSql, {}, {
@@ -510,7 +510,7 @@ export class WeighingModel {
                 SELECT
                     sq_pd_roll.nextval,
                     SYSDATE,                                    -- CREATE_DATE
-                    NVL(:staffId, 1),                           -- CREATE_STAFF
+                    :staffId,                                   -- CREATE_STAFF
                     :part,                                      -- PART
                     'จากการตัด Split',                           -- ROLL_FROM
                     v.pl_order_id,                              -- PL_ORDER_ID
@@ -542,7 +542,7 @@ export class WeighingModel {
                 weigh: data.weigh,
                 status: data.status || "PASS",
                 remark: data.remark || null,
-                staffId: data.staffId || 1,
+                staffId: data.staffId,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
                 roll_no_ref: roll_no,
@@ -599,7 +599,7 @@ export class WeighingModel {
         try {
             conn = await getConnection();
             let result;
-            const formattedStaffId = data.staffId ? Number(data.staffId) : -1;
+            const formattedStaffId:any = data.staffId;
 
             // console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
@@ -684,8 +684,8 @@ export class WeighingModel {
     }
 
     // 🎯 Helper function ย่อยสำหรับยัดค่า NULL / Default พร้อมส่ง staffId
-    private static async InsertDefaultNull(conn: any, pd_roll_id: number | string, staffId: number | string = -1) {
-        const formattedStaffId = staffId ? Number(staffId) : -1;
+    private static async InsertDefaultNull(conn: any, pd_roll_id: number | string, staffId: number | string | null): Promise<any> {
+        const formattedStaffId = staffId;
         const insertNullSql = `
             INSERT INTO PD_ROLL_QUALITY (
                 ID, CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,

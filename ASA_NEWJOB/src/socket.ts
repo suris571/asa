@@ -89,7 +89,7 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
 
         // 🎯 เรียกใช้ฟังก์ชันกลาง: ดึง ID เครื่อง และจับเข้า Room อัตโนมัติ
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut");
-
+        // {startDate: null, endDate: null, status: 'ALL', orderNo: null, productionLineId: '161'}
         socket.on("get_filtered_queue", async (payload) => {
             try {
                 // ใช้ currentLineId จาก connection หรือ payload ก็ได้

@@ -30,9 +30,21 @@ async function generateBarcode(text) {
     }
 }
 const app = (0, express_1.default)();
+// 🟢 1. ดักส่ง Header ปลดล็อก Private Network Access ให้ Chrome (แก้เรื่อง more-private address space 'local')
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Private-Network", "true"); // 👈 ตัวสำคัญสำหรับ Chrome PNA
+    res.header("Access-Control-Allow-Headers", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+    next();
+});
 app.use(express_1.default.static('public'));
 app.use((0, cors_1.default)({
     origin: "*",
+    methods: ["GET", "POST"],
 }));
 app.use(express_1.default.json());
 const httpServer = (0, http_1.createServer)(app);
@@ -120,5 +132,5 @@ httpServer
     }
     process.exit(1);
 });
-serial_service_1.SerialService.initialize(io, "COM1", 9600);
+serial_service_1.SerialService.initialize(io, "COM1", 2400);
 //# sourceMappingURL=agent.js.map

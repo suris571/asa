@@ -19,11 +19,11 @@ class WeighingModel {
             let holdCauseList = [];
             if (type != "history") {
                 const remarkSql = `
-                    SELECT DISTINCT REMARKS 
+                    SELECT REMARKS 
                     FROM pd_roll 
                     WHERE create_date >= ADD_MONTHS(SYSDATE, -1)
-                    AND REMARKS IS NOT NULL 
                     AND TRIM(REMARKS) IS NOT NULL
+                    GROUP BY REMARKS
                     ORDER BY REMARKS ASC
                 `;
                 const remarkResult = await conn.execute(remarkSql, {}, {
@@ -420,7 +420,7 @@ class WeighingModel {
                 SELECT
                     sq_pd_roll.nextval,
                     SYSDATE,                                    -- CREATE_DATE
-                    NVL(:staffId, 1),                           -- CREATE_STAFF
+                    :staffId,                                   -- CREATE_STAFF
                     :part,                                      -- PART
                     'จากการตัด Split',                           -- ROLL_FROM
                     v.pl_order_id,                              -- PL_ORDER_ID
@@ -451,7 +451,7 @@ class WeighingModel {
                 weigh: data.weigh,
                 status: data.status || "PASS",
                 remark: data.remark || null,
-                staffId: data.staffId || 1,
+                staffId: data.staffId,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
                 roll_no_ref: roll_no,
@@ -500,7 +500,7 @@ class WeighingModel {
         try {
             conn = await (0, database_1.getConnection)();
             let result;
-            const formattedStaffId = data.staffId ? Number(data.staffId) : -1;
+            const formattedStaffId = data.staffId;
             // console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
                 // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert พร้อมบันทึก CREATE_STAFF
@@ -581,8 +581,8 @@ class WeighingModel {
         }
     }
     // 🎯 Helper function ย่อยสำหรับยัดค่า NULL / Default พร้อมส่ง staffId
-    static async InsertDefaultNull(conn, pd_roll_id, staffId = -1) {
-        const formattedStaffId = staffId ? Number(staffId) : -1;
+    static async InsertDefaultNull(conn, pd_roll_id, staffId) {
+        const formattedStaffId = staffId;
         const insertNullSql = `
             INSERT INTO PD_ROLL_QUALITY (
                 ID, CREATE_DATE, CREATE_STAFF, PD_ROLL_ID,

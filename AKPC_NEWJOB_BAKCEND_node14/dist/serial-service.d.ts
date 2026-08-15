@@ -4,6 +4,7 @@ export declare class SerialService {
     private static parser;
     private static ioInstance;
     private static mockTimer;
+    private static reconnectTimer;
     static initialize(io: Server, portName?: string, baudRate?: number): void;
     private static startMockStream;
 }

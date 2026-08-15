@@ -207,7 +207,7 @@
                     <label for="searchStatus">🚦 สถานะ:</label>
                     <!-- 🎯 เพิ่ม style="min-width: 280px;" เพื่อขยายความกว้าง -->
                     <select id="searchStatus" class="form-control form-control-sm" style="min-width: 280px;">
-                        <option value="ALL">รอสั่งตัด+รอตัด+ตัดไม่ครบ+HOLD</option>
+                        <option value="">รอสั่งตัด+รอตัด+ตัดไม่ครบ+HOLD</option>
                         <% if (typeof statusList !== 'undefined' && statusList.length > 0) { %>
                             <% statusList.forEach(function(item) { %>
                                 <option value="<%= item.id %>"><%= item.status %></option>

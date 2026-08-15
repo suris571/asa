@@ -31,7 +31,7 @@ export const startProduction = async (req: Request, res: Response) => {
     const { orderId, orderDetailId, qty, type } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session ของผู้ใช้งานปัจจุบัน
     const productionLineId:any = Number(req.session.user?.productionLineId);
-    const staffId:any = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
+    const staffId:any = req.session.user?.staff_id; 
 
     if (!orderId || !orderDetailId) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน (กรุณาระบุ orderId และ orderDetailId)" });
@@ -134,7 +134,7 @@ export const startWeighing = async (req: Request, res: Response) => {
     const { split_set_id, pl_order_id, pl_order_detail_id, type , cut_length } = req.body;
     // 🎯 ดึง ID เครื่องจาก Session
     const productionLineId:any = Number(req.session.user?.productionLineId);
-    const staffId:any = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
+    const staffId:any = req.session.user?.staff_id; 
     const io = getIO();
 
     // 🎯 เตรียม Target Room สำหรับยิงไปหน้า Split Set เฉพาะเครื่อง
@@ -208,7 +208,7 @@ export const startWeighing = async (req: Request, res: Response) => {
 
 export const qcCloseReel = async (req: Request, res: Response) => {
     const productionLineId: any = Number(req.session.user?.productionLineId);
-    const staffId:any = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
+    const staffId:any = req.session.user?.staff_id; 
 
     try {
         const today = new Date();
@@ -237,7 +237,7 @@ export const qcCloseReel = async (req: Request, res: Response) => {
 export const saveRemarkController = async (req: Request, res: Response) => {
     try {
         const { items } = req.body;
-        const staffId:any = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
+        const staffId:any = req.session.user?.staff_id; 
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({
@@ -303,7 +303,7 @@ export const getQcReelListController = async (req: Request, res: Response) => {
 export const saveQcCloseReelController = async (req: Request, res: Response) => {
     try {
         const { splitSetId, reelId } = req.body;
-        const staffId:any = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น -1
+        const staffId:any = req.session.user?.staff_id; 
 
 
         // 1. Validation เบื้องต้น

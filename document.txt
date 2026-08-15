@@ -553,6 +553,11 @@ SELECT (SELECT NVL(MAX(ID), 0) FROM STAFF_PERMISSION) + 5, SYSDATE, 2000, 16804,
 COMMIT;
 
 
+CREATE INDEX idx_pd_roll_date_remarks 
+ON pd_roll (create_date, REMARKS);
+
+สำหรับ query remark เร็วขึ้น
+
 
 
 
@@ -560,3 +565,7 @@ COMMIT;
 
 
 npm install --production
+
+
+ปิด ที่ chome
+chrome://flags/#block-insecure-private-network-requests

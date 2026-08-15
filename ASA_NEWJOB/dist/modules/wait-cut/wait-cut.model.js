@@ -236,7 +236,7 @@ class WaitCutModel {
      * @param orderDetailId รหัสรายละเอียดออเดอร์
      * @param qty จำนวนเซ็ตที่ต้องการสร้าง
      */
-    static async createOrderSplitSet(orderId, orderDetailId, qty, staff_id = 1) {
+    static async createOrderSplitSet(orderId, orderDetailId, qty, staff_id) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -496,7 +496,7 @@ class WaitCutModel {
             }
         }
     }
-    static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id, staff_id = 1, cut_length) {
+    static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id, staff_id, cut_length) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -1162,7 +1162,7 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            const formattedStaffId = staffId ? Number(staffId) : -1;
+            const formattedStaffId = staffId;
             // 🎯 Step 1: อัปเดตทุก Set ใน PL_CUT_SPLIT_SET ที่ยังไม่เสร็จ
             const updateSetsSql = `
                 UPDATE pl_cut_split_set
@@ -1436,7 +1436,7 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            const formattedStaffId = staffId ? Number(staffId) : -1; // ถ้าไม่ได้ส่ง staffId มา ให้ใช้ค่า -1 เป็นค่า default
+            const formattedStaffId = staffId;
             // 🔍 1. เช็กว่าใน PL_CUT_SPLIT_SET มีรายการที่ชั่งเสร็จสิ้นแล้ว (status = 5) หรือไม่?
             const checkFinishedSql = `
                 SELECT COUNT(*) AS FINISHED_COUNT
@@ -1510,7 +1510,7 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            const formattedStaffId = staffId ? Number(staffId) : -1; // ถ้าไม่ได้ส่ง staffId มา ให้ใช้ค่า -1 เป็นค่า default
+            const formattedStaffId = staffId;
             // 🟢 1. คืนค่ารายการใน PL_CUT_SPLIT_SET ที่โดน HOLD (status = 4) ให้กลับมาเป็นรอตัด (status = 2) พร้อมบันทึกผู้แก้ไข
             const updateSplitSetSql = `
                 UPDATE pl_cut_split_set

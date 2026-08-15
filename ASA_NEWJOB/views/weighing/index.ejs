@@ -157,14 +157,14 @@
     let weighingTable;
     let modalOrderTable;
     let weighingTableHistory;
-    let urlPrintBarcode = 'http://localhost:4000/preview-label';
     const userProductionLineId = "<%= data.pm_select_ID ? data.pm_select_ID : '' %>";
     let socket = io('/socket/weighing', {
         query: {
             productionLineId: userProductionLineId 
         }
     });
-    let socketScale = io('http://localhost:4000');
+    let socketScale = io('http://127.0.0.1:4000');
+    let urlPrintBarcode = 'http://127.0.0.1:4000/preview-label';
 
     socketScale.off('connect');
     socketScale.off('weight_stream');
