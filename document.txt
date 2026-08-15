@@ -558,8 +558,8 @@ ON pd_roll (create_date, REMARKS);
 
 สำหรับ query remark เร็วขึ้น
 
-
-
+สำหรับหา roll_no ตอนบันทึกน้ำหนักเร็วขึ้น
+CREATE INDEX idx_pd_roll_no_num ON PD_ROLL (TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)) ONLINE;
 
 
 

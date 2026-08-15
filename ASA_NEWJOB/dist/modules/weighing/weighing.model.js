@@ -305,42 +305,6 @@ class WeighingModel {
             }
         }
     }
-    static async getMaxRollNo() {
-        let conn;
-        try {
-            conn = await (0, database_1.getConnection)();
-            // 💡 วิธีที่ 1: ปรับใช้ ROWNUM <= 1 แทน FETCH FIRST 1 ROWS ONLY
-            const sql = `
-            SELECT roll_no 
-            FROM (
-                SELECT roll_no 
-                FROM PD_ROLL 
-                WHERE roll_no IS NOT NULL 
-                  AND REGEXP_LIKE(roll_no, '^[0-9]+$')
-                ORDER BY TO_NUMBER(roll_no) DESC
-            )
-            WHERE ROWNUM <= 1
-        `;
-            const result = await conn.execute(sql, [], {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
-            });
-            const rows = result.rows || [];
-            if (rows.length > 0 && rows[0].ROLL_NO) {
-                const currentMax = parseInt(rows[0].ROLL_NO, 10);
-                return String(currentMax + 1); // 🎯 ดึงได้ปุ๊บ +1 แล้วส่งกลับ
-            }
-            // 🎯 ถ้าตารางยังไม่มีข้อมูล ให้เริ่มที่ '1'
-            return "1";
-        }
-        catch (error) {
-            // console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
-            return "1";
-        }
-        finally {
-            if (conn)
-                await conn.close();
-        }
-    }
     static getCurrentShift = (dateObj = new Date()) => {
         // ดึงชั่วโมง (0 - 23) ตามโซนเวลาท้องถิ่น
         const currentHour = dateObj.getHours();
@@ -378,6 +342,30 @@ class WeighingModel {
         catch (error) {
             // console.error("❌ เกิดข้อผิดพลาดใน Model [GetWaitWeighingInfoById]:", error);
             throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async getMaxRollNo() {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🟢 ใช้ Expression ตรงกับ Index (Oracle จะดึงค่า MAX จาก Index ทันทีโดยไม่ต้องอ่านตารางจริง)
+            const sql = `
+                SELECT NVL(MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)), 0) + 1 AS NEXT_ROLL_NO
+                FROM PD_ROLL
+            `;
+            const result = await conn.execute(sql, [], {
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+            });
+            const nextRoll = result.rows[0]?.NEXT_ROLL_NO;
+            return String(nextRoll || 1);
+        }
+        catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
+            return "1";
         }
         finally {
             if (conn)
