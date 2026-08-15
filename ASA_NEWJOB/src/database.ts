@@ -1,12 +1,13 @@
 import oracledb from 'oracledb';
 import dotenv from 'dotenv';
 
+
 // สั่งให้ระบบโหลดค่าจากไฟล์ .env เข้ามาใช้งาน
 dotenv.config();
 
 // ❌ ลบ oracledb.initOracleClient(); ออกแล้ว เพื่อให้วิ่งเป็น Thin Mode ตาม Default
 // oracledb.initOracleClient();
-// oracledb.initOracleClient({ libDir: 'C:\\oracle\\instantclient_11_2' });
+// oracledb.initOracleClient({ libDir: 'C:\\oracle\\instantclient_12_2' });
 let pool: oracledb.Pool;
 
 // 1. สั่งสร้างกองกลาง (Pool) ค้างไว้ตอนแอปเปิดตัวครั้งแรกครั้งเดียว
@@ -18,10 +19,12 @@ export async function initializePool() {
     poolMin: 1,
     poolMax: 4,
     poolIncrement: 1,
-    
-    // 💡 เพิ่ม 2 ออปชันนี้เพื่อป้องกันปัญหา Listener หนักใจ
-    connectTimeout: 60,      // ให้เวลาลองเชื่อมต่อสูงสุด 60 วินาที (ไม่ตัดสายทันทีที่เจอสะดุด)
-    queueMax: 500            // ถ้าคิวยังเต็มให้รอในคิวก่อน อย่าเพิ่งพ่น Error ทันที
+    connectTimeout: 60,
+    queueMax: 500,
+
+    // 🟢 แนะนำเพิ่ม 2 ค่านี่ค่ะ:
+    poolPingInterval: 60, // เช็กสายล่วงหน้าก่อนแจกจ่าย connection ถ้าสายตายจะดึงสายใหม่ให้ทันที
+    poolTimeout: 300,     // คืนค่าสายที่ไม่ได้ใช้งานลงให้เหลือ poolMin ทุกๆ 5 นาที
   });
   console.log('⚓ กองกลางท่อฐานข้อมูล (Connection Pool) พร้อมรบ!');
 }

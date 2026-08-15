@@ -8,7 +8,6 @@ exports.AuthModel = void 0;
 const database_1 = require("../../database");
 const oracledb_1 = __importDefault(require("oracledb"));
 class AuthModel {
-    static DepartMent_id = 571; // กำหนดค่า department_id เป็น 571
     static async getProductionLineIdByNo(productionLineNo) {
         let conn;
         try {
@@ -61,13 +60,11 @@ class AuthModel {
             FROM staff
             WHERE user_name = :username
             AND passwd = :password
-            AND department_id = :DepartMent_id
             AND status = 'ปกติ'
         `;
             const result = await conn.execute(staffSql, {
                 username: username.trim(),
-                password: password.trim(),
-                DepartMent_id: this.DepartMent_id
+                password: password.trim()
             }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             // ถ้าไม่เจอข้อมูลพนักงาน ให้คืนค่า null
             if (!result.rows || result.rows.length === 0) {
@@ -122,7 +119,7 @@ class AuthModel {
         `;
             const result = await conn.execute(sql, { staff_id: staffId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             return result.rows
-                ? result.rows.map((row) => Number(Number(row.permission_id).toFixed(2)))
+                ? result.rows.map((row) => Number(row.permission_id))
                 : [];
         }
         catch (error) {

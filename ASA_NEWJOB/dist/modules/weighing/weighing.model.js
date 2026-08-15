@@ -21,7 +21,7 @@ class WeighingModel {
                 const remarkSql = `
                     SELECT DISTINCT REMARKS 
                     FROM pd_roll 
-                    WHERE create_date >= ADD_MONTHS(SYSDATE, -3)
+                    WHERE create_date >= ADD_MONTHS(SYSDATE, -1)
                     AND REMARKS IS NOT NULL 
                     AND TRIM(REMARKS) IS NOT NULL
                     ORDER BY REMARKS ASC
@@ -34,7 +34,7 @@ class WeighingModel {
                 const holdCauseSql = `
                     SELECT DISTINCT hold_cause 
                     FROM pd_roll 
-                    WHERE create_date >= ADD_MONTHS(SYSDATE, -3)
+                    WHERE create_date >= ADD_MONTHS(SYSDATE, -1)
                     AND hold_cause IS NOT NULL 
                     AND TRIM(hold_cause) IS NOT NULL
                     ORDER BY hold_cause ASC
@@ -114,7 +114,7 @@ class WeighingModel {
             else {
                 sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
             }
-            console.log("SQL Query:", sql);
+            // console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -151,7 +151,7 @@ class WeighingModel {
             }
         }
         catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [getNextWeighing]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [getNextWeighing]:", error);
             throw error;
         }
         finally {
@@ -160,7 +160,7 @@ class WeighingModel {
                     await conn.close();
                 }
                 catch (closeErr) {
-                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                    // console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
                 }
             }
         }
@@ -250,7 +250,7 @@ class WeighingModel {
         catch (error) {
             if (conn)
                 await conn.rollback();
-            console.error("❌ เกิดข้อผิดพลาดใน Model [updateWeighingResult]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [updateWeighingResult]:", error);
             throw error;
         }
         finally {
@@ -277,7 +277,7 @@ class WeighingModel {
             });
             // 2. ถ้าเจอข้อมูล (มีการชั่งน้ำหนักแล้ว) ให้ส่งออก false ทันที
             if (result.rows && result.rows.length > 0) {
-                console.log("reset ไม่ได้เจอข้อมูล");
+                // console.log("reset ไม่ได้เจอข้อมูล");
                 return false;
             }
             // 3. ถ้าไม่เจอข้อมูล ให้ลบข้อมูลใน PL_WAIT_WEIGHING ของ split_set_id นี้
@@ -291,7 +291,7 @@ class WeighingModel {
             return true;
         }
         catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [CheckResetSplitSet]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [CheckResetSplitSet]:", error);
             throw error;
         }
         finally {
@@ -300,7 +300,7 @@ class WeighingModel {
                     await conn.close();
                 }
                 catch (closeErr) {
-                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                    // console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
                 }
             }
         }
@@ -333,7 +333,7 @@ class WeighingModel {
             return "1";
         }
         catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
             return "1";
         }
         finally {
@@ -376,7 +376,7 @@ class WeighingModel {
             return null;
         }
         catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [GetWaitWeighingInfoById]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [GetWaitWeighingInfoById]:", error);
             throw error;
         }
         finally {
@@ -487,7 +487,7 @@ class WeighingModel {
         catch (error) {
             if (conn)
                 await conn.rollback();
-            console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL]:", error);
             throw error;
         }
         finally {
@@ -501,7 +501,7 @@ class WeighingModel {
             conn = await (0, database_1.getConnection)();
             let result;
             const formattedStaffId = data.staffId ? Number(data.staffId) : -1;
-            console.log("qcReelQualityId:", data.qcReelQualityId);
+            // console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
                 // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert พร้อมบันทึก CREATE_STAFF
                 const insertFromQcSql = `
@@ -572,7 +572,7 @@ class WeighingModel {
         catch (error) {
             if (conn)
                 await conn.rollback();
-            console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL_QUALITY]:", error);
+            // console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL_QUALITY]:", error);
             throw error;
         }
         finally {

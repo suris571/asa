@@ -111,9 +111,9 @@ export const initSocket = (httpServer: HTTPServer): SocketIOServer => {
             try {
                 await WaitCutModel.swapQueue(orderId, current_que, aboveOrderId, above_que);
 
-                await FnNextCutSplitSet(targetLineId);
-                await FnNextRoll(targetLineId);
-                await FnNextQcCloseReel();
+                FnNextCutSplitSet(targetLineId);
+                FnNextRoll(targetLineId);
+                FnNextQcCloseReel(targetLineId);
 
                 // 🎯 Broadcast แจ้งเตือนยิงเฉพาะ Room ของเครื่องนั้น
                 const targetRoom = targetLineId ? waitCutNamespace.to(`machine_room_${targetLineId}`) : waitCutNamespace;
@@ -282,22 +282,30 @@ export const FnNextCutSplitSet = async (productionLineId: string | number) => {
     }
 };
 
-export const FnNextQcCloseReel = async () => {
+export const FnNextQcCloseReel = async (productionLineId?: string | number) => {
     try {
         const io = getIO();
         if (io) {
             // 🎯 ยิงหาทุกคนที่ต่ออยู่ในท่อ /socket/weighing โดยตรง
-            io.of("/socket/wait-cut/qc-close-reel").emit("queue_structure_changed", { success: true });
+            const qcCloseReelNamespace = io.of("/socket/wait-cut/qc-close-reel");
+            const targetRoom = productionLineId 
+                ? qcCloseReelNamespace.to(`machine_room_${productionLineId}`) 
+                : qcCloseReelNamespace;
+            targetRoom.emit("queue_structure_changed", { success: true });
             console.log("📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย");
         } else {
             console.warn("⚠️ [Socket Warning] ไม่พบตัวแปร io");
         }
     } catch (error: any) {
-        console.error("❌ [FnNextRoll Error]:", error);
+        console.error("❌ [FnNextQcCloseReel Error]:", error);
 
         const io = getIO();
         if (io) {
-            io.of("/socket/weighing").emit("queue_updated", { success: false, error: error.message });
+            const qcCloseReelNamespace = io.of("/socket/wait-cut/qc-close-reel");
+            const targetRoom = productionLineId 
+                ? qcCloseReelNamespace.to(`machine_room_${productionLineId}`) 
+                : qcCloseReelNamespace;
+            targetRoom.emit("queue_structure_changed", { success: false, error: error.message });
         }
     }
 };

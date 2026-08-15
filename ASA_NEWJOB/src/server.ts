@@ -50,24 +50,56 @@ app.use('/', authRoutes); // ท่อสำหรับหน้า /login แ�
 app.use(requireAuth); 
 
 app.use(async (req: Request, res: Response, next: NextFunction) => {
-    const staffId = req.session.user?.staff_id;
-    
-    // ดึงสิทธิ์สดใหม่จาก Oracle DB ณ วินาทีนั้นเลย
-    const freshPermissions = staffId 
-        ? await AuthModel.getPermissionsByStaffId(staffId) 
-        : [];
-    // ฝังลง res.locals เพื่อให้ทั้ง EJS และ Middleware เช็คสิทธิ์เห็นตรงกัน
-    res.locals.data = {
-        username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
-        role: req.session.user?.role,
-        pm1_pending: 5,
-        pm2_pending: 3,
-        pm_select: req.session.user?.machineNo,
-        pm_select_ID: req.session.user?.productionLineId,
-        permissions: freshPermissions, // 👈 สิทธิ์ Real-time อัปเดตทันทีที่ DB เปลี่ยน
-    };
+    try {
+        const staffId = req.session.user?.staff_id;
+        
+        // 🛑 แก้บั๊ก: เช็กว่ามี staffId จริงๆ (เพราะถ้า staffId = 0 ใน JS จะโดนมองเป็น false)
+        const hasStaffId = staffId !== undefined && staffId !== null;
 
-    next();
+        // 1. ดึงสิทธิ์สดใหม่จาก Oracle DB
+        const rawPermissions: any[] = hasStaffId 
+            ? await AuthModel.getPermissionsByStaffId(staffId) 
+            : [];
+
+        // 🎯 แปลงสิทธิ์ทั้งหมดให้เป็น Number ป้องกันปัญหา DB คืนค่าเป็น String (เช่น "16800" -> 16800)
+        const freshPermissions = rawPermissions.map((p) => Number(p));
+
+        // 2. 🎯 กำหนดรายการสิทธิ์ที่ระบบนี้ยอมรับ (16800 - 16804)
+        const validSystemPermissions = [16800, 16801, 16802, 16803, 16804];
+
+        // 3. 🎯 เช็กว่ามี "อย่างน้อย 1 สิทธิ์" ตรงกับระบบนี้หรือไม่
+        const hasAccess = freshPermissions.some((p) => validSystemPermissions.includes(p));
+
+        // 🔍 LOG สิทธิ์ทั้งหมดเพื่อ Debug
+        console.log(`--------------------------------------------------`);
+        console.log(`🔍 [Permission Check] Staff ID: ${staffId}`);
+        console.log(`   - สิทธิ์ทั้งหมดที่พนักงานคนนี้มีใน DB :`, freshPermissions);
+        console.log(`   - สิทธิ์ที่ระบบนี้อนุญาตให้เข้าใช้งาน :`, validSystemPermissions);
+        console.log(`   - ผลการตรวจสอบ (ขออย่างน้อย 1 สิทธิ์)  : ${hasAccess ? '✅ ผ่าน' : '❌ ไม่ผ่าน'}`);
+        console.log(`--------------------------------------------------`);
+
+        // 🛑 ถ้าไม่มีสิทธิ์เลยแม้แต่อันเดียว ให้ Redirect ไป Logout
+        if (!hasAccess) {
+            console.warn(`⚠️ Staff ID: ${staffId} ไม่มีสิทธิ์ใช้งานระบบนี้ -> Redirect ไป /auth/logout`);
+            return res.redirect('/auth/logout');
+        }
+
+        // 4. ฝังลง res.locals สำหรับ EJS
+        res.locals.data = {
+            username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
+            role: req.session.user?.role,
+            pm1_pending: 5,
+            pm2_pending: 3,
+            pm_select: req.session.user?.machineNo,
+            pm_select_ID: req.session.user?.productionLineId,
+            permissions: freshPermissions,
+        };
+
+        next();
+    } catch (error) {
+        console.error("❌ Middleware Permission Error:", error);
+        next(error);
+    }
 });
 
 // เส้นทางหลักของระบบโรงงาน

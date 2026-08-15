@@ -7,16 +7,20 @@ const Common_1 = require("../util/Common");
 const getWeighingPage = async (req, res) => {
     const productionLineId = Number(req.session.user?.productionLineId);
     try {
+        console.time("⏱️ [TOTAL] Weighing Page Load");
         const today = new Date();
         const twoDaysAgo = new Date();
         twoDaysAgo.setDate(today.getDate() - 2);
-        // 🎯 แปลงให้อยู่ในฟอร์แมต DD/MM/YYYY (ตรงกับ Model แล้ว)
-        const startDate = Common_1.Common.formatDateDDMMYYYY(twoDaysAgo); // ได้ผลลัพธ์เช่น "06/08/2026"
-        const endDate = Common_1.Common.formatDateDDMMYYYY(today); // ได้ผลลัพธ์เช่น "08/08/2026"
-        // สั่ง await รอรับประวัติการชั่งน้ำหนักย้อนหลังดักทาง SQL
-        const getNextWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId);
-        const historyWeighing = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate);
-        // เรนเดอร์หน้าจอ ejs พร้อมสกัดข้อมูลพ่นลงตาราง
+        const startDate = Common_1.Common.formatDateDDMMYYYY(twoDaysAgo);
+        const endDate = Common_1.Common.formatDateDDMMYYYY(today);
+        // 🎯 ดึงแบบ Parallel พร้อมจับเวลา
+        console.time("[TIME] 1. Fetching DB");
+        const [getNextWeighing, historyWeighing] = await Promise.all([
+            weighing_model_1.WeighingModel.getNextWeighing(productionLineId),
+            weighing_model_1.WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate)
+        ]);
+        console.timeEnd("[TIME] 1. Fetching DB");
+        console.time("[TIME] 2. Render EJS");
         res.render('weighing/index', {
             nextData: getNextWeighing,
             historyData: historyWeighing,
@@ -24,6 +28,8 @@ const getWeighingPage = async (req, res) => {
             startDate: startDate,
             endDate: endDate
         });
+        console.timeEnd("[TIME] 2. Render EJS");
+        console.timeEnd("[TOTAL] Weighing Page Load");
     }
     catch (error) {
         console.error("ระบบหน้าจอชั่งน้ำหนักขัดข้อง:", error);
@@ -34,7 +40,7 @@ exports.getWeighingPage = getWeighingPage;
 const saveWeighingController = async (req, res) => {
     try {
         const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
-        let staffId = req.session.user?.staff_id || 1; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
+        const staffId = req.session.user?.staff_id; // ดึง staff_id จาก session หรือใช้ค่าเริ่มต้นเป็น 1
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
         }

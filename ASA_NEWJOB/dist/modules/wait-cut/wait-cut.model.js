@@ -10,8 +10,8 @@ const weighing_model_1 = require("./../weighing/weighing.model");
 const Common_1 = require("../util/Common");
 const oracledb_1 = __importDefault(require("oracledb"));
 class WaitCutModel {
-    static default_status = "ส่งให้ Rewinder"; // กำหนดค่า department_id เป็น 571
-    static last_status = 'เสร็จสิ้น'; // กำหนดค่า department_id เป็น 571
+    static default_status = "ส่งให้ Rewinder";
+    static last_status = 'ยกเลิก';
     static async getAllCutStatuses() {
         const query = `
             SELECT id, status_name, description 
@@ -1087,23 +1087,23 @@ class WaitCutModel {
                 if (Number(remainingCount) === 0) {
                     // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
                     // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
-                    // const updateOrderSql = `
-                    //     UPDATE pl_order
-                    //     SET 
-                    //         status = :status,
-                    //         FINISH_ORDER = SYSDATE,
-                    //         UPDATE_STAFF = :staffId,
-                    //         UPDATE_DATE = SYSDATE
-                    //     WHERE id = :orderId
-                    // `;
                     const updateOrderSql = `
                         UPDATE pl_order
                         SET 
+                            status = :status,
                             FINISH_ORDER = SYSDATE,
                             UPDATE_STAFF = :staffId,
                             UPDATE_DATE = SYSDATE
                         WHERE id = :orderId
                     `;
+                    // const updateOrderSql = `
+                    //     UPDATE pl_order
+                    //     SET 
+                    //         FINISH_ORDER = SYSDATE,
+                    //         UPDATE_STAFF = :staffId,
+                    //         UPDATE_DATE = SYSDATE
+                    //     WHERE id = :orderId
+                    // `;
                     const orderResult = await conn.execute(updateOrderSql, {
                         orderId: currentOrderId,
                         staffId: formattedStaffId,

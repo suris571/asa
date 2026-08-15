@@ -51,7 +51,7 @@
         <div class="form-group mb-3">
           <label class="text-xs font-weight-bold text-secondary">ชื่อผู้ใช้งาน (Username)</label>
           <div class="input-group">
-            <input type="text" name="username" class="form-control form-control-lg font-weight-bold" placeholder="ระบุชื่อผู้ใช้งาน..." required autocomplete="off">
+            <input type="text" name="username" class="form-control form-control-lg font-weight-bold" placeholder="ระบุชื่อผู้ใช้งาน..." required autocomplete="off" style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
             <div class="input-group-append">
               <div class="input-group-text">
                 <span class="fas fa-user-badge"></span>

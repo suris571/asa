@@ -19,7 +19,7 @@ export const requirePermission = (permissionId: number) => {
     console.log("📋 สิทธิ์สดปัจจุบันจาก DB:", userPermissions);
 
     // 🟢 เช็คสิทธิ์ตรง หรือเช็คสิทธิ์ Admin (168)
-    const hasPermission = userPermissions.includes(permissionId) || userPermissions.includes(168);
+    const hasPermission = userPermissions.includes(permissionId) || userPermissions.includes(16800);
     console.log("ผลการตรวจสอบ:", hasPermission);
 
     if (hasPermission) {

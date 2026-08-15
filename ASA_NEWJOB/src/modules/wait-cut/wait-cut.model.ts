@@ -35,8 +35,8 @@ export interface OrderQueue {
 
 export class WaitCutModel {
 
-    private static default_status = "ส่งให้ Rewinder"; // กำหนดค่า department_id เป็น 571
-    private static last_status = 'เสร็จสิ้น'; // กำหนดค่า department_id เป็น 571
+    private static default_status = "ส่งให้ Rewinder"; 
+    private static last_status = 'ยกเลิก';
 
     static async getAllCutStatuses(): Promise<any[]> {
         const query = `
@@ -1268,23 +1268,23 @@ export class WaitCutModel {
                 if (Number(remainingCount) === 0) {
                     // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
                     // 🟢 5.2 ถ้าไม่มีรายการค้างแล้ว (REMAINING_COUNT = 0) -> อัปเดต pl_order เป็น 'เสร็จสิ้น'
-                    // const updateOrderSql = `
-                    //     UPDATE pl_order
-                    //     SET 
-                    //         status = :status,
-                    //         FINISH_ORDER = SYSDATE,
-                    //         UPDATE_STAFF = :staffId,
-                    //         UPDATE_DATE = SYSDATE
-                    //     WHERE id = :orderId
-                    // `;
                     const updateOrderSql = `
                         UPDATE pl_order
                         SET 
+                            status = :status,
                             FINISH_ORDER = SYSDATE,
                             UPDATE_STAFF = :staffId,
                             UPDATE_DATE = SYSDATE
                         WHERE id = :orderId
                     `;
+                    // const updateOrderSql = `
+                    //     UPDATE pl_order
+                    //     SET 
+                    //         FINISH_ORDER = SYSDATE,
+                    //         UPDATE_STAFF = :staffId,
+                    //         UPDATE_DATE = SYSDATE
+                    //     WHERE id = :orderId
+                    // `;
 
                     const orderResult = await conn.execute(
                         updateOrderSql,

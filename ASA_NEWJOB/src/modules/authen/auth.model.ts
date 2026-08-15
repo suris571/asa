@@ -4,7 +4,6 @@ import oracledb from "oracledb";
 
 
 export class AuthModel {
-    private static DepartMent_id = 571; // กำหนดค่า department_id เป็น 571
 
     static async getProductionLineIdByNo(productionLineNo: number | string): Promise<number> {
         let conn;
@@ -68,7 +67,6 @@ export class AuthModel {
             FROM staff
             WHERE user_name = :username
             AND passwd = :password
-            AND department_id = :DepartMent_id
             AND status = 'ปกติ'
         `;
 
@@ -76,8 +74,7 @@ export class AuthModel {
             staffSql,
             { 
                 username: username.trim(),
-                password: password.trim(),
-                DepartMent_id: this.DepartMent_id
+                password: password.trim()
             },
             { outFormat: oracledb.OUT_FORMAT_OBJECT }
         );
@@ -149,7 +146,7 @@ static async getPermissionsByStaffId(staffId: number): Promise<number[]> {
         );
 
         return result.rows 
-            ? result.rows.map((row: any) => Number(Number(row.permission_id).toFixed(2))) 
+            ? result.rows.map((row: any) => Number(row.permission_id)) 
             : [];
     } catch (error) {
         console.error("❌ Error fetching permissions:", error);

@@ -1,0 +1,13 @@
+import { Server } from 'socket.io';
+export declare class SerialService {
+    private static port;
+    private static parser;
+    private static ioInstance;
+    private static mockTimer;
+    static initialize(io: Server, portName?: string, baudRate?: number): void;
+    /**
+     * 🧪 ฟังก์ชันสลักเลขสุ่มวิ่งออโต้ ยิงเข้าหน้าเว็บเมื่อคอม Dev ไม่มีสายต่อจริง
+     */
+    private static startMockStream;
+}
+//# sourceMappingURL=serial-service.d.ts.map

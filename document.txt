@@ -160,11 +160,11 @@ CREATE TABLE pl_cut_split_set (
 );
 
 
-CREATE SEQUENCE SQ_PL_CUT_SPLIT_SET
-    START WITH 1
-    INCREMENT BY 1
-    NOCACHE
-    NOCYCLE;
+CREATE SEQUENCE seq_pl_cut_split_set
+  START WITH 1
+  INCREMENT BY 1
+  NOCACHE
+  NOCYCLE;
 
 
 CREATE OR REPLACE TRIGGER trg_pl_cut_split_set_id
@@ -269,7 +269,9 @@ SELECT
     c_stat.status_name,
     c_stat.id AS status_id,
     p_or.pl_production_line_id,
+
     NVL(w_all.wait_weighing_qty, 0) AS wait_weighing_qty,
+
     NVL(w_pending.reel_use_qty, 0) AS reel_use_qty
 
 FROM pl_cut_split_set p_cut
@@ -285,6 +287,7 @@ LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
 LEFT JOIN grade g4 ON p_de.grade4_id = g4.id
 LEFT JOIN CUT_STATUSES c_stat ON p_cut.status = c_stat.id
 LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
+
 LEFT JOIN (
     SELECT 
         split_set_id,
@@ -490,7 +493,7 @@ INNER JOIN pl_order p_or ON p_wei.pl_order_id = p_or.id
 LEFT JOIN grade g ON p_wei.grade_id = g.id
 LEFT JOIN p_size pz ON p_wei.size_id = pz.id
 LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
-LEFT JOIN qc_reel_quality qc_re_qua ON qc_reel.id = qc_re_qua.qc_reel_id;
+LEFT JOIN qc_reel_quality qc_re_qua ON qc_reel.id = qc_re_qua.qc_reel_id
 
 
 
@@ -548,3 +551,12 @@ SELECT (SELECT NVL(MAX(ID), 0) FROM STAFF_PERMISSION) + 4, SYSDATE, 2000, 16803,
 SELECT (SELECT NVL(MAX(ID), 0) FROM STAFF_PERMISSION) + 5, SYSDATE, 2000, 16804, SYSDATE, -1 FROM DUAL;
 
 COMMIT;
+
+
+
+
+
+
+
+
+npm install --production
