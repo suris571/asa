@@ -1,13 +1,9 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getIO = exports.broadcastNextRollToWeighingStation = exports.FnNextQcCloseReel = exports.FnNextCutSplitSet = exports.FnNextRoll = exports.initSocket = void 0;
 const socket_io_1 = require("socket.io");
 const wait_cut_model_1 = require("./modules/wait-cut/wait-cut.model");
 const weighing_model_1 = require("./modules/weighing/weighing.model");
-const crypto_1 = __importDefault(require("crypto"));
 // เก็บ Hash แยกตามเครื่องจักร (เช่น { 1: 'hash_xxx', 2: 'hash_yyy' })
 let lastQueueHashes = {};
 // ⏳ ฟังก์ชันหลังบ้าน คอยตรวจส่อง Oracle DB แยกตามเครื่องจักร
@@ -22,7 +18,6 @@ const startQueueMonitor = (waitCutNamespace) => {
             // 🎯 2. ดึงรายการ Room ทั้งหมดที่ขึ้นต้นด้วย 'machine_room_' มาสร้างเป็น Set ของ Machine ID ที่ใช้งานอยู่จริง
             const activeMachineIds = new Set();
             for (const socket of connectedSockets) {
-                // 🎯 ใช้ for...of อ่านจาก socket.rooms โดยตรง ไร้ปัญหา Type Error แน่นอนค่ะ
                 for (const room of socket.rooms) {
                     if (room.startsWith("machine_room_")) {
                         const id = parseInt(room.replace("machine_room_", ""));
@@ -31,15 +26,12 @@ const startQueueMonitor = (waitCutNamespace) => {
                     }
                 }
             }
-            // 🎯 3. วนลูปตรวจเฉพาะเครื่องที่มีคนเปิดหน้าจอทำงานอยู่จริงๆ (Dynamic 100%)
+            // 🎯 3. วนลูปตรวจเฉพาะเครื่องที่มีคนเปิดหน้าจอทำงานอยู่จริงๆ (ใช้ Fingerprint แทนการดึงทั้ง DB)
             for (const machineId of activeMachineIds) {
-                const currentRawData = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, null, null, null, null, machineId);
-                const filteredDataForHash = currentRawData.map((item) => {
-                    const { que, ...restOfData } = item;
-                    return restOfData;
-                });
-                const currentHash = crypto_1.default.createHash("md5").update(JSON.stringify(filteredDataForHash)).digest("hex");
-                if (currentHash !== lastQueueHashes[machineId]) {
+                // 🟢 เรียกใช้ Fingerprint เบาๆ (ประมวลผลเร็วระดับมิลลิวินาที)
+                const currentHash = await wait_cut_model_1.WaitCutModel.getQueueFingerprint(machineId);
+                // ถ้าค่า Fingerprint เปลี่ยนจากรอบที่แล้ว แสดงว่าข้อมูลใน DB มีการเคลื่อนไหว
+                if (currentHash !== "" && currentHash !== lastQueueHashes[machineId]) {
                     console.log(`📢 [Backend Monitor] เครื่องตัด ID: ${machineId} มีข้อมูลเปลี่ยนแปลง! ยิงเตือนเฉพาะห้อง...`);
                     lastQueueHashes[machineId] = currentHash;
                     // ยิงแจ้งเตือนเฉพาะ Room ของเครื่องนั้นๆ

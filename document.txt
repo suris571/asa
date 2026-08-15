@@ -269,10 +269,10 @@ SELECT
     c_stat.status_name,
     c_stat.id AS status_id,
     p_or.pl_production_line_id,
-
-    NVL(w_all.wait_weighing_qty, 0) AS wait_weighing_qty,
-
-    NVL(w_pending.reel_use_qty, 0) AS reel_use_qty
+		
+    NVL(w_stat.wait_weighing_qty, 0) AS wait_weighing_qty,
+		
+    NVL(w_stat.reel_use_qty, 0) AS reel_use_qty
 
 FROM pl_cut_split_set p_cut
 INNER JOIN pl_order_detail p_de ON p_cut.pl_order_detail_id = p_de.id
@@ -291,21 +291,12 @@ LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
 LEFT JOIN (
     SELECT 
         split_set_id,
-        COUNT(*) AS wait_weighing_qty
+        COUNT(*) AS wait_weighing_qty,
+        COUNT(CASE WHEN status IS NULL THEN 1 END) AS reel_use_qty
     FROM pl_wait_weighing
     WHERE split_set_id IS NOT NULL
     GROUP BY split_set_id
-) w_all ON p_cut.id = w_all.split_set_id
-
-LEFT JOIN (
-    SELECT 
-        split_set_id,
-        COUNT(*) AS reel_use_qty
-    FROM pl_wait_weighing
-    WHERE split_set_id IS NOT NULL
-      AND status IS NULL
-    GROUP BY split_set_id
-) w_pending ON p_cut.id = w_pending.split_set_id
+) w_stat ON p_cut.id = w_stat.split_set_id
 
 
 
@@ -427,7 +418,7 @@ SELECT
     p_wei.pl_order_id,
     p_wei.pl_order_detail_id,
     p_wei.split_set_id,
-		p_wei.part,
+    p_wei.part,
     p_or.model,
     p_wei.weigh,
     p_wei.status,
@@ -435,56 +426,28 @@ SELECT
     p_wei.created_at,
 
     p_wei.roll,
-		p_wei.roll_no,
+    p_wei.roll_no,
     p_wei.blade_size AS blad,
     g.grade AS grade_name,
-		g.id AS grade_id,
+    g.id AS grade_id,
     pz.p_size AS size_name,
-		pz.id AS size_id,
-		
+    pz.id AS size_id,
+        
     p_or.order_no,
     p_de.order_item,
     p_cut.set_no,
     p_cut.cut_length,
     p_cut.finish_at,
     qc_reel.reel_no,
-		qc_reel.id AS qc_reel_id,
-		qc_re_qua.id AS qc_reel_quality_id,
+    qc_reel.id AS qc_reel_id,
+    qc_re_qua.id AS qc_reel_quality_id,
     p_de.queue_no,
     p_de.cut_status_id AS main_cut_status_id,
     p_or.diameter,
-		p_or.pl_production_line_id,
-    (
-        SELECT 
-            SUM(
-                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
-            )
-        FROM pl_cut_split_set_view v
-        WHERE v.pl_order_id = p_wei.pl_order_id
-        GROUP BY v.pl_order_id
-    ) AS total,
-		(
-        SELECT COUNT(*)
-        FROM pl_wait_weighing w
-        WHERE w.pl_order_id = p_wei.pl_order_id
-          AND w.status IS NOT NULL 
-          AND TRIM(w.status) IS NOT NULL
-    ) AS already_done,
-		(
-        SELECT 
-            NVL(SUM(
-                (CASE WHEN v.blad1 IS NOT NULL AND TRIM(v.blad1) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad2 IS NOT NULL AND TRIM(v.blad2) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad3 IS NOT NULL AND TRIM(v.blad3) IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN v.blad4 IS NOT NULL AND TRIM(v.blad4) IS NOT NULL THEN 1 ELSE 0 END)
-            ), 0)
-        FROM pl_cut_split_set_view v
-        WHERE v.pl_order_detail_id = p_wei.pl_order_detail_id
-          AND v.status_id = 5
-    ) AS done_cal_pl_cut_split_set
+    p_or.pl_production_line_id,
+    NVL(tot.total, 0) AS total,
+    NVL(done.already_done, 0) AS already_done,
+    NVL(cal.done_cal_pl_cut_split_set, 0) AS done_cal_pl_cut_split_set
 
 FROM pl_wait_weighing p_wei
 INNER JOIN pl_cut_split_set p_cut ON p_wei.split_set_id = p_cut.id
@@ -494,6 +457,39 @@ LEFT JOIN grade g ON p_wei.grade_id = g.id
 LEFT JOIN p_size pz ON p_wei.size_id = pz.id
 LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
 LEFT JOIN qc_reel_quality qc_re_qua ON qc_reel.id = qc_re_qua.qc_reel_id
+LEFT JOIN (
+    SELECT 
+        pl_order_id,
+        SUM(
+            (CASE WHEN blad1 IS NOT NULL AND TRIM(blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad2 IS NOT NULL AND TRIM(blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad3 IS NOT NULL AND TRIM(blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad4 IS NOT NULL AND TRIM(blad4) IS NOT NULL THEN 1 ELSE 0 END)
+        ) AS total
+    FROM pl_cut_split_set_view
+    GROUP BY pl_order_id
+) tot ON p_wei.pl_order_id = tot.pl_order_id
+LEFT JOIN (
+    SELECT 
+        pl_order_id,
+        COUNT(*) AS already_done
+    FROM pl_wait_weighing
+    WHERE status IS NOT NULL AND TRIM(status) IS NOT NULL
+    GROUP BY pl_order_id
+) done ON p_wei.pl_order_id = done.pl_order_id
+LEFT JOIN (
+    SELECT 
+        pl_order_detail_id,
+        SUM(
+            (CASE WHEN blad1 IS NOT NULL AND TRIM(blad1) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad2 IS NOT NULL AND TRIM(blad2) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad3 IS NOT NULL AND TRIM(blad3) IS NOT NULL THEN 1 ELSE 0 END) +
+            (CASE WHEN blad4 IS NOT NULL AND TRIM(blad4) IS NOT NULL THEN 1 ELSE 0 END)
+        ) AS done_cal_pl_cut_split_set
+    FROM pl_cut_split_set_view
+    WHERE status_id = 5
+    GROUP BY pl_order_detail_id
+) cal ON p_wei.pl_order_detail_id = cal.pl_order_detail_id
 
 
 
@@ -553,16 +549,44 @@ SELECT (SELECT NVL(MAX(ID), 0) FROM STAFF_PERMISSION) + 5, SYSDATE, 2000, 16804,
 COMMIT;
 
 
-CREATE INDEX idx_pd_roll_date_remarks 
-ON pd_roll (create_date, REMARKS);
+-- ==========================================
+-- 1. ตาราง PD_ROLL (ตารางใหญ่ 34 ล้านแถว)
+-- ==========================================
+-- สำหรับ Search remark
+CREATE INDEX idx_pd_roll_date_remarks ON PD_ROLL (CREATE_DATE, REMARKS) ONLINE;
 
-สำหรับ query remark เร็วขึ้น
-
-สำหรับหา roll_no ตอนบันทึกน้ำหนักเร็วขึ้น
+-- สำหรับ getMaxRollNo() ดึงเลขม้วนล่าสุดแบบ Index Min/Max Scan
 CREATE INDEX idx_pd_roll_no_num ON PD_ROLL (TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)) ONLINE;
 
+-- สำหรับ updateCloseReel และ JOIN ต่างๆ
 CREATE INDEX idx_pd_roll_split_set_id ON PD_ROLL (SPLIT_SET_ID) ONLINE;
+CREATE INDEX idx_pd_roll_qc_reel_id ON PD_ROLL (QC_REEL_ID) ONLINE;
 
+-- ==========================================
+-- 2. ตาราง PL_ORDER & PL_ORDER_DETAIL
+-- ==========================================
+CREATE INDEX idx_pl_order_line_status ON PL_ORDER (PL_PRODUCTION_LINE_ID, STATUS) ONLINE;
+CREATE INDEX idx_pl_order_detail_order_id ON PL_ORDER_DETAIL (PL_ORDER_ID) ONLINE;
+
+-- ==========================================
+-- 3. ตาราง PL_CUT_SPLIT_SET
+-- ==========================================
+-- ยุบรวม (PL_ORDER_ID, PL_ORDER_DETAIL_ID) คลุมทั้ง STATUS และ SUB_STATUS ในตัวเดียว
+CREATE INDEX idx_split_set_ord_det_combined ON PL_CUT_SPLIT_SET (PL_ORDER_ID, PL_ORDER_DETAIL_ID, STATUS, SUB_STATUS) ONLINE;
+CREATE INDEX idx_split_set_qc_reel_id ON PL_CUT_SPLIT_SET (QC_REEL_ID) ONLINE;
+
+-- ==========================================
+-- 4. ตาราง PL_WAIT_WEIGHING
+-- ==========================================
+-- ตัวนี้ดักได้ทั้งค้นหาด้วย (SPLIT_SET_ID) อย่างเดียว และ (SPLIT_SET_ID + STATUS)
+CREATE INDEX idx_wait_weigh_split_stat ON PL_WAIT_WEIGHING (SPLIT_SET_ID, STATUS) ONLINE;
+CREATE INDEX idx_wait_weigh_order_stat ON PL_WAIT_WEIGHING (PL_ORDER_ID, STATUS) ONLINE;
+
+-- ==========================================
+-- 5. ตาราง QC_REEL & QC_REEL_QUALITY
+-- ==========================================
+CREATE INDEX idx_qc_reel_grade_id ON QC_REEL (GRADE_ID) ONLINE;
+CREATE INDEX idx_qc_reel_quality_reel_id ON QC_REEL_QUALITY (QC_REEL_ID) ONLINE;
 
 
 

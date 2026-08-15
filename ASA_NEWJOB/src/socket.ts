@@ -10,7 +10,6 @@ let lastQueueHashes: { [key: number]: string } = {};
 // ⏳ ฟังก์ชันหลังบ้าน คอยตรวจส่อง Oracle DB แยกตามเครื่องจักร
 const startQueueMonitor = (waitCutNamespace: any) => {
     const MONITOR_INTERVAL = 30000;
-
     setInterval(async () => {
         try {
             // 1. เช็กก่อนว่ามีคนเปิดหน้าเว็บต่อ Socket อยู่ไหม
@@ -21,7 +20,6 @@ const startQueueMonitor = (waitCutNamespace: any) => {
             const activeMachineIds = new Set<number>();
 
             for (const socket of connectedSockets) {
-                // 🎯 ใช้ for...of อ่านจาก socket.rooms โดยตรง ไร้ปัญหา Type Error แน่นอนค่ะ
                 for (const room of socket.rooms) {
                     if (room.startsWith("machine_room_")) {
                         const id = parseInt(room.replace("machine_room_", ""));
@@ -30,18 +28,13 @@ const startQueueMonitor = (waitCutNamespace: any) => {
                 }
             }
 
-            // 🎯 3. วนลูปตรวจเฉพาะเครื่องที่มีคนเปิดหน้าจอทำงานอยู่จริงๆ (Dynamic 100%)
+            // 🎯 3. วนลูปตรวจเฉพาะเครื่องที่มีคนเปิดหน้าจอทำงานอยู่จริงๆ (ใช้ Fingerprint แทนการดึงทั้ง DB)
             for (const machineId of activeMachineIds) {
-                const currentRawData = await WaitCutModel.getAllWaitingAndWeighing(null, null, null, null, null, machineId);
+                // 🟢 เรียกใช้ Fingerprint เบาๆ (ประมวลผลเร็วระดับมิลลิวินาที)
+                const currentHash = await WaitCutModel.getQueueFingerprint(machineId);
 
-                const filteredDataForHash = currentRawData.map((item: any) => {
-                    const { que, ...restOfData } = item;
-                    return restOfData;
-                });
-
-                const currentHash = crypto.createHash("md5").update(JSON.stringify(filteredDataForHash)).digest("hex");
-
-                if (currentHash !== lastQueueHashes[machineId]) {
+                // ถ้าค่า Fingerprint เปลี่ยนจากรอบที่แล้ว แสดงว่าข้อมูลใน DB มีการเคลื่อนไหว
+                if (currentHash !== "" && currentHash !== lastQueueHashes[machineId]) {
                     console.log(`📢 [Backend Monitor] เครื่องตัด ID: ${machineId} มีข้อมูลเปลี่ยนแปลง! ยิงเตือนเฉพาะห้อง...`);
 
                     lastQueueHashes[machineId] = currentHash;

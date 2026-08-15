@@ -37,7 +37,7 @@ router.post('/login', async (req, res) => {
                 username: username,
                 role: "",
                 name: `${user.first_name} ${user.last_name}`,
-                staff_id: user?.id, // เพิ่ม staff_id ลงใน session
+                staff_id: Number(user?.id), // เพิ่ม staff_id ลงใน session
                 machineNo: Number(machineNo),
                 permissions: user.permissions,
                 productionLineId: productionLineId

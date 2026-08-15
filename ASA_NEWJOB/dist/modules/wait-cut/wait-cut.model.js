@@ -12,6 +12,42 @@ const oracledb_1 = __importDefault(require("oracledb"));
 class WaitCutModel {
     static default_status = "ส่งให้ Rewinder";
     static last_status = 'ยกเลิก';
+    static async getQueueFingerprint(productionLineId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🟢 ดึงข้อมูลระดับสถิติ ครอบคลุมทั้ง Insert ใหม่ (NULL) และ Update งานเดิม
+            const sql = `
+                SELECT 
+                    COUNT(*) AS TOTAL_ROWS,
+                    MAX(pl_order_detail_id) AS MAX_ID,
+                    MAX(NVL(update_date, create_date)) AS LAST_ACTIVITY,
+                    NVL(SUM(NVL(completed_set_qty, 0) + NVL(completed_roll_qty, 0)), 0) AS TOTAL_COMPLETED,
+                    MAX(cut_status_id) AS LAST_STATUS
+                FROM pl_order_view
+                WHERE pl_production_line_id = :productionLineId
+                AND status = :defaultStatus
+                AND (cut_status_id IN (1, 2, 3, 4) OR cut_status_id IS NULL)
+            `;
+            const result = await conn.execute(sql, {
+                productionLineId: Number(productionLineId),
+                defaultStatus: WaitCutModel.default_status
+            }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            const row = result.rows[0];
+            // ถ้าไม่มีข้อมูลเลย ให้คืนค่า string ว่าง
+            if (!row || row.TOTAL_ROWS === 0)
+                return "EMPTY";
+            // แปลงผลลัพธ์บรรทัดเดียวเป็น String รวมเพื่อเช็ก Hash
+            return `${row.TOTAL_ROWS}-${row.MAX_ID}-${row.LAST_ACTIVITY}-${row.TOTAL_COMPLETED}-${row.LAST_STATUS}`;
+        }
+        catch (error) {
+            return "";
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
     static async getAllCutStatuses() {
         const query = `
             SELECT id, status_name, description 
@@ -914,7 +950,7 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            const formattedStaffId = staffId ? Number(staffId) : null;
+            const formattedStaffId = Number(staffId);
             // 🔍 1. ดึงโควตาคงเหลือ (remaining) จาก PL_QC_REEL_VIEW
             const reelViewSql = `
                 SELECT reel_no, remaining 
@@ -944,7 +980,7 @@ class WaitCutModel {
                 };
             }
             const requiredQty = currentSetResult.rows[0]?.WAIT_WEIGHING_QTY || 0;
-            // 🛑 3. เปรียบเทียบ: จำนวนที่จะใช้ > โควตาคงเหลือหรือไม่?
+            // 🛑 3. เปรียบเทียบโควตา
             if (requiredQty > remainingQty) {
                 return {
                     success: false,
@@ -952,7 +988,7 @@ class WaitCutModel {
                 };
             }
             // 🟢 4. โควตาเพียงพอ -> UPDATE ตารางที่เกี่ยวข้องกัน
-            // 4.1 อัปเดตผูก qc_reel_id ใน pd_roll (ถ้ามีรายการชั่งน้ำหนักไปก่อนแล้ว)
+            // 4.1 อัปเดตผูก qc_reel_id ใน pd_roll
             const updatePdRollSql = `
                 UPDATE pd_roll
                 SET qc_reel_id = :reelId,
@@ -960,32 +996,34 @@ class WaitCutModel {
                     update_date = SYSDATE
                 WHERE split_set_id = :splitSetId
             `;
-            await conn.execute(updatePdRollSql, { reelId, splitSetId, staffId: formattedStaffId }, { autoCommit: false });
-            // 4.2 อัปเดตผูกค่า Quality สเปกกระดาษย้อนหลังใน pd_roll_quality (ถ้ามีรายการชั่งไปก่อนแล้ว)
-            const updatePdRollQualitySql = `
-                UPDATE pd_roll_quality pq
-                SET (
-                    BASIS_WEIGHT, BURSTING_STRENGTH, RING_CRUSH, CONCORA, THICKNESS,
-                    COBB, MOISTURE_CONTENT, CIE_LAB_L, CIE_LAB_A, CIE_LAB_B,
-                    BOTTOM_SIDE, INKJET, REMARKS
-                ) = (
-                    SELECT 
-                        q.BASIS_WEIGHT, q.BURSTING_STRENGHT, q.RING_CRUSH, q.CONCORA, q.THICKNESS,
-                        q.COBB, q.MOISTURE_CONTENT, q.CIE_LAB_L, q.CIE_LAB_A, q.CIE_LAB_B,
-                        q.BOTTOM_SIDE, q.INKJET, q.REMARKS
-                    FROM qc_reel_quality q
-                    WHERE q.qc_reel_id = :reelId
-                ),
-                UPDATE_STAFF = :staffId,
-                UPDATE_DATE = SYSDATE
-                WHERE pq.pd_roll_id IN (
-                    SELECT id 
-                    FROM pd_roll 
-                    WHERE split_set_id = :splitSetId
-                )
-            `;
-            await conn.execute(updatePdRollQualitySql, { reelId, splitSetId, staffId: formattedStaffId }, { autoCommit: false });
-            // 4.3 อัปเดตผูก qc_reel_id ลงใน pl_cut_split_set (ตารางหลัก)
+            const pdRollRes = await conn.execute(updatePdRollSql, { reelId, splitSetId, staffId: formattedStaffId }, { autoCommit: false });
+            // 🟢 4.2 อัปเดต pd_roll_quality เฉพาะเมื่อมีรายการ pd_roll ถูกอัปเดตจริงๆ เท่านั้น
+            if (pdRollRes.rowsAffected && pdRollRes.rowsAffected > 0) {
+                const updatePdRollQualitySql = `
+                    UPDATE pd_roll_quality pq
+                    SET (
+                        BASIS_WEIGHT, BURSTING_STRENGTH, RING_CRUSH, CONCORA, THICKNESS,
+                        COBB, MOISTURE_CONTENT, CIE_LAB_L, CIE_LAB_A, CIE_LAB_B,
+                        BOTTOM_SIDE, INKJET, REMARKS
+                    ) = (
+                        SELECT 
+                            q.BASIS_WEIGHT, q.BURSTING_STRENGHT, q.RING_CRUSH, q.CONCORA, q.THICKNESS,
+                            q.COBB, q.MOISTURE_CONTENT, q.CIE_LAB_L, q.CIE_LAB_A, q.CIE_LAB_B,
+                            q.BOTTOM_SIDE, q.INKJET, q.REMARKS
+                        FROM qc_reel_quality q
+                        WHERE q.qc_reel_id = :reelId
+                    ),
+                    UPDATE_STAFF = :staffId,
+                    UPDATE_DATE = SYSDATE
+                    WHERE pq.pd_roll_id IN (
+                        SELECT id 
+                        FROM pd_roll 
+                        WHERE split_set_id = :splitSetId
+                    )
+                `;
+                await conn.execute(updatePdRollQualitySql, { reelId, splitSetId, staffId: formattedStaffId }, { autoCommit: false });
+            }
+            // 4.3 อัปเดตผูก qc_reel_id ลงใน pl_cut_split_set
             const updateSplitSetSql = `
                 UPDATE pl_cut_split_set
                 SET qc_reel_id = :reelId,
@@ -994,7 +1032,7 @@ class WaitCutModel {
                 WHERE id = :splitSetId
             `;
             const result = await conn.execute(updateSplitSetSql, { reelId, splitSetId, staffId: formattedStaffId }, { autoCommit: false });
-            // 💾 4.4 Commit All Transaction
+            // 💾 4.4 Commit ทั้งหมด
             await conn.commit();
             return {
                 success: true,
