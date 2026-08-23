@@ -147,6 +147,14 @@ CREATE TABLE pl_cut_split_set (
     SIZE_ID2            NUMBER,
     SIZE_ID3            NUMBER,
     SIZE_ID4            NUMBER,
+    OVER_SIZE1	        NUMBER,
+    OVER_SIZE2	        NUMBER,
+    OVER_SIZE3	        NUMBER,
+    OVER_SIZE4	        NUMBER,
+    GRADE1_ID	        NUMBER,
+    GRADE2_ID	        NUMBER,	
+    GRADE3_ID	        NUMBER,	
+    GRADE4_ID	        NUMBER,
     status              NUMBER DEFAULT 1 NOT NULL,
     sub_status          VARCHAR2(50) NULL,
     set_no              VARCHAR2(50) NULL,
@@ -248,10 +256,10 @@ SELECT
     g3.grade AS grade3_name,
     g4.grade AS grade4_name,
     p_cut.set_no,
-    p_de.over_size1 AS blad1,
-    p_de.over_size2 AS blad2,
-    p_de.over_size3 AS blad3,
-    p_de.over_size4 AS blad4,
+    p_cut.over_size1 AS blad1,
+    p_cut.over_size2 AS blad2,
+    p_cut.over_size3 AS blad3,
+    p_cut.over_size4 AS blad4,
         
     pz1.p_size AS size_1,
     pz2.p_size AS size_2,
@@ -281,10 +289,10 @@ LEFT JOIN p_size pz1 ON p_cut.size_id1 = pz1.id
 LEFT JOIN p_size pz2 ON p_cut.size_id2 = pz2.id
 LEFT JOIN p_size pz3 ON p_cut.size_id3 = pz3.id
 LEFT JOIN p_size pz4 ON p_cut.size_id4 = pz4.id
-LEFT JOIN grade g1 ON p_de.grade1_id = g1.id
-LEFT JOIN grade g2 ON p_de.grade2_id = g2.id
-LEFT JOIN grade g3 ON p_de.grade3_id = g3.id
-LEFT JOIN grade g4 ON p_de.grade4_id = g4.id
+LEFT JOIN grade g1 ON p_cut.grade1_id = g1.id
+LEFT JOIN grade g2 ON p_cut.grade2_id = g2.id
+LEFT JOIN grade g3 ON p_cut.grade3_id = g3.id
+LEFT JOIN grade g4 ON p_cut.grade4_id = g4.id
 LEFT JOIN CUT_STATUSES c_stat ON p_cut.status = c_stat.id
 LEFT JOIN qc_reel ON p_cut.qc_reel_id = qc_reel.id
 
@@ -595,3 +603,13 @@ npm install --production
 
 ปิด ที่ chome
 chrome://flags/#block-insecure-private-network-requests
+
+
+
+ติดตั้งnode 14
+setx NODE_SKIP_PLATFORM_CHECK 1 /M
+setx PATH "%PATH%;C:\node" /M
+
+npm install -g pm2
+npm install -g pm2-windows-service
+pm2 save

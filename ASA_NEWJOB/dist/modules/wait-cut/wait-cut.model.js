@@ -320,7 +320,15 @@ class WaitCutModel {
                         size_id1, 
                         size_id2, 
                         size_id3, 
-                        size_id4
+                        size_id4,
+                        over_size1,
+                        over_size2,
+                        over_size3,
+                        over_size4,
+                        grade1_id,
+                        grade2_id,
+                        grade3_id,
+                        grade4_id
                     ) 
                     SELECT 
                         sq_pl_cut_split_set.NEXTVAL, 
@@ -334,7 +342,15 @@ class WaitCutModel {
                         size1_id, 
                         size2_id, 
                         size3_id, 
-                        size4_id
+                        size4_id,
+                        over_size1,
+                        over_size2,
+                        over_size3,
+                        over_size4,
+                        grade1_id,
+                        grade2_id,
+                        grade3_id,
+                        grade4_id
                     FROM pl_order_detail
                     WHERE id = :orderDetailId
                 `;
@@ -769,6 +785,7 @@ class WaitCutModel {
                 FROM pl_cut_split_set_view
                 WHERE 1=1
                 AND split_status_id = 5
+                AND CUT_LENGTH IS NOT NULL
             `;
             const binds = {};
             if (productionLineId && productionLineId !== "null") {
@@ -1598,7 +1615,9 @@ class WaitCutModel {
             const formattedStaffId = staffId ? Number(staffId) : null;
             // 🟢 1. SELECT ค่าสดล่าสุดจาก DB และล็อกแถวป้องกัน Race Condition
             const selectSql = `
-                SELECT size_id1, size_id2, size_id3, size_id4
+                SELECT size_id1, size_id2, size_id3, size_id4,
+                       over_size1, over_size2, over_size3, over_size4,
+                       grade1_id, grade2_id, grade3_id, grade4_id
                 FROM pl_cut_split_set
                 WHERE id = :splitSetId
                 FOR UPDATE
@@ -1607,20 +1626,32 @@ class WaitCutModel {
             const row = result.rows[0];
             if (!row)
                 throw new Error("ไม่พบข้อมูลรายการเซ็ตย่อย");
-            const valA = row[`SIZE_ID${posA}`];
-            const valB = row[`SIZE_ID${posB}`];
-            // 🟢 2. สลับตำแหน่งค่าใน DB พร้อมบันทึกผู้แก้ไขและเวลา
+            const sizeValA = row[`SIZE_ID${posA}`];
+            const sizeValB = row[`SIZE_ID${posB}`];
+            const overSizeValA = row[`OVER_SIZE${posA}`];
+            const overSizeValB = row[`OVER_SIZE${posB}`];
+            const gradeValA = row[`GRADE${posA}_ID`];
+            const gradeValB = row[`GRADE${posB}_ID`];
+            // 🟢 2. สลับตำแหน่งค่า SIZE, OVER_SIZE และ GRADE ใน DB พร้อมบันทึกผู้แก้ไขและเวลา
             const updateSql = `
                 UPDATE pl_cut_split_set
-                SET size_id${posA} = :valB,
-                    size_id${posB} = :valA,
+                SET size_id${posA} = :sizeValB,
+                    size_id${posB} = :sizeValA,
+                    over_size${posA} = :overSizeValB,
+                    over_size${posB} = :overSizeValA,
+                    grade${posA}_id = :gradeValB,
+                    grade${posB}_id = :gradeValA,
                     update_staff = :staffId,
                     update_date = SYSDATE
                 WHERE id = :splitSetId
             `;
             await conn.execute(updateSql, {
-                valA,
-                valB,
+                sizeValA,
+                sizeValB,
+                overSizeValA,
+                overSizeValB,
+                gradeValA,
+                gradeValB,
                 splitSetId,
                 staffId: formattedStaffId
             }, { autoCommit: false });

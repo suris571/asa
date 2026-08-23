@@ -123,11 +123,6 @@
 </div>
 
 <div class="content-wrapper">
-  <section class="content-header p-2">
-    <div class="container-fluid">
-      <h1 class="h3 font-weight-bold">⚖️ ระบบรับน้ำหนักลูกกระดาษ (ท้ายไลน์ผลิตที่ 1)</h1>
-    </div>
-  </section>
 
   <section class="content p-2">
     <div class="container-fluid">
@@ -137,16 +132,20 @@
           <form id="weighingForm">
             <input type="hidden" id="id" name="id" value="<%= (nextData && nextData.id) ? nextData.id : '' %>">
             <div class="row">
-              <%- include('components/step1-order') %>
-              <%- include('components/step2-weight') %>
-              <%- include('components/step3-action') %>
+              <div class="col-md-4 border-right">
+                <%- include('components/step1-order') %>
+                <%- include('components/step2-weight') %>
+                <%- include('components/step3-action') %>
+              </div>
+              <div class="col-md-8">
+                <%- include('components/history-table') %>
+              </div>
             </div>
           </form>
         </div>
       </div>
 
       <%- include('components/order-modal') %>
-      <%- include('components/history-table') %>
 
     </div>
   </section>

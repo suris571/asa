@@ -1,14 +1,12 @@
-<div class="col-md-4 border-right">
-  <h5 class="text-primary font-weight-bold mb-3"><i class="fas fa-search"></i> STEP 1: ข้อมูลใบสั่งผลิต</h5>
+<div class="mb-3 pb-3 border-bottom">
+  <h7 class="text-primary font-weight-bold mb-3"><i class="fas fa-search"></i> STEP 1: ข้อมูลใบสั่งผลิต</h7>
   
-  <div class="form-group row mb-2">
-    <label class="col-sm-4 col-form-label font-weight-bold text-sm">เลขใบสั่งผลิต</label>
-    <div class="col-sm-8">
-      <div class="input-group">
-        <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" value="<%= (nextData && nextData.orderNo) ? nextData.orderNo : '' %>">
-        <div class="input-group-append">
-          <button class="btn btn-info btn-sm font-weight-bold" type="button" id="btnFetchOrder">เลือกรายการลูกม้วน</button>
-        </div>
+  <div class="form-group mb-2">
+    <label class="font-weight-bold text-sm mb-1">เลขใบสั่งผลิต</label>
+    <div class="input-group flex-nowrap">
+      <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" value="<%= (nextData && nextData.orderNo) ? nextData.orderNo : '' %>">
+      <div class="input-group-append">
+        <button class="btn btn-info btn-sm font-weight-bold text-nowrap" type="button" id="btnFetchOrder">เลือกรายการลูกม้วน</button>
       </div>
     </div>
   </div>
@@ -40,7 +38,7 @@
     <div class="col-6">
       <div class="form-group mb-2">
         <label class="mb-0 text-muted font-weight-bold">รุ่น (Version)</label>
-        <input readonly type="text" class="form-control form-control-sm bg-white" name="model" id="model" value="<%= (nextData && nextData.model) ? nextData.model : '' %>">
+        <input type="text" class="form-control form-control-sm bg-white" name="model" id="model" value="<%= (nextData && nextData.model) ? nextData.model : '' %>">
       </div>
     </div>
   </div>
