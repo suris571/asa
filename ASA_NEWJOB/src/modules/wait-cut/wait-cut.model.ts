@@ -897,7 +897,8 @@ export class WaitCutModel {
                 FROM pl_cut_split_set_view
                 WHERE 1=1
                 AND split_status_id = 5
-                AND CUT_LENGTH IS NOT NULL
+                AND cut_length IS NOT NULL
+                AND cut_length <> 0
             `;
 
             const binds: any = {};
@@ -933,7 +934,7 @@ export class WaitCutModel {
             }
 
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-
+            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล QC Close Reel:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });
@@ -2040,4 +2041,47 @@ export class WaitCutModel {
             if (conn) await conn.close();
         }
     }
+
+    // 🎯 นับจำนวนรายการแยกตามแต่ละ cut_status_id (1,2,3,4) และแยกตาม pl_production_line_id
+    static async countWaitingCutByProductionLine(): Promise<any[]> {
+        let conn;
+        try {
+            conn = await getConnection();
+
+            const sql = `
+                SELECT 
+                    pl_production_line_id AS PL_PRODUCTION_LINE_ID,
+                    cut_status_id AS CUT_STATUS_ID,
+                    COUNT(pl_order_detail_id) AS TOTAL
+                FROM pl_order_view
+                WHERE cut_status_id IN (1, 2, 3, 4)
+                AND status = :defaultStatus
+                GROUP BY pl_production_line_id, cut_status_id
+            `;
+
+            const result: any = await conn.execute(sql, {defaultStatus: WaitCutModel.default_status }, {
+                outFormat: oracledb.OUT_FORMAT_OBJECT
+            });
+
+            const dataList: any[] = [];
+            if (result.rows) {
+                for (const row of (result.rows as any[])) {
+                    dataList.push({
+                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID,
+                        cut_status_id: row.CUT_STATUS_ID,
+                        total: row.TOTAL
+                    });
+                }
+            }
+            return dataList;
+
+        } catch (error) {
+            console.error("❌ Model Error [countWaitingCutByProductionLine]:", error);
+            throw error;
+        } finally {
+            if (conn) await conn.close();
+        }
+    }
+
+    
 }

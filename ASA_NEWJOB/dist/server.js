@@ -20,6 +20,7 @@ const auth_routes_js_1 = __importDefault(require("./modules/authen/auth-routes.j
 const wait_cut_route_js_1 = __importDefault(require("./modules/wait-cut/wait-cut.route.js"));
 const weighing_route_js_1 = __importDefault(require("./modules/weighing/weighing.route.js"));
 const auth_model_js_1 = require("./modules/authen/auth.model.js");
+const wait_cut_model_js_1 = require("./modules/wait-cut/wait-cut.model.js");
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const PORT = 3000;
@@ -74,8 +75,10 @@ app.use(async (req, res, next) => {
         res.locals.data = {
             username: req.session.user?.name || "ไม่ระบุชื่อพนักงาน",
             role: req.session.user?.role,
-            pm1_pending: 5,
-            pm2_pending: 3,
+            pm1_pending: 0,
+            pm2_pending: 0,
+            pm1_status: { 1: 0, 2: 0, 3: 0, 4: 0 },
+            pm2_status: { 1: 0, 2: 0, 3: 0, 4: 0 },
             pm_select: req.session.user?.machineNo,
             pm_select_ID: req.session.user?.productionLineId,
             permissions: freshPermissions,
@@ -88,7 +91,36 @@ app.use(async (req, res, next) => {
     }
 });
 // เส้นทางหลักของระบบโรงงาน
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
+    try {
+        // 🎯 ดึงจำนวนรายการแยกตามสายการผลิต (161/162) และตาม cut_status_id (1-4)
+        const pendingByLine = await wait_cut_model_js_1.WaitCutModel.countWaitingCutByProductionLine();
+        // หาจำนวนของ line + status ที่ต้องการจากผลลัพธ์ที่ Group มาแล้ว
+        const getCount = (lineId, statusId) => {
+            const found = pendingByLine.find((item) => Number(item.pl_production_line_id) === lineId &&
+                Number(item.cut_status_id) === statusId);
+            return found ? Number(found.total) : 0;
+        };
+        // 🎯 คงค่าเดิม pm1_pending/pm2_pending ไว้ (นับเฉพาะ status = 1 รอตัด) เพื่อไม่ให้ EJS เดิมพัง
+        res.locals.data.pm1_pending = getCount(161, 1);
+        res.locals.data.pm2_pending = getCount(162, 1);
+        // 🎯 เพิ่มรายละเอียดแยกตาม status ของแต่ละไลน์ (1=รอตัด, 2=รอตัด(split), 3=ตัดยังไม่ครบ, 4=HOLD)
+        res.locals.data.pm1_status = {
+            1: getCount(161, 1),
+            2: getCount(161, 2),
+            3: getCount(161, 3),
+            4: getCount(161, 4),
+        };
+        res.locals.data.pm2_status = {
+            1: getCount(162, 1),
+            2: getCount(162, 2),
+            3: getCount(162, 3),
+            4: getCount(162, 4),
+        };
+    }
+    catch (error) {
+        console.error("❌ ดึงจำนวนรายการรอตัดไม่สำเร็จ:", error);
+    }
     res.render('index');
 });
 app.use('/wait-cut', wait_cut_route_js_1.default);

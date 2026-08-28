@@ -1,11 +1,51 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getIO = exports.broadcastNextRollToWeighingStation = exports.FnNextQcCloseReel = exports.FnNextCutSplitSet = exports.FnNextRoll = exports.initSocket = void 0;
 const socket_io_1 = require("socket.io");
 const wait_cut_model_1 = require("./modules/wait-cut/wait-cut.model");
 const weighing_model_1 = require("./modules/weighing/weighing.model");
+const crypto_1 = __importDefault(require("crypto"));
 // เก็บ Hash แยกตามเครื่องจักร (เช่น { 1: 'hash_xxx', 2: 'hash_yyy' })
 let lastQueueHashes = {};
+// เก็บ Hash ล่าสุดของข้อมูลกราฟสรุปสถานะงานตัด (หน้า Dashboard)
+let lastChartDataHash = "";
+// 📊 ฟังก์ชันหลังบ้าน คอยตรวจดูจำนวนงานแยกตามสถานะ (1-4) ของแต่ละไลน์ ทุก 20 วิ ถ้าเปลี่ยนค่อยยิงอัปเดต
+const startChartMonitor = (chartNamespace) => {
+    const MONITOR_INTERVAL = 20000;
+    setInterval(async () => {
+        try {
+            // เช็กก่อนว่ามีคนเปิดหน้า Dashboard ต่อ Socket อยู่ไหม ไม่งั้นไม่ต้องเสียแรงยิง Query
+            const connectedSockets = await chartNamespace.fetchSockets();
+            if (connectedSockets.length === 0)
+                return;
+            const pendingByLine = await wait_cut_model_1.WaitCutModel.countWaitingCutByProductionLine();
+            const getCount = (lineId, statusId) => {
+                const found = pendingByLine.find((item) => Number(item.pl_production_line_id) === lineId &&
+                    Number(item.cut_status_id) === statusId);
+                return found ? Number(found.total) : 0;
+            };
+            const payload = {
+                pm1_pending: getCount(161, 1),
+                pm2_pending: getCount(162, 1),
+                pm1_status: { 1: getCount(161, 1), 2: getCount(161, 2), 3: getCount(161, 3), 4: getCount(161, 4) },
+                pm2_status: { 1: getCount(162, 1), 2: getCount(162, 2), 3: getCount(162, 3), 4: getCount(162, 4) },
+            };
+            // เทียบ Hash ของผลลัพธ์รอบนี้กับรอบก่อน ถ้าไม่ต่างกันก็ไม่ต้องยิงอัปเดต
+            const currentHash = crypto_1.default.createHash("md5").update(JSON.stringify(payload)).digest("hex");
+            if (currentHash !== lastChartDataHash) {
+                lastChartDataHash = currentHash;
+                chartNamespace.emit("chart_data_updated", payload);
+                console.log("📢 [Chart Monitor] ข้อมูลสรุปสถานะงานตัดเปลี่ยนแปลง -> ยิงอัปเดตกราฟ Dashboard");
+            }
+        }
+        catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดในระบบ Chart Monitor:", error);
+        }
+    }, MONITOR_INTERVAL);
+};
 // ⏳ ฟังก์ชันหลังบ้าน คอยตรวจส่อง Oracle DB แยกตามเครื่องจักร
 const startQueueMonitor = (waitCutNamespace) => {
     const MONITOR_INTERVAL = 30000;
@@ -170,6 +210,17 @@ const initSocket = (httpServer) => {
         });
         socket.on("disconnect", () => {
             console.log("🔴 พนักงานปิดหน้ารอตัด ID:", socket.id);
+        });
+    });
+    // ==========================================================================
+    // 📊 ห้องที่ 5: [/socket/updateChart] (Dashboard สรุปสถานะงานตัดแบบ Real-time)
+    // ==========================================================================
+    const updateChartNamespace = io.of("/socket/updateChart");
+    startChartMonitor(updateChartNamespace);
+    updateChartNamespace.on("connection", (socket) => {
+        console.log("🟢 พนักงานเปิด [หน้า Dashboard] เชื่อมต่อเข้ามา ID:", socket.id);
+        socket.on("disconnect", () => {
+            console.log("🔴 พนักงานปิดหน้า Dashboard ID:", socket.id);
         });
     });
     return io;
