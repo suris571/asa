@@ -170,22 +170,13 @@
 </div>
 
 <div class="content-wrapper">
-  <section class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1>ระบบจัดการคิวงาน</h1>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <section class="content">
     <div class="container-fluid">
       
         <div class="card">
         <div class="card-header bg-navy">
-            <h3 class="card-title font-weight-bold">📋 ระบบจัดการคิวงานสั่งตัดและตั้งค่าใบมีด</h3>
+            <h3 class="card-title font-weight-bold">📋 ระบบจัดการสั่งตัดและตั้งค่าใบมีด</h3>
             <div class="card-tools">
             <span id="socketStatus" class="badge bg-warning text-dark">🟡 กำลังเตรียมเชื่อมต่อ...</span>
             </div>
@@ -218,8 +209,8 @@
 
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
-                    <label for="searchOrderNo">🔍 เลขที่ใบสั่งผลิต:</label>
-                    <input type="text" id="searchOrderNo" placeholder="พิมพ์เลขที่ใบสั่งผลิต...">
+                    <label for="searchOrderNo">🔍 ใบสั่งผลิต:</label>
+                    <input type="text" id="searchOrderNo" placeholder="ใบสั่งผลิต...">
                 </div>
 
                 <!-- ปุ่มกดสั่งการ -->
@@ -238,19 +229,20 @@
             <thead class="bg-light">
                 <tr>
                 <th rowspan="2" class="align-middle">ลำดับ</th>
-                <th rowspan="2" class="align-middle">เลขที่ใบสั่งผลิต</th>
+                <th rowspan="2" class="align-middle">ใบสั่งผลิต</th>
                 <th rowspan="2" class="align-middle">ITEM</th>
                 <th rowspan="2" class="align-middle">Set</th>
                 <th colspan="4" class="text-center bg-gray-light">GRADE</th>
                 <!-- <th rowspan="2" class="align-middle">Set</th> -->
                 <th colspan="4" class="text-center bg-gray-light">ตั้งค่าใบมีด</th>
                 <th colspan="4" class="text-center bg-gray-light">Size นิ้ว</th>
+                <th rowspan="2" class="align-middle">MM</th>
                 <th rowspan="2" class="align-middle">วันที่เสร็จ</th>
                 <th rowspan="2" class="align-middle">เวลา</th>
                 <th rowspan="2" class="align-middle">ลูก</th>
                 <th rowspan="2" class="align-middle">Set</th>
                 <th rowspan="2" class="align-middle">สถานะ</th>
-                <th rowspan="2" class="align-middle bg-navy">ปุ่มกดจัดการคิวงาน</th>
+                <th rowspan="2" class="align-middle bg-navy">ปุ่มกดจัดการ</th>
                 </tr>
                 <tr>
                 <th>1</th><th>2</th><th>3</th><th>4</th>
@@ -303,7 +295,7 @@
         
         if (!res || !res.success || !res.data) return;
         if (queueTable) {
-            // เช็กว่าพนักงานกำลังเอาเมาส์ชี้เล็งปุ่มจัดการคิวงานอยู่หรือไม่
+            // เช็กว่าพนักงานกำลังเอาเมาส์ชี้เล็งปุ่มจัดการอยู่หรือไม่
             const isUserHoveringButtons = $('.queue-action-group:hover').length > 0;
 
             if (isUserHoveringButtons) {
@@ -356,6 +348,18 @@
             { "data": "size2", "defaultContent": "" },
             { "data": "size3", "defaultContent": "" },
             { "data": "size4", "defaultContent": "" },
+            {
+                // 🎯 แสดงผลรวม Size 1 - Size 4 (ช่อง MM)
+                "data": null, 
+                "render": function(data, type, row) {
+                    const s1 = parseFloat(String(row.blad1 || '').replace(/,/g, '')) || 0;
+                    const s2 = parseFloat(String(row.blad2 || '').replace(/,/g, '')) || 0;
+                    const s3 = parseFloat(String(row.blad3 || '').replace(/,/g, '')) || 0;
+                    const s4 = parseFloat(String(row.blad4 || '').replace(/,/g, '')) || 0;
+                    const total = s1 + s2 + s3 + s4;
+                    return  total > 0 ? new Intl.NumberFormat('th-TH', {minimumFractionDigits: 0,maximumFractionDigits: 0}).format(total) : '';
+                }
+            },
             { "data": "finishDate", "defaultContent": "" },
             { "data": "finishTime", "defaultContent": "" },
             { "data": "completed_roll_qty", "defaultContent": "" },

@@ -103,7 +103,6 @@ class WaitCutModel {
     ) {
         let conn;
         let isLocalConn = false;
-        console.log(productionLineId);
         try {
             if (Conn) {
                 conn = Conn;
@@ -112,7 +111,6 @@ class WaitCutModel {
                 conn = await (0, database_1.getConnection)();
                 isLocalConn = true;
             }
-            console.log("🔍 [Model Receive Data] ค่าที่หลุดมาถึง Model:", { status, order_no, startDate, endDate, productionLineId });
             let query = `
                 SELECT 
                     pl_order_id, pl_order_detail_id, order_no, order_item, qty, status,
@@ -168,7 +166,6 @@ class WaitCutModel {
                 bindParams.endDate = endDate.trim();
             }
             query += ` ORDER BY queue_no ASC`;
-            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล Waiting & Weighing:", query);
             const result = await conn.execute(query, bindParams, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -230,7 +227,6 @@ class WaitCutModel {
             const my_que = Number(que_now);
             const t_id = Number(targetOrderId);
             const t_que = Number(target_que);
-            console.log(`🔍 [Backend Model - Swap Mode] เริ่มการสลับคิวคู่กรณี: ID ${id} (คิว ${my_que}) <-> ID ${t_id} (คิว ${t_que})`);
             if (isNaN(id) || isNaN(my_que) || isNaN(t_id) || isNaN(t_que)) {
                 console.error("⚠️ [Error] พบข้อมูลไม่ใช่ตัวเลข (NaN Detected) ใน swapQueue");
                 return { success: false, message: "Invalid format: NaN detected" };
@@ -251,7 +247,6 @@ class WaitCutModel {
             await conn.execute(updateTargetRow, { my_que: my_que, target_id: t_id });
             // 3. ทำการ Commit ข้อมูลให้บันทึกถาวรพร้อมกันแบบไร้รอยต่อ
             await conn.commit();
-            console.log(`✅ สลับคิวใน Database สำเร็จ! (ID ${id} -> คิว ${t_que}) และ (ID ${t_id} -> คิว ${my_que})`);
         }
         catch (error) {
             if (conn) {
@@ -428,7 +423,7 @@ class WaitCutModel {
             }
         }
     }
-    static async getSplitSetQueueData(orderNo, lineId, status, startDate, endDate) {
+    static async getSplitSetQueueData(orderNo, lineId, status, startDate, endDate, item = "") {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -491,10 +486,12 @@ class WaitCutModel {
                 sql += ` AND split_status_id = :status `;
                 binds.status = Number(status);
             }
+            if (item && typeof item === "string") {
+                sql += ` AND order_item = :item `;
+                binds.item = item.trim();
+            }
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล Split Set Queue:", sql);
-            console.log("orderNo:", orderNo, "lineId:", lineId, "status:", status, "startDate:", startDate, "endDate:", endDate);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -548,6 +545,50 @@ class WaitCutModel {
             }
         }
     }
+    static async getSplitSetQueueDataOne(lineId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 🎯 1. SELECT เฉพาะ split_set_id และใช้ ROWNUM <= 1 เพื่อจำกัดการดึงแค่ 1 แถว (ประหยัด Resource)
+            let sql = `
+            SELECT split_set_id AS SPLIT_SET_ID
+            FROM pl_cut_split_set_view
+            WHERE 1=1
+            AND split_status_id = 2
+        `;
+            const binds = {};
+            if (lineId) {
+                sql += ` AND pl_production_line_id = :lineId `;
+                binds.lineId = lineId;
+            }
+            // 🎯 2. เรียงลำดับคิว และใช้ ROWNUM ดึงแค่รายการแรกสุด
+            sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            // สำหรับ Oracle Database (รองรับทั้งเวอร์ชันเก่าและใหม่)
+            const wrappedSql = `SELECT SPLIT_SET_ID FROM (${sql}) WHERE ROWNUM = 1`;
+            const result = await conn.execute(wrappedSql, binds, {
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+            });
+            // 🎯 3. ถ้าเจอข้อมูลให้ส่งคืนเฉพาะ split_set_id ถ้าไม่เจอส่งคืน null
+            if (result.rows && result.rows.length > 0) {
+                return result.rows[0].SPLIT_SET_ID;
+            }
+            return null;
+        }
+        catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [getSplitSetQueueDataOne]:", error);
+            throw error;
+        }
+        finally {
+            if (conn) {
+                try {
+                    await conn.close();
+                }
+                catch (closeErr) {
+                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                }
+            }
+        }
+    }
     static async createOrderWeighing(split_set_id, pl_order_id, pl_order_detail_id, staff_id, cut_length) {
         let conn;
         try {
@@ -577,7 +618,6 @@ class WaitCutModel {
                 cut_length,
                 staffId: formattedStaffId
             }, { autoCommit: false });
-            console.log(`📌 [Model] อัปเดตสถานะ PL_CUT_SPLIT_SET ID: ${split_set_id} เป็น 5 เรียบร้อยแล้ว (สถานะเดิม: ${previousStatus})`);
             // 🎯 3. เงื่อนไขสำคัญ: ถ้าสถานะเดิมเท่ากับ 4 (HOLD) ให้ข้ามการสร้างคิวรอชั่งน้ำหนักทันที!
             if (previousStatus === 4 && false) {
                 console.log(`⚠️ [Model] เซ็ต ID: ${split_set_id} มีสถานะเดิมเป็น HOLD (4) -> ปิดงานเป็นเสร็จสิ้นโดย "ไม่สร้างคิวรอชั่งน้ำหนัก"`);
@@ -649,7 +689,6 @@ class WaitCutModel {
                         staffId: formattedStaffId
                     }, { autoCommit: false });
                 }
-                console.log(`✅ บันทึกคิวรอชั่งน้ำหนักสำเร็จ: แตกออกมาทั้งหมด ${rollsToInsert.length} ลูก`);
             }
             // 💾 Commit กระบวนการทั้งหมดลง Database
             await conn.commit();
@@ -707,7 +746,6 @@ class WaitCutModel {
                 staffId: formattedStaffId
             }, { autoCommit: false });
             await conn.commit();
-            console.log(`✅ [Model] Reset สถานะ PL_CUT_SPLIT_SET ID: ${split_set_id} เป็น 2 สำเร็จ`);
             return true;
         }
         catch (error) {
@@ -817,7 +855,6 @@ class WaitCutModel {
                 binds.endDate = endDate.trim();
             }
             sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
-            console.log("🔍 [Model Query] SQL ที่ใช้ดึงข้อมูล QC Close Reel:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -1330,7 +1367,6 @@ class WaitCutModel {
                 UPDATE pl_cut_split_set
                 SET 
                     status = 1,
-                    sub_status = NULL,
                     finish_at = NULL,
                     update_staff = :staffId,
                     update_date = SYSDATE
@@ -1609,56 +1645,41 @@ class WaitCutModel {
                 await conn.close();
         }
     }
-    static async swapSplitSetSize(splitSetId, posA, posB, staffId // 🎯 รับ staffId เพิ่มเติม
-    ) {
+    static async swapSplitSetSize(splitSetId, posA, posB, staffId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
             const formattedStaffId = staffId ? Number(staffId) : null;
-            // 🟢 1. SELECT ค่าสดล่าสุดจาก DB และล็อกแถวป้องกัน Race Condition
-            const selectSql = `
-                SELECT size_id1, size_id2, size_id3, size_id4,
-                       over_size1, over_size2, over_size3, over_size4,
-                       grade1_id, grade2_id, grade3_id, grade4_id
-                FROM pl_cut_split_set
-                WHERE id = :splitSetId
-                FOR UPDATE
-            `;
-            const result = await conn.execute(selectSql, { splitSetId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
-            const row = result.rows[0];
-            if (!row)
-                throw new Error("ไม่พบข้อมูลรายการเซ็ตย่อย");
-            const sizeValA = row[`SIZE_ID${posA}`];
-            const sizeValB = row[`SIZE_ID${posB}`];
-            const overSizeValA = row[`OVER_SIZE${posA}`];
-            const overSizeValB = row[`OVER_SIZE${posB}`];
-            const gradeValA = row[`GRADE${posA}_ID`];
-            const gradeValB = row[`GRADE${posB}_ID`];
-            // 🟢 2. สลับตำแหน่งค่า SIZE, OVER_SIZE และ GRADE ใน DB พร้อมบันทึกผู้แก้ไขและเวลา
+            // 🎯 1. แปลง input ให้เป็น Array ของ ID
+            const idList = Array.isArray(splitSetId) ? splitSetId : [splitSetId];
+            if (idList.length === 0) {
+                throw new Error("ไม่พบรายการ ID ที่ต้องการสลับ");
+            }
+            // 🎯 2. สลับค่า A <-> B ของทุก ID ใน Array พร้อมกันทันทีด้วย SQL คำสั่งเดียว
+            // การเอาคอลัมน์ฝั่ง B มาแมปให้ A และเอา A มาแมปให้ B โดยตรง จะทำให้ Oracle สลับค่าของแต่ละแถวให้เองอัตโนมัติ
             const updateSql = `
                 UPDATE pl_cut_split_set
-                SET size_id${posA} = :sizeValB,
-                    size_id${posB} = :sizeValA,
-                    over_size${posA} = :overSizeValB,
-                    over_size${posB} = :overSizeValA,
-                    grade${posA}_id = :gradeValB,
-                    grade${posB}_id = :gradeValA,
+                SET size_id${posA} = size_id${posB},
+                    size_id${posB} = size_id${posA},
+                    over_size${posA} = over_size${posB},
+                    over_size${posB} = over_size${posA},
+                    grade${posA}_id = grade${posB}_id,
+                    grade${posB}_id = grade${posA}_id,
                     update_staff = :staffId,
                     update_date = SYSDATE
-                WHERE id = :splitSetId
+                WHERE id IN (${idList.map((_, i) => `:id_${i}`).join(',')})
             `;
-            await conn.execute(updateSql, {
-                sizeValA,
-                sizeValB,
-                overSizeValA,
-                overSizeValB,
-                gradeValA,
-                gradeValB,
-                splitSetId,
+            // สร้าง Bind Parameters สำหรับ IN clause (:id_0, :id_1, :id_2, ...)
+            const bindParams = {
                 staffId: formattedStaffId
-            }, { autoCommit: false });
+            };
+            idList.forEach((id, index) => {
+                bindParams[`id_${index}`] = id;
+            });
+            const result = await conn.execute(updateSql, bindParams, { autoCommit: false });
             await conn.commit();
-            return { success: true };
+            console.log(`✅ [swapSplitSetSize] สลับข้อมูลสำเร็จทั้งหมด ${result.rowsAffected || 0} แถว`);
+            return { success: true, affectedRows: result.rowsAffected };
         }
         catch (error) {
             if (conn) {

@@ -409,6 +409,16 @@
   }
 }
 
+.custom-filter-item input.date-picker {
+        width: 110px !important;
+        text-align: center;
+    }
+
+#searchOrderNo {
+        width: 110px !important;
+        text-align: center;
+    }
+
 
 
 .select2-container--default .select2-selection--single .select2-selection__clear {

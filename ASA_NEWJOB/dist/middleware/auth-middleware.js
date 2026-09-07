@@ -14,10 +14,8 @@ const requirePermission = (permissionId) => {
         console.log("🔑 ตรวจสอบสิทธิ์ Permission ID:", permissionId);
         // 🟢 เปลี่ยนมาอ่านค่าสดจาก res.locals.data ที่ดึงจาก DB
         const userPermissions = res.locals.data?.permissions || [];
-        console.log("📋 สิทธิ์สดปัจจุบันจาก DB:", userPermissions);
         // 🟢 เช็คสิทธิ์ตรง หรือเช็คสิทธิ์ Admin (168)
         const hasPermission = userPermissions.includes(permissionId) || userPermissions.includes(16800);
-        console.log("ผลการตรวจสอบ:", hasPermission);
         if (hasPermission) {
             return next(); // ผ่านไปทำงานใน Controller ได้
         }

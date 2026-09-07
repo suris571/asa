@@ -43,7 +43,6 @@ const startProduction = async (req, res) => {
         // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/wait-cut").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut");
         if (type && type === "success") {
-            console.log(`📡 [Controller] รับคำสั่งบังคับเสร็จสิ้น สำหรับใบงานย่อย ID: ${orderDetailId}`);
             const result = await wait_cut_model_1.WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId, staffId);
             await (0, socket_1.FnNextCutSplitSet)(productionLineId);
             // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
@@ -55,7 +54,6 @@ const startProduction = async (req, res) => {
             });
         }
         else if (type && type === "reset") {
-            console.log(`📡 [Controller] รับคำสั่ง Reset สำหรับใบงานย่อย ID: ${orderDetailId}`);
             const result = await wait_cut_model_1.WaitCutModel.forceResetOrderDetail(orderDetailId, orderId, staffId);
             // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
             targetRoom.emit("queue_structure_changed", { success: true });
@@ -66,7 +64,6 @@ const startProduction = async (req, res) => {
             });
         }
         else if (type && type === "hold") {
-            console.log(`📡 [Controller] รับคำสั่ง HOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
             // 1. เรียกใช้ Model ในการ Hold ใบงาน
             const result = await wait_cut_model_1.WaitCutModel.holdOrderDetail(orderDetailId, orderId, staffId);
             // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้ (เพื่อให้คิวถัดไปขยับขึ้นมา)
@@ -80,7 +77,6 @@ const startProduction = async (req, res) => {
             });
         }
         else if (type && type === "unhold") {
-            console.log(`📡 [Controller] รับคำสั่ง UNHOLD สำหรับใบงานย่อย ID: ${orderDetailId}`);
             // 1. เรียกใช้งาน Model ปลด Hold
             const result = await wait_cut_model_1.WaitCutModel.unholdOrderDetail(orderDetailId, orderId, staffId);
             // 2. จัดระเบียบคิวการตัดใหม่สำหรับเครื่องนี้
@@ -96,7 +92,6 @@ const startProduction = async (req, res) => {
         if (!qty || isNaN(Number(qty)) || Number(qty) <= 0) {
             return res.status(400).json({ success: false, message: "จำนวนเซ็ตไม่ถูกต้อง" });
         }
-        console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${orderDetailId}`);
         const createResult = await wait_cut_model_1.WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId);
         await (0, socket_1.FnNextCutSplitSet)(productionLineId);
         // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
@@ -170,7 +165,6 @@ const startWeighing = async (req, res) => {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วนหรือจำนวนเซ็ตไม่ถูกต้อง" });
     }
     try {
-        console.log(`📡 [Controller] รับคำสั่งเริ่มกระบวนการตัดงาน สำหรับใบงานย่อย ID: ${split_set_id}`);
         await wait_cut_model_1.WaitCutModel.createOrderWeighing(Number(split_set_id), Number(pl_order_id), Number(pl_order_detail_id), staffId, cut_length);
         await wait_cut_model_1.WaitCutModel.ManagerStatusPlOrderDetail(Number(pl_order_detail_id));
         // 🔊 ยิงเฉพาะเครื่อง
@@ -315,7 +309,7 @@ exports.saveQcCloseReelController = saveQcCloseReelController;
 const swapSplitSetSize = async (req, res) => {
     const { splitSetId, posA, posB } = req.body;
     const productionLineId = Number(req.session.user?.productionLineId);
-    const staffId = req.session.user?.staff_id; // หรือ userId จาก session
+    const staffId = req.session.user?.staff_id; // หรือ userId จาก session'
     try {
         // 1. สลับค่าใน DB
         await wait_cut_model_1.WaitCutModel.swapSplitSetSize(splitSetId, posA, posB, staffId);

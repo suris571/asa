@@ -38,7 +38,6 @@ const startChartMonitor = (chartNamespace) => {
             if (currentHash !== lastChartDataHash) {
                 lastChartDataHash = currentHash;
                 chartNamespace.emit("chart_data_updated", payload);
-                console.log("📢 [Chart Monitor] ข้อมูลสรุปสถานะงานตัดเปลี่ยนแปลง -> ยิงอัปเดตกราฟ Dashboard");
             }
         }
         catch (error) {
@@ -72,7 +71,6 @@ const startQueueMonitor = (waitCutNamespace) => {
                 const currentHash = await wait_cut_model_1.WaitCutModel.getQueueFingerprint(machineId);
                 // ถ้าค่า Fingerprint เปลี่ยนจากรอบที่แล้ว แสดงว่าข้อมูลใน DB มีการเคลื่อนไหว
                 if (currentHash !== "" && currentHash !== lastQueueHashes[machineId]) {
-                    console.log(`📢 [Backend Monitor] เครื่องตัด ID: ${machineId} มีข้อมูลเปลี่ยนแปลง! ยิงเตือนเฉพาะห้อง...`);
                     lastQueueHashes[machineId] = currentHash;
                     // ยิงแจ้งเตือนเฉพาะ Room ของเครื่องนั้นๆ
                     waitCutNamespace.to(`machine_room_${machineId}`).emit("queue_structure_changed", { success: true });
@@ -90,7 +88,6 @@ function setupMachineRoom(socket, namespaceName) {
     if (productionLineId) {
         const roomName = `machine_room_${productionLineId}`;
         socket.join(roomName);
-        console.log(`📌 [${namespaceName}] Socket ID: ${socket.id} เข้าสู่ Room: ${roomName}`);
         return productionLineId;
     }
     console.warn(`⚠️ [${namespaceName}] Socket ID: ${socket.id} เชื่อมต่อโดยไม่มี productionLineId`);
@@ -107,7 +104,6 @@ const initSocket = (httpServer) => {
     const waitCutNamespace = io.of("/socket/wait-cut");
     startQueueMonitor(waitCutNamespace);
     waitCutNamespace.on("connection", (socket) => {
-        console.log("🟢 พนักงานเปิด [หน้ารอตัด] เชื่อมต่อเข้ามา ID:", socket.id);
         // 🎯 เรียกใช้ฟังก์ชันกลาง: ดึง ID เครื่อง และจับเข้า Room อัตโนมัติ
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut");
         // {startDate: null, endDate: null, status: 'ALL', orderNo: null, productionLineId: '161'}
@@ -116,7 +112,6 @@ const initSocket = (httpServer) => {
                 // ใช้ currentLineId จาก connection หรือ payload ก็ได้
                 const { status, orderNo, startDate, endDate, productionLineId } = payload;
                 const targetLineId = productionLineId || currentLineId;
-                console.log(`📌 [Socket] ดึงข้อมูลคิวรอตัด ${JSON.stringify(payload)}`);
                 const data = await wait_cut_model_1.WaitCutModel.getAllWaitingAndWeighing(null, status, orderNo, startDate, endDate, targetLineId);
                 socket.emit("update_queue_table", { success: true, data: data });
             }
@@ -141,7 +136,6 @@ const initSocket = (httpServer) => {
             }
         });
         socket.on("disconnect", () => {
-            console.log("🔴 พนักงานปิดหน้ารอตัด ID:", socket.id);
         });
     });
     // ==========================================================================
@@ -149,7 +143,6 @@ const initSocket = (httpServer) => {
     // ==========================================================================
     const weighingNamespace = io.of("/socket/weighing");
     weighingNamespace.on("connection", async (socket) => {
-        console.log("🟢 พนักงานเปิด [หน้าชั่งน้ำหนัก] เชื่อมต่อเข้ามา ID:", socket.id);
         const currentLineId = setupMachineRoom(socket, "/socket/weighing");
         socket.on("get_next_roll", async () => {
             (0, exports.FnNextRoll)(currentLineId);
@@ -161,7 +154,6 @@ const initSocket = (httpServer) => {
             socket.emit("update_history_table", { success: true, data: data });
         });
         socket.on("disconnect", () => {
-            console.log("🔴 พนักงานปิดหน้าจอชั่งน้ำหนัก ID:", socket.id);
         });
     });
     // ==========================================================================
@@ -169,25 +161,23 @@ const initSocket = (httpServer) => {
     // ==========================================================================
     const waitCutSplitSet = io.of("/socket/wait-cut/split-cut-set");
     waitCutSplitSet.on("connection", (socket) => {
-        console.log("🟢 พนักงานเปิด [หน้ารอตัดแยก Set] เชื่อมต่อเข้ามา ID:", socket.id);
         // 🎯 เรียกใช้ฟังก์ชันกลางเช่นกัน
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/split-cut-set");
         socket.on("get_filtered_queue", async (payload) => {
             try {
-                const { orderNo, productionLineId, status, startDate, endDate } = payload;
+                const { orderNo, productionLineId, status, item, startDate, endDate } = payload;
                 // ดึง lineId จาก payload หรือใช้ค่าที่ได้ตอนเชื่อมต่อ
                 const targetLineId = productionLineId || currentLineId;
-                console.log(`📌 [Socket] ดึงข้อมูลคิวรอตัดแยก Set ${JSON.stringify(payload)}`);
                 // 🎯 เรียก Model ตัวใหม่ที่เราเพิ่ม pl_production_line_id เรียบร้อยแล้ว
-                const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo, targetLineId, status, startDate, endDate);
-                socket.emit("update_queue_table", { success: true, data: data });
+                const data = await wait_cut_model_1.WaitCutModel.getSplitSetQueueData(orderNo, targetLineId, status, startDate, endDate, item);
+                const ShowLength = await wait_cut_model_1.WaitCutModel.getSplitSetQueueDataOne(productionLineId);
+                socket.emit("update_queue_table", { success: true, data: data, ShowLength: ShowLength });
             }
             catch (error) {
                 socket.emit("update_queue_table", { success: false, error: error.message });
             }
         });
         socket.on("disconnect", () => {
-            console.log("🔴 พนักงานปิดหน้ารอตัดแยก Set ID:", socket.id);
         });
     });
     // ==========================================================================
@@ -195,12 +185,10 @@ const initSocket = (httpServer) => {
     // ==========================================================================
     const waitCutCoseReel = io.of("/socket/wait-cut/qc-close-reel");
     waitCutCoseReel.on("connection", (socket) => {
-        console.log("🟢 พนักงานเปิด [หน้า QC CLOSE REEL] เชื่อมต่อเข้ามา ID:", socket.id);
         const currentLineId = setupMachineRoom(socket, "/socket/wait-cut/qc-close-reel");
         socket.on("get_filtered_queue", async (payload) => {
             try {
                 const { startDate, endDate, status, orderNo } = payload;
-                console.log(`📌 [Socket] ดึงข้อมูลคิว QC CLOSE REEL ${JSON.stringify(payload)}`);
                 const data = await wait_cut_model_1.WaitCutModel.getQcCloseReel(orderNo, startDate, endDate, currentLineId, status);
                 socket.emit("update_queue_table", { success: true, data: data });
             }
@@ -209,7 +197,6 @@ const initSocket = (httpServer) => {
             }
         });
         socket.on("disconnect", () => {
-            console.log("🔴 พนักงานปิดหน้ารอตัด ID:", socket.id);
         });
     });
     // ==========================================================================
@@ -218,9 +205,7 @@ const initSocket = (httpServer) => {
     const updateChartNamespace = io.of("/socket/updateChart");
     startChartMonitor(updateChartNamespace);
     updateChartNamespace.on("connection", (socket) => {
-        console.log("🟢 พนักงานเปิด [หน้า Dashboard] เชื่อมต่อเข้ามา ID:", socket.id);
         socket.on("disconnect", () => {
-            console.log("🔴 พนักงานปิดหน้า Dashboard ID:", socket.id);
         });
     });
     return io;
@@ -230,7 +215,6 @@ const FnNextRoll = async (productionLineId) => {
     try {
         // 🎯 ดึงข้อมูลม้วนถัดไปเฉพาะเครื่องนั้นๆ
         const data = await weighing_model_1.WeighingModel.getNextWeighing(productionLineId);
-        console.log(`📦 [FnNextRoll] ดึงข้อมูลม้วนถัดไปสำเร็จ (Line: ${productionLineId || 'ALL'}):`, data);
         const io = (0, exports.getIO)();
         if (io) {
             const weighingNamespace = io.of("/socket/weighing");
@@ -239,7 +223,6 @@ const FnNextRoll = async (productionLineId) => {
                 ? weighingNamespace.to(`machine_room_${productionLineId}`)
                 : weighingNamespace;
             targetRoom.emit("queue_updated", { success: true, data: data });
-            console.log(`📢 [Socket] อัปเดตข้อมูลม้วนถัดไป (Line: ${productionLineId || 'ALL'}) เรียบร้อย`);
         }
         else {
             console.warn("⚠️ [Socket Warning] ไม่พบตัวแปร io");
@@ -273,7 +256,6 @@ const FnNextCutSplitSet = async (productionLineId) => {
                 ? splitSetNamespace.to(`machine_room_${productionLineId}`)
                 : splitSetNamespace;
             targetRoom.emit("queue_structure_changed", { success: true });
-            console.log(`📢 [Socket] อัปเดตคิวแยก Set (Line: ${productionLineId || 'ALL'}) เรียบร้อย`);
         }
         else {
             console.warn("⚠️ [Socket Warning] ไม่พบตัวแปร io");
@@ -302,7 +284,6 @@ const FnNextQcCloseReel = async (productionLineId) => {
                 ? qcCloseReelNamespace.to(`machine_room_${productionLineId}`)
                 : qcCloseReelNamespace;
             targetRoom.emit("queue_structure_changed", { success: true });
-            console.log("📢 [Socket] อัปเดตข้อมูลม้วนถัดไปให้พนักงานทุกคนเรียบร้อย");
         }
         else {
             console.warn("⚠️ [Socket Warning] ไม่พบตัวแปร io");
@@ -326,7 +307,6 @@ const broadcastNextRollToWeighingStation = (nextRollData) => {
         console.error("⚠️ ไม่สามารถปล่อยสัญญาณได้เนื่องจากระบบ Socket ยังไม่ถูกเปิดใช้งานค่ะกัปตัน!");
         return;
     }
-    console.log(`📢 [Socket]: เครื่องตัดส่งสัญญาณมา! กำลังยิงรหัส ${nextRollData.roll_no} เข้าห้องชั่งน้ำหนัก...`);
     // 🎯 เจาะจงพ่นข้อมูลอีเวนต์ 'next_roll_ready_for_weighing' เข้าไปเฉพาะในห้อง /socket/weighing เท่านั้น
     io.of("/socket/weighing").emit("next_roll_ready_for_weighing", nextRollData);
 };

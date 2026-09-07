@@ -140,6 +140,7 @@ export class WeighingModel {
                 sql += ` ORDER BY id DESC`;
             }else{
                 sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+
             }
             
 

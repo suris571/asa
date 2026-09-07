@@ -170,22 +170,13 @@
 </div>
 
 <div class="content-wrapper">
-  <section class="content-header">
-    <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1>ระบบจัดการคิวงาน</h1>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <section class="content">
     <div class="container-fluid">
       
         <div class="card">
         <div class="card-header bg-navy">
-            <h3 class="card-title font-weight-bold">📋 ระบบจัดการคิวงานสั่งตัดและตั้งค่าใบมีด</h3>
+            <h3 class="card-title font-weight-bold">📋 รายการรอสั่งตัดแยกเซต</h3>
             <div class="card-tools">
             <span id="socketStatus" class="badge bg-warning text-dark">🟡 กำลังเตรียมเชื่อมต่อ...</span>
             </div>
@@ -205,12 +196,17 @@
                 <!-- 3. เลขที่ใบสั่งผลิต -->
                 <div class="custom-filter-item">
                     <label for="searchOrderNo">🔍 เลขที่ใบสั่งผลิต:</label>
-                    <input type="text" id="searchOrderNo" placeholder="พิมพ์เลขที่ใบสั่งผลิต...">
+                    <input type="text" id="searchOrderNo" placeholder="ใบสั่งผลิต...">
+                </div>
+
+                <div class="custom-filter-item">
+                    <label for="searchitem">🔍 item:</label>
+                    <input type="text" id="searchitem" placeholder="item..." style=" width: 70px !important;">
                 </div>
 
                 <div class="custom-filter-item">
                     <label for="searchStatus">🚦 สถานะ:</label>
-                    <select id="searchStatus" class="form-control form-control-sm">
+                    <select id="searchStatus" class="form-control form-control-sm" style=" width: 110px !important;">
                         <option value="">รอสั่งตัด</option>
                         <option value="5">เสร็จสิ้น</option>
                         <option value="4">HOLD</option>
@@ -246,7 +242,32 @@
                         <!-- ตั้งค่าใบมีด -->
                         <th>1</th><th>2</th><th>3</th><th>4</th>
                         <!-- Size นิ้ว -->
-                        <th>1</th><th>2</th><th>3</th><th>4</th>
+                        <th>
+                            <div class="d-flex align-items-center justify-content-center">
+                                <span class="mr-1">1</span>
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap1To2" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(1, 2)">▶</button>
+                            </div>
+                        </th>
+                        <th>
+                            <div class="d-flex align-items-center justify-content-center">
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap2To1" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(2, 1)">◀</button>
+                                <span class="mr-1">2</span>
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap2To3" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(2, 3)">▶</button>
+                            </div>
+                        </th>
+                        <th>
+                            <div class="d-flex align-items-center justify-content-center">
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap3To2" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(3, 2)">◀</button>
+                                <span class="mr-1">3</span>
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap3To4" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(3, 4)">▶</button>
+                            </div>
+                        </th>
+                        <th>
+                            <div class="d-flex align-items-center justify-content-center">
+                                <button type="button" class="btn p-0 border-0 btn-swap-header" id="btnSwap4To3" style="display:none; font-size: 11px;" onclick="swapAllSizePositions(4, 3)">◀</button>
+                                <span>4</span>
+                            </div>
+                        </th>
                         <!-- ปุ่มกด -->
                         <th class="bg-light text-dark">เสร็จสิ้น</th>
                         <th class="bg-light text-dark">HOLD</th>
@@ -565,12 +586,16 @@
             }
         }
     });
+
     socket.on('update_queue_table', function(res) {
         hideLoader();
         if (!res || !res.success || !res.data) return;
         
         if (queueTable) {
            queueTable.clear().rows.add(res.data).draw(false);
+           checkHeaderSwapButtons(res.data);
+           console.log(res)
+           toggleCutLengthInput(res.ShowLength)
         }
     });
 
@@ -596,9 +621,80 @@
         $('#filterMaxDate').val('');
         $('#searchStatus').val('');
         $('#searchOrderNo').val('');
+        $('#searchitem').val('');
         fetchFilteredQueue(); 
     });
+
+    toggleCutLengthInput(serverData[0].split_set_id)
   });
+
+
+
+    function toggleCutLengthInput(targetSplitSetId) {
+        if (!queueTable) return;
+        if (!targetSplitSetId) return;
+
+        // กวาดทุกแถวใน DataTables (รวมทุกหน้า)
+        queueTable.rows().every(function () {
+            const rowData = this.data();
+            const rowNode = $(this.node());
+            const id = rowData.split_set_id || rowData.splitSetId;
+            
+            // ค้นหา Input ในแถวนั้นๆ
+            const lengthInput = rowNode.find('input.input-cut-length');
+
+            if (id == targetSplitSetId) {
+                // 🟢 ถ้าตรงกับ ID ที่ส่งมา ให้แสดงผล Input
+                lengthInput.show(); 
+                // หรือใช้ .css('visibility', 'visible') ถ้าต้องการให้เว้นพื้นที่ไว้ไม่ให้ตารางขยับ
+            } else {
+                // 🔴 ถ้าไม่ตรง ให้ซ่อน Input
+                lengthInput.hide(); 
+                // หรือใช้ .css('visibility', 'hidden')
+            }
+        });
+    }
+
+
+    function checkHeaderSwapButtons() {
+        // 1. ซ่อนปุ่มสลับทั้งหมดบนหัวตารางไว้ก่อนเป็นดีฟอลต์
+        $('.btn-swap-header').hide();
+
+        const orderNo = $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : '';
+        const item = $('#searchitem').val() ? $('#searchitem').val().trim() : '';
+        
+        // ดึงข้อมูลทั้งหมดในตาราง
+        const allData = queueTable ? queueTable.data().toArray() : [];
+
+        // เงื่อนไขแรก: ต้องกรอกทั้ง OrderNo และ Item และตารางต้องมีข้อมูล
+        if (orderNo === '' || item === '' || allData.length === 0) {
+            return;
+        }
+
+        // 2. ดึงแถวแรกมาเป็นเกณฑ์เช็กค่า Size (หรือใช้ hasVal เช็ก)
+        const firstRow = allData[0];
+        const has1 = hasVal(firstRow.size1);
+        const has2 = hasVal(firstRow.size2);
+        const has3 = hasVal(firstRow.size3);
+        const has4 = hasVal(firstRow.size4);
+
+        // 3. เปิดแสดงผลปุ่มสลับเฉพาะคู่ช่องที่มีข้อมูลทั้งคู่
+        
+        // สลับระหว่าง ช่อง 1 <-> ช่อง 2 (ต้องมีข้อมูลทั้ง size1 และ size2)
+        if (has1 && has2) {
+            $('#btnSwap1To2, #btnSwap2To1').show();
+        }
+
+        // สลับระหว่าง ช่อง 2 <-> ช่อง 3 (ต้องมีข้อมูลทั้ง size2 และ size3)
+        if (has2 && has3) {
+            $('#btnSwap2To3, #btnSwap3To2').show();
+        }
+
+        // สลับระหว่าง ช่อง 3 <-> ช่อง 4 (ต้องมีข้อมูลทั้ง size3 และ size4)
+        if (has3 && has4) {
+            $('#btnSwap3To4, #btnSwap4To3').show();
+        }
+    }
 
     function formatNumberWithComma(input) {
         // 1. ลบทุกตัวอักษรที่ไม่ใช่ตัวเลขออกก่อน
@@ -619,6 +715,7 @@
             startDate: rawStartDate !== '' ? rawStartDate : null,
             endDate: rawEndDate !== '' ? rawEndDate : null,
             orderNo: $('#searchOrderNo').val() ? $('#searchOrderNo').val().trim() : null,
+            item: $('#searchitem').val() ? $('#searchitem').val().trim() : null,
             status: $('#searchStatus').val() ? $('#searchStatus').val().trim() : null
         };
         console.log("🚀 [Client Request] ยิงเงื่อนไขไป Query บนหลังบ้าน:", filterParams);
@@ -637,7 +734,7 @@
         const cleanLength = Number(lengthValue.replace(/,/g, ''));
 
         // 🛑 2. Validation: ถ้ายังไม่กรอก หรือเป็น 0
-        if (!lengthValue || isNaN(cleanLength) || cleanLength <= 0) {
+        if (!lengthValue || isNaN(cleanLength) || cleanLength < 3000 || cleanLength > 8000) {
             
             // 🔴 เติม Class สไตล์ Bootstrap และใส่ Border แดงแบบบังคับ !important
             lengthInput.addClass('is-invalid').css({
@@ -650,7 +747,7 @@
             Swal.fire({
                 icon: 'error',
                 title: 'เกิดข้อผิดพลาด',
-                text: "❌ กรุณาระบุ 'ความยาว' ให้ถูกต้องก่อนกดเสร็จสิ้น!",
+                text: "❌ กรุณาระบุ 'ความยาว' ให้ถูกต้อง 3,000 - 8,000 ก่อนกดเสร็จสิ้น!",
                 showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
                 timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
                 timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
@@ -924,6 +1021,68 @@
         }
     }
 
+    async function swapAllSizePositions(posA, posB) {
+        if (!queueTable) return;
+
+        // 1. ดึงข้อมูล "ทั้งหมด" ที่อยู่ใน memory ของ DataTables (รวมทุกหน้า)
+        const allData = queueTable.data().toArray();
+        if (!allData.length) return;
+
+        // 2. ดึงเฉพาะ split_set_id ออกมาเป็น Array
+        const splitSetIds = allData
+        .filter(row => {
+            const status = row.cut_status_id !== undefined ? row.cut_status_id : row.status;
+            return parseInt(status) === 2; // 🎯 กรองเฉพาะรายการที่สถานะเป็น 2 (รอสั่งตัด)
+        })
+        .map(row => row.split_set_id || row.splitSetId)
+        .filter(id => id !== undefined && id !== null && id);
+
+        if (!splitSetIds.length) return;
+
+        try {
+            showLoader();
+
+            console.log(`🚀 [Batch Swap] สลับตำแหน่ง ${posA} <-> ${posB} สำหรับ ID ทั้งหมด:`, splitSetIds);
+
+            // 3. ยิง AJAX ส่ง Array ของ ID ทั้งหมดไปอัปเดต DB หลังบ้าน
+            const response = await $.ajax({
+                url: '/wait-cut/swap-split-set-size',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    splitSetId: splitSetIds, // [101, 102, 103, 104, ...]
+                    posA: posA,
+                    posB: posB
+                })
+            });
+
+            if (response.success) {
+                // 🟢 4. เมื่อบันทึกสำเร็จ ให้ดึงข้อมูลชุดใหม่มาเรนเดอร์อีกครั้ง
+                fetchFilteredQueue();
+            } else {
+                hideLoader();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: "💥 " + (response.message || 'ไม่สามารถสลับขนาดทั้งหมดได้'),
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true
+                });
+            }
+        } catch (err) {
+            hideLoader();
+            console.error('💥 Error batch swapping position:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: "❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true
+            });
+        }
+    }
 
 
     function showLoader() {
