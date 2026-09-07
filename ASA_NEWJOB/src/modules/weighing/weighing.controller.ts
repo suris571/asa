@@ -49,6 +49,7 @@ export const saveWeighingController = async (req: Request, res: Response) => {
     try {
         const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
         const staffId = req.session.user?.staff_id;
+        const productionLineId: any = Number(req.session.user?.productionLineId);
 
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
@@ -73,16 +74,13 @@ export const saveWeighingController = async (req: Request, res: Response) => {
         };
 
         // ⏱️ Step 1: Measure GetWaitWeighingInfoById
-        const step1Start = performance.now();
         const waitWeighingInfo: any = await WeighingModel.GetWaitWeighingInfoById(payload.id);
-        console.log(`[PERF] Step 1: GetWaitWeighingInfoById took ${(performance.now() - step1Start).toFixed(2)} ms`);
 
         if (!waitWeighingInfo) {
             return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลในระบบ' });
         }
 
         // ⏱️ Step 2: Measure InsertPD_ROLL
-        const step2Start = performance.now();
         const insertPD_ROLL: any = await WeighingModel.InsertPD_ROLL({
             id_pl_wait_weight: payload.id,
             weigh: payload.weigh,
@@ -94,31 +92,28 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             roll: waitWeighingInfo.ROLL,
             diameter: payload.diameter,
             hold_cause: payload.hold_cause,
+            productionLineId
         });
-        console.log(`[PERF] Step 2: InsertPD_ROLL took ${(performance.now() - step2Start).toFixed(2)} ms`);
 
         // ⏱️ Step 3: Measure InsertPD_ROLL_QUALITY
+        let isSuccess = false;
         if (insertPD_ROLL?.id) {
-            const step3Start = performance.now();
             await WeighingModel.InsertPD_ROLL_QUALITY({
                 id_pl_wait_weight: payload.id,
                 pd_roll_id: insertPD_ROLL.id,
                 qcReelQualityId: waitWeighingInfo.QC_REEL_QUALITY_ID,
                 staffId: staffId
             });
-            console.log(`[PERF] Step 3: InsertPD_ROLL_QUALITY took ${(performance.now() - step3Start).toFixed(2)} ms`);
+
+            isSuccess = await WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId);
         }
 
         // ⏱️ Step 4: Measure updateWeighingResult
-        const step4Start = performance.now();
-        const isSuccess = await WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId);
-        console.log(`[PERF] Step 4: updateWeighingResult took ${(performance.now() - step4Start).toFixed(2)} ms`);
 
         if (!isSuccess) {
             return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
         }
-
-        const productionLineId: any = Number(req.session.user?.productionLineId);
+        
         const io = getIO();
         const targetRoom = productionLineId ? io.of("/socket/weighing").to(`machine_room_${productionLineId}`) : io.of("/socket/weighing");
         targetRoom.emit("historyUpdate", { success: true });

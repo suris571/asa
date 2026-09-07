@@ -139,7 +139,11 @@ export class WeighingModel {
             if(type == "history") {
                 sql += ` ORDER BY id DESC`;
             }else{
-                sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+                if(productionLineId == 162){//PM2
+                    sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+                }else{//PM1
+                    sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll ASC`;
+                }
 
             }
             
@@ -424,31 +428,49 @@ export class WeighingModel {
         }
     }
 
-    static async getMaxRollNo(): Promise<string> {
-        let conn;
-        try {
-            conn = await getConnection();
+    static async getMaxRollNo(productionLineId: number): Promise<string> {
+    let conn;
+    try {
+        conn = await getConnection();
 
-            // 🟢 ดึง MAX ตรงจาก Index (เร็วระดับ < 1 ms)
-            const sql = `
-                SELECT NVL(MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)), 0) + 1 AS NEXT_ROLL_NO
-                FROM PD_ROLL
-            `;
+        let prefixFilter = '';
+        let defaultStartNo = 1;
 
-            const result: any = await conn.execute(sql, [], {
-                outFormat: oracledb.OUT_FORMAT_OBJECT,
-            });
-
-            const nextRoll = result.rows[0]?.NEXT_ROLL_NO;
-            return String(nextRoll || 1);
-
-        } catch (error) {
-            console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
-            return "1";
-        } finally {
-            if (conn) await conn.close();
+        if (Number(productionLineId) === 161) {
+            // 🎯 กรองเฉพาะขึ้นต้นด้วย 1, มีความยาว 9 หลัก และเป็นตัวเลขล้วนเท่านั้น
+            prefixFilter = "AND roll_no LIKE '1%' AND LENGTH(roll_no) = 9";
+            defaultStartNo = 100000001; // ค่าเริ่มต้น 9 หลักสำหรับสาย 161
+        } else if (Number(productionLineId) === 162) {
+            // 🎯 กรองเฉพาะขึ้นต้นด้วย 2, มีความยาว 9 หลัก และเป็นตัวเลขล้วนเท่านั้น
+            prefixFilter = "AND roll_no LIKE '2%' AND LENGTH(roll_no) = 9";
+            defaultStartNo = 200000001; // ค่าเริ่มต้น 9 หลักสำหรับสาย 162
         }
+
+        const sql = `
+            SELECT NVL(
+                MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)), 
+                ${defaultStartNo - 1}
+            ) + 1 AS NEXT_ROLL_NO
+            FROM PD_ROLL
+            WHERE 1=1 ${prefixFilter}
+        `;
+
+        const result: any = await conn.execute(sql, [], {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+        });
+
+        const nextRoll = result.rows[0]?.NEXT_ROLL_NO;
+        return String(nextRoll || defaultStartNo);
+
+    } catch (error) {
+        console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
+        if (Number(productionLineId) === 161) return "";
+        if (Number(productionLineId) === 162) return "";
+        return "1";
+    } finally {
+        if (conn) await conn.close();
     }
+}
 
     static async InsertPD_ROLL(data: {
         id_pl_wait_weight: number | string;
@@ -461,6 +483,7 @@ export class WeighingModel {
         roll: string;
         diameter: string | null;
         hold_cause: string | null;
+        productionLineId:number
     }): Promise<{ id: number; roll_no: string } | null> {
         let conn;
         try {
@@ -475,7 +498,12 @@ export class WeighingModel {
             const newPdRollId = seqResult.rows[0]?.NEW_ID;
 
             // 🟢 2. ดึง roll_no จาก Index ตัวใหม่ (< 1 ms)
-            let roll_no = await WeighingModel.getMaxRollNo();
+            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId);
+            if (!roll_no || String(roll_no).trim() === '') {
+                console.error("❌ ไม่สามารถสร้างเลข Roll No ได้เนื่องจากข้อผิดพลาดใน Model");
+                // หากเป็น Controller ให้ res.status(500).json(...) หรือ throw error ออกไป
+                return null; 
+            }
 
             const insertPDQuery = `
                 INSERT INTO PD_ROLL (

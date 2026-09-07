@@ -275,6 +275,15 @@
                     // 🟢 ปิด Loader ทันทีตรงนี้ เพื่อให้ UI บนหน้าจอเปลี่ยนกลับเป็น Form เปล่าทันตาเห็น
                     hideLoader();
 
+                    Swal.fire({
+                        icon: 'success',
+                        title: '',
+                        text: "ROLL_NO: " + response.roll_no,
+                        showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
+                        timer: 3000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
+                        timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)
+                    });
+
                     // 🚀 Step 2: ยิงสั่งพิมพ์ทีหลัง (แม้เบราว์เซอร์จะเด้ง Popup Save/Print มา Freeze UI หน้าจอก็เคลียร์แล้ว)
                     try {
                         await sendDataToPrint({ url: urlPrintBarcode, body: formData });
@@ -480,17 +489,14 @@
                         const val = Number(data) || 0;
                     return Math.trunc(val).toLocaleString('en-US');
                     }
-                },    
+                },
                 { 
-                    "data": "reel_no",
-                    "className": "font-weight-bold",
-                    "render": function(data, type, row) {
-                        if (data) return data;
-                        if (row.rollNo && String(row.rollNo).includes('-')) {
-                            return String(row.rollNo).split('-')[1];
-                        }
-                        return '';
-                    }
+                    "data": "orderNo",
+                    "defaultContent": "-"
+                },
+                { 
+                    "data": "setNo",
+                    "defaultContent": "-"
                 },
                 { 
                     "data": "status",
