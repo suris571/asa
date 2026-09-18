@@ -27,6 +27,7 @@ SELECT
     p_de.queue_no,
     p_de.cut_status_id AS main_cut_status_id,
     qc_reel.reel_no,
+    qc_reel.dcs_reel_no,
     p_cut.remark,
     p_cut.finish_at,
     c_stat.status_name,

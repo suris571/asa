@@ -72,10 +72,11 @@
           </div>
         </div>
 
-        <div class="form-group mb-3">
+        <div class="form-group mb-3" id="slelctLine" style="display: none;">
             <label for="machineSelect" class="font-weight-bold">เลือกเครื่องจักรที่ปฏิบัติงาน</label>
-            <select id="machineSelect" name="machineId" class="form-control custom-select" required>
-                <option selected value="1">🏭 เครื่องตัดที่ 1 (PM 1)</option>
+            <select id="machineSelect" name="machineId" class="form-control custom-select">
+                <option selected value="">เลือก line ผลิต</option>
+                <option value="1">🏭 เครื่องตัดที่ 1 (PM 1)</option>
                 <option value="2">🏭 เครื่องตัดที่ 2 (PM 2)</option>
             </select>
         </div>
@@ -131,6 +132,7 @@
       
       // เคลียร์ป้ายเก่า
       $('.alert-danger').remove(); 
+      $('.alert-warning').remove(); 
 
       const $btn = $(this).find('button[type="submit"]');
       $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> กำลังตรวจสอบสิทธิ์...');
@@ -140,7 +142,6 @@
         password: $('input[name="password"]').val(),
         machineNo: $('#machineSelect').val()
       };
-      console.log(payload)
       $.ajax({
         url: '/login',
         method: 'POST',
@@ -164,14 +165,26 @@
 
           // 🛡️ แถมซ่อมแบบเก่าให้ด้วย (สาเหตุที่รอบแรกไม่ขึ้น เพราะไม่มีกล่องครอบป้าย)
           // เราเปลี่ยนมาแปะไว้ใต้การ์ดเฮดเดอร์แทน โผล่แน่นอนคาตา 100% ค่ะกัปตัน
-          $('input[name="password"]').val("");
-          $('input[name="password"]').focus();
-          const alertHtml = `
+          
+          if(xhr?.responseJSON?.status == "select"){
+              const alertHtml = `
+              <div class="alert alert-warning text-sm p-2 mb-3 mx-3" role="alert">
+                <i class="fas fa-exclamation-triangle mr-1"></i> ${errorMsg}
+              </div>
+            `;
+            $('.card-header').after(alertHtml); 
+            $('#slelctLine').show()
+            $('#slelctLine').focus()
+          }else{
+            const alertHtml = `
             <div class="alert alert-danger text-sm p-2 mb-3 mx-3" role="alert">
               <i class="fas fa-exclamation-triangle mr-1"></i> ${errorMsg}
             </div>
           `;
           $('.card-header').after(alertHtml); 
+            $('input[name="password"]').val("");
+            $('input[name="password"]').focus();
+          }
           
           // คืนชีพปุ่มกด
           $btn.prop('disabled', false).html('<i class="fas fa-sign-in-alt mr-2"></i> เข้าสู่ระบบ');

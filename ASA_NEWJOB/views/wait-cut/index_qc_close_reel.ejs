@@ -264,7 +264,7 @@
                         <th rowspan="2" class="align-middle">ความยาว</th>
                         <th rowspan="2" class="align-middle">วันที่เสร็จ</th>
                         <th rowspan="2" class="align-middle">เวลา</th>
-                        <th rowspan="2" class="align-middle">reel</th>
+                        <th rowspan="2" class="align-middle">Dsc NO</th>
                         <th rowspan="2" class="align-middle">ปุ่มกด</th>
                         <th rowspan="2" class="align-middle">หมายเหตุ</th>
                     </tr>
@@ -335,6 +335,7 @@
 
     // 4. ดึงข้อมูลชุดแรกจาก Server มาเรนเดอร์ตารางตอนเปิดหน้าเว็บ
     const serverData = <%- JSON.stringify(orders) %>;
+    console.log(serverData)
     queueTable = $('#splitSetTable').DataTable({
         "paging": true,
         "pageLength": 25,
@@ -375,7 +376,7 @@
             
             { "data": "date", "defaultContent": "" },
             { "data": "time", "defaultContent": "" },
-            { "data": "reel_no", "defaultContent": "" },
+            { "data": "dcs_reel_no", "defaultContent": "" },
             {
                 "data": null,
                 "render": function(data, type, row) {

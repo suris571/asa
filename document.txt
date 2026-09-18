@@ -272,6 +272,7 @@ SELECT
     p_de.queue_no,
     p_de.cut_status_id AS main_cut_status_id,
     qc_reel.reel_no,
+    qc_reel.dcs_reel_no,
     p_cut.remark,
     p_cut.finish_at,
     c_stat.status_name,
@@ -613,3 +614,14 @@ setx PATH "%PATH%;C:\node" /M
 npm install -g pm2
 npm install -g pm2-windows-service
 pm2 save
+
+
+
+PERMISSION
+16800//ใช้ได้ทุกเมนู
+16801 เมนูแรกน้าสั่งผลิต
+16802 เมนูสองแยก set
+16803 QC ปิด Reel No.
+16801 รับน้ำหนักลูกกระดาษ
+16861 เครื่องตัด1
+16862 เครื่องตัด2

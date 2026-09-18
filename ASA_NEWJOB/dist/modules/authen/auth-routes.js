@@ -24,11 +24,37 @@ router.get('/auth/logout', (req, res) => {
 });
 // 🔑 ตรวจจับรหัสผ่าน และเครื่องจักรที่เลือก (POST: /login)
 router.post('/login', async (req, res) => {
-    const { username, password, machineNo } = req.body;
+    let { username, password, machineNo } = req.body;
     // ค้นหารายชื่อในตรรกะคลังแสงจำลอง
     const user = await auth_model_1.AuthModel.validateStaff(username, password);
-    console.log(user);
-    if (user && user.permissions && (user.permissions.includes(16800) || user.permissions.includes(16801) || user.permissions.includes(16802) || user.permissions.includes(16803) || user.permissions.includes(16804))) {
+    if (!user && !user?.permissions) {
+        return res.status(401).json({
+            success: false,
+            error: '❌ รหัสผ่านหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้'
+        });
+    }
+    if (user?.permissions.includes(16861) && user.permissions.includes(16862) && machineNo == "") {
+        return res.status(500).json({
+            success: false,
+            error: 'กรุณาเลือก line ผลิต',
+            status: "select"
+        });
+    }
+    else if (!user.permissions.includes(16861) && !user.permissions.includes(16862)) {
+        return res.status(500).json({
+            success: false,
+            error: 'กรุณาระบุ line ผลิต PM1,PM2 ให้กับผู้ใช้งาน'
+        });
+    }
+    else if (user?.permissions.includes(16861) && user.permissions.includes(16862) && machineNo) {
+    }
+    else if (user.permissions.includes(16861)) {
+        machineNo = "1";
+    }
+    else if (user.permissions.includes(16862)) {
+        machineNo = "2";
+    }
+    if (user.permissions.includes(16800) || user.permissions.includes(16801) || user.permissions.includes(16802) || user.permissions.includes(16803) || user.permissions.includes(16804)) {
         try {
             // 🎯 ดึง ID จริงจากตาราง PL_PRODUCTION_LINE โดยใช้ machineNo (เช่น 1 หรือ 2)
             const productionLineId = await auth_model_1.AuthModel.getProductionLineIdByNo(Number(machineNo));
@@ -56,10 +82,9 @@ router.post('/login', async (req, res) => {
         }
     }
     else {
-        console.log(`🔴 [AJAX] ล็อกอินล้มเหลว: ไอดีหรือรหัสผ่านผิดพลาด (Username: ${username})`);
         return res.status(401).json({
             success: false,
-            error: '❌ รหัสผ่านไม่ถูกต้องหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้'
+            error: '❌ รหัสผ่านหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้'
         });
     }
 });
