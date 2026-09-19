@@ -45,11 +45,11 @@ class WeighingModel {
                 holdCauseList = holdCauseResult.rows?.map(r => r.HOLD_CAUSE) || [];
             }
             // 🎯 3. Query หลัก (ตามเดิม)
-            let sql = `
+            let baseSql = `
                 SELECT 
                     id                  AS "id",
                     pl_order_id         AS "orderId",
-                    pl_order_detail_id  AS "orderDetailId",
+                    pl_order_detail_id AS "orderDetailId",
                     split_set_id        AS "splitSetId",
                     part                AS "part",
                     roll                AS "roll",
@@ -76,49 +76,67 @@ class WeighingModel {
                 FROM pl_wait_weighing_view
                 WHERE 1 = 1
             `;
+            let whereClause = ``;
+            const binds = {};
+            // 1. เงื่อนไข Status
             if (!type) {
-                sql += ` AND status IS NULL`;
+                whereClause += ` AND status IS NULL`;
             }
             else {
-                sql += ` AND status IS NOT NULL`;
+                whereClause += ` AND status IS NOT NULL`;
             }
-            const binds = {};
+            // 2. เงื่อนไข Line การผลิต
             if (productionLineId) {
-                sql += ` AND pl_production_line_id = :productionLineId`;
+                whereClause += ` AND pl_production_line_id = :productionLineId`;
                 binds.productionLineId = productionLineId;
             }
+            // 3. เงื่อนไขค้นหา
             const isSearchMode = search && search.trim() !== "";
             if (isSearchMode) {
-                sql += ` AND UPPER(order_no) LIKE :search`;
+                whereClause += ` AND UPPER(order_no) LIKE :search`;
                 binds.search = `%${search.trim().toUpperCase()}%`;
             }
             const rollSearchMode = roll_no && roll_no.trim() !== "";
             if (rollSearchMode) {
-                sql += ` AND UPPER(roll_no) LIKE :roll_no`;
+                whereClause += ` AND UPPER(roll_no) LIKE :roll_no`;
                 binds.roll_no = `%${roll_no.trim().toUpperCase()}%`;
             }
-            if (!isSearchMode && !type) {
-                sql += ` AND ROWNUM <= 1`;
-            }
+            // 4. เงื่อนไขวันที่
             if (startDate && startDate.trim() !== '') {
-                sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
+                whereClause += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
                 binds.startDate = startDate.trim();
             }
             if (endDate && endDate.trim() !== '') {
-                sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
+                whereClause += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
                 binds.endDate = endDate.trim();
             }
-            if (type == "history") {
-                sql += ` ORDER BY id DESC`;
+            // 5. เงื่อนไข ORDER BY
+            let orderByClause = ``;
+            if (type === "history") {
+                whereClause += ` AND roll_no IS NOT NULL`;
+                orderByClause = ` ORDER BY roll_no DESC`;
             }
             else {
-                if (productionLineId == 162) { //PM2
-                    sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll DESC`;
+                if (productionLineId == 162) { // PM2
+                    orderByClause = ` ORDER BY queue_no ASC NULLS LAST, split_set_id ASC, roll DESC`;
                 }
-                else { //PM1
-                    sql += ` ORDER BY queue_no ASC NULLS LAST, set_no ASC, roll ASC`;
+                else { // PM1
+                    orderByClause = ` ORDER BY queue_no ASC NULLS LAST, split_set_id ASC, roll ASC`;
                 }
             }
+            // 6. ประกอบ SQL (หุ้ม Subquery สำหรับกรณีที่ต้องการดึงเฉพาะแถวแรก)
+            let sql = ``;
+            const isSingleRowMode = !isSearchMode && !type;
+            if (isSingleRowMode) {
+                // หุ้ม Subquery เพื่อให้ Order By ทำงานให้เสร็จก่อนตัด ROWNUM <= 1
+                sql = `SELECT * FROM (
+                    ${baseSql} ${whereClause} ${orderByClause}
+                ) WHERE ROWNUM <= 1`;
+            }
+            else {
+                sql = `${baseSql} ${whereClause} ${orderByClause}`;
+            }
+            console.log(sql);
             // console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
@@ -436,6 +454,7 @@ class WeighingModel {
                     RETURN_OLD_ROLL,
                     R_ROLL,
                     HOLD_CAUSE,
+                    PART_DATE,
                     SPLIT_SET_ID
                 )
                 SELECT
@@ -443,7 +462,7 @@ class WeighingModel {
                     SYSDATE,
                     :staffId,
                     :part,
-                    'จากการตัด Split',
+                    'จากการผลิต',
                     v.pl_order_id,
                     v.pl_production_line_id,
                     NVL(:qc_reel_id, 0),
@@ -463,6 +482,7 @@ class WeighingModel {
                     'N',
                     :roll,
                     :hold_cause,
+                    v.created_at,
                     v.split_set_id
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight

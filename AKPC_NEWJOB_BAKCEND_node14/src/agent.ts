@@ -101,12 +101,13 @@ app.post("/preview-label", async (req, res) => {
                 date: createdAt,
                 barcodeImg: barcodeString,
                 status: res_status,
+                model:model
             });
 
             await PrintService.printPdfFile(savedPdfPath);
 
             try {
-                await fs.unlink(savedPdfPath);
+                // await fs.unlink(savedPdfPath);
                 console.log(`[Cleanup] Deleted temp file: ${savedPdfPath}`);
             } catch (removeErr) {
                 console.warn(`[Cleanup Warning] Could not delete temp file (${savedPdfPath}):`, removeErr);
@@ -132,6 +133,7 @@ app.post("/preview-label", async (req, res) => {
             date: createdAt,
             barcodeImg: barcodeString,
             status: res_status,
+            model:model
         });
     }
 });

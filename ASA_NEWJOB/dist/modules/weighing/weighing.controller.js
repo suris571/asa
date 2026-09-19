@@ -43,7 +43,7 @@ const saveWeighingController = async (req, res) => {
     const totalStart = performance.now();
     console.log(`[PERF START] saveWeighingController execution initiated`);
     try {
-        const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
+        const { id, weight, status, remark, model, diameter, hold_cause, createdAt } = req.body;
         const staffId = req.session.user?.staff_id;
         const productionLineId = Number(req.session.user?.productionLineId);
         if (!id) {
@@ -62,6 +62,7 @@ const saveWeighingController = async (req, res) => {
             model: model && model.trim() !== '' ? model.trim() : null,
             staffId: staffId,
             diameter: diameter && diameter.trim() !== '' ? diameter.trim() : null,
+            createdAt: createdAt,
             hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
         };
         // ⏱️ Step 1: Measure GetWaitWeighingInfoById
@@ -81,6 +82,7 @@ const saveWeighingController = async (req, res) => {
             roll: waitWeighingInfo.ROLL,
             diameter: payload.diameter,
             hold_cause: payload.hold_cause,
+            createdAt: createdAt,
             productionLineId
         });
         // ⏱️ Step 3: Measure InsertPD_ROLL_QUALITY

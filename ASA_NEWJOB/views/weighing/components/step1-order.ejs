@@ -2,7 +2,7 @@
   <h7 class="text-primary font-weight-bold mb-3"><i class="fas fa-search"></i> STEP 1: ข้อมูลใบสั่งผลิต</h7>
   
   <div class="form-group mb-2">
-    <label class="font-weight-bold text-sm mb-1">เลขใบสั่งผลิต</label>
+    <label class="font-weight-bold text-sm mb-1">เลขใบสั่งผลิต Set <span id="setNo"><%= (nextData && nextData.setNo) ? nextData.setNo : '' %></span></label>
     <div class="input-group flex-nowrap">
       <input type="text" class="form-control form-control-sm text-center font-weight-bold" id="orderNo" value="<%= (nextData && nextData.orderNo) ? nextData.orderNo : '' %>">
       <div class="input-group-append">

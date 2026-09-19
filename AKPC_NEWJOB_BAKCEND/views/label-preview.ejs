@@ -271,7 +271,7 @@ font-weight: 400;letter-spacing: 1.5px; }
       <table class="top-table">
         <tr>
           <td class="lbl">GRADE</td>
-          <td class="value_top" style="padding-right: 138px;"><%= (grade) ? grade : '' %></td>
+          <td class="value_top" style="padding-right: 138px;"><%= (grade) ? grade : '' %><%= (model) ? model : '' %></td>
           <td class="unit">GSM.</td>
         </tr>
         <tr>
@@ -333,7 +333,7 @@ font-weight: 400;letter-spacing: 1.5px; }
         <!-- GRADE -->
         <tr style="border-bottom: 1px solid #000;">
           <td style="padding: 5px 8px; font-size: 18px; font-weight: normal; width: 38%;" class="left_a">GRADE</td>
-          <td style="padding: 5px 4px; font-size: 20px; text-align: center;" class="center_a"><%= (grade) ? grade : '' %></td>
+          <td style="padding: 5px 4px; font-size: 20px; text-align: center;" class="center_a"><%= (grade) ? grade : '' %><%= (model) ? model : '' %></td>
           <td style="padding: 5px 4px 2px 0; font-size: 11px; text-align: right; vertical-align: bottom; width: 35px;" class="right_a">GSM.</td>
         </tr>
         <!-- SIZE -->

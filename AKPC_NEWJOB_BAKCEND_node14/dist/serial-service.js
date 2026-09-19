@@ -63,7 +63,7 @@ class SerialService {
                         const currentWeight = Math.trunc(parseFloat(match[1]));
                         if (!isNaN(currentWeight)) {
                             const isStable = rawData.includes('\u0002S') || rawData.includes('S000G');
-                            console.log(`>>> [READY TO EMIT] Weight: ${currentWeight} kg | Stable: ${isStable}`);
+                            // console.log(`>>> [READY TO EMIT] Weight: ${currentWeight} kg | Stable: ${isStable}`);
                             this.ioInstance.emit('weight_stream', {
                                 weight: currentWeight.toLocaleString('en-US'),
                                 stable: isStable,

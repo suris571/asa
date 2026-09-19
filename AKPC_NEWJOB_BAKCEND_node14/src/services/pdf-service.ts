@@ -12,6 +12,7 @@ interface LabelData {
   rollNo: string;
   barcodeImg: string;
   status: string;
+  model:string
 }
 
 export async function generateLabelPdf(data: LabelData): Promise<string> {
@@ -31,6 +32,7 @@ export async function generateLabelPdf(data: LabelData): Promise<string> {
 
     browser = await puppeteer.launch({
       headless: true, // 👈 ปรับเป็น boolean true สำหรับ Puppeteer v13
+      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       args: [
         '--no-sandbox', 
         '--disable-setuid-sandbox',

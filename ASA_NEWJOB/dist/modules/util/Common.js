@@ -28,5 +28,38 @@ class Common {
         return `${day}/${month}/${year}`;
     }
     ;
+    static getCurrentShiftPartAndCreateAt = (dateObj = new Date()) => {
+        // 1. คัดลอก Date Object เพื่อคำนวณ
+        const workDate = new Date(dateObj);
+        const currentHour = workDate.getHours();
+        let shiftPart = "";
+        // 🎯 1. ช่วงเวลา 08:00 ถึง 15:59 -> กะเช้า
+        if (currentHour >= 8 && currentHour < 16) {
+            shiftPart = "เช้า";
+        }
+        // 🎯 2. ช่วงเวลา 16:00 ถึง 23:59 -> กะบ่าย
+        else if (currentHour >= 16 && currentHour < 24) {
+            shiftPart = "บ่าย";
+        }
+        // 🎯 3. ช่วงเวลา 00:00 ถึง 07:59 -> กะดึก (วันที่ผลิตถอยกลับไป 1 วัน)
+        else {
+            shiftPart = "ดึก";
+            workDate.setDate(workDate.getDate() - 1); // ถอยวันที่ลง 1 วัน (แต่ชั่วโมง/นาที/วินาที ยังเหมือนเดิม)
+        }
+        // 2. จัดฟอร์แมตวันที่ (YYYY-MM-DD)
+        const year = workDate.getFullYear();
+        const month = String(workDate.getMonth() + 1).padStart(2, '0');
+        const day = String(workDate.getDate()).padStart(2, '0');
+        // 3. จัดฟอร์แมตเวลาเดิม (HH:mm:ss)
+        const hours = String(workDate.getHours()).padStart(2, '0');
+        const minutes = String(workDate.getMinutes()).padStart(2, '0');
+        const seconds = String(workDate.getSeconds()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+        const formattedTimestamp = `${formattedDate} ${hours}:${minutes}:${seconds}`;
+        return {
+            date: formattedTimestamp,
+            part: shiftPart
+        };
+    };
 }
 exports.Common = Common;

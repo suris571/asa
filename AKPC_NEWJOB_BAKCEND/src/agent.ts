@@ -109,6 +109,7 @@ app.post("/preview-label", async (req, res) => {
                 date: createdAt,
                 barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
                 status: res_status,
+                model:model
             });
 
             await PrintService.printPdfFile(savedPdfPath);
@@ -145,6 +146,7 @@ app.post("/preview-label", async (req, res) => {
             date: createdAt,
             barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
             status: res_status,
+            model:model
         });
     }
 });

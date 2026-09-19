@@ -629,16 +629,16 @@ class WaitCutModel {
                 const queryDetail = `
                     SELECT 
                         over_size1 AS BLAD1, over_size2 AS BLAD2, over_size3 AS BLAD3, over_size4 AS BLAD4,
-                        size1_id   AS SIZE1_ID, size2_id AS SIZE2_ID, size3_id AS SIZE3_ID, size4_id AS SIZE4_ID,
+                        size_id1   AS SIZE1_ID, size_id2 AS SIZE2_ID, size_id3 AS SIZE3_ID, size_id4 AS SIZE4_ID,
                         grade1_id  AS GRADE1_ID, grade2_id AS GRADE2_ID, grade3_id AS GRADE3_ID, grade4_id AS GRADE4_ID
-                    FROM pl_order_detail
-                    WHERE id = :pl_order_detail_id
+                    FROM pl_cut_split_set
+                    WHERE id = :split_set_id
                 `;
-                const result = await conn.execute(queryDetail, { pl_order_detail_id }, {
+                const result = await conn.execute(queryDetail, { split_set_id }, {
                     outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
                 });
                 if (!result.rows || result.rows.length === 0) {
-                    throw new Error(`ไม่พบข้อมูลรายละเอียดออเดอร์ ID: ${pl_order_detail_id}`);
+                    throw new Error(`ไม่พบข้อมูลรายละเอียดเซ็ต ID: ${split_set_id}`);
                 }
                 const row = result.rows[0];
                 const rollsToInsert = [];
@@ -673,9 +673,12 @@ class WaitCutModel {
                         :bladeSize, 
                         :sizeId, 
                         :gradeId,
-                        NULL, NULL, NULL, :staffId, SYSDATE
+                        NULL, NULL, NULL, :staffId, TO_TIMESTAMP(:createdAt, 'YYYY-MM-DD HH24:MI:SS')
                     )
                 `;
+                let dateinsert = Common_1.Common.getCurrentShiftPartAndCreateAt();
+                let resDateStapme = dateinsert.date;
+                console.log(dateinsert);
                 // 🚀 วนลูป INSERT รายลูก
                 for (const roll of rollsToInsert) {
                     await conn.execute(insertQuery, {
@@ -686,7 +689,8 @@ class WaitCutModel {
                         bladeSize: roll.bladeSize,
                         sizeId: roll.sizeId,
                         gradeId: roll.gradeId,
-                        staffId: formattedStaffId
+                        staffId: formattedStaffId,
+                        createdAt: resDateStapme
                     }, { autoCommit: false });
                 }
             }

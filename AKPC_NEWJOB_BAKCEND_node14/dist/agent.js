@@ -12,7 +12,6 @@ const serial_service_1 = require("./serial-service");
 const print_service_1 = require("./print-service");
 const bwip_js_1 = __importDefault(require("bwip-js"));
 const pdf_service_1 = require("./services/pdf-service");
-const promises_1 = __importDefault(require("fs/promises"));
 async function generateBarcode(text) {
     try {
         const pngBuffer = await bwip_js_1.default.toBuffer({
@@ -81,10 +80,11 @@ app.post("/preview-label", async (req, res) => {
                 date: createdAt,
                 barcodeImg: barcodeString,
                 status: res_status,
+                model: model
             });
             await print_service_1.PrintService.printPdfFile(savedPdfPath);
             try {
-                await promises_1.default.unlink(savedPdfPath);
+                // await fs.unlink(savedPdfPath);
                 console.log(`[Cleanup] Deleted temp file: ${savedPdfPath}`);
             }
             catch (removeErr) {
@@ -112,6 +112,7 @@ app.post("/preview-label", async (req, res) => {
             date: createdAt,
             barcodeImg: barcodeString,
             status: res_status,
+            model: model
         });
     }
 });

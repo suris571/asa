@@ -21,6 +21,7 @@ async function generateLabelPdf(data) {
         process.env.ELECTRON_HIDE_INTERNAL_WINDOWS = "true";
         browser = await puppeteer_1.default.launch({
             headless: true,
+            executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',

@@ -339,7 +339,7 @@
             columns: [
                 { "data": "orderNo", "defaultContent": "-" },                     // 1. เลขใบสั่งผลิต
                 { "data": "createdAt", "defaultContent": "-" },                   // 2. วันที่
-                { "data": "rollNo", "defaultContent": "-" },                      // 3. roll Item
+                { "data": "setNo", "defaultContent": "-" },                      // 3. roll Item
                 { "data": "gradeName", "defaultContent": "-" },                   // 4. เกรด
                 { "data": "model", "defaultContent": "-" },                       // 5. รุ่น
                 { "data": "sizeName", "defaultContent": "-" },                    // 6. ขนาด
@@ -577,6 +577,7 @@
                 $('#model').val(nextData.model);
                 $('#diameter').val(nextData.diameter);
                 $('#part').val(nextData.part);
+                $('#setNo').text(nextData.setNo);
                 
                 // ล้างช่องกรอกรอชั่งลูกใหม่
                 initWeighingSelect2(nextData.hold_cause_list, nextData.remarks_list);
@@ -677,7 +678,7 @@
             $('#diameter').val(rowData.diameter || '');                 // Diameter
             $('#reelno').val(rowData.reel_no || '');                    // รหัส Roll No.
             $('#part').val(rowData.part || '');                         // กะการทำงาน
-
+            $('#setNo').text(rowData.setNo || '');                         // กะการทำงาน
             // 3. ปิด Modal Popup
             $('#orderQueueModal').modal('hide');
 

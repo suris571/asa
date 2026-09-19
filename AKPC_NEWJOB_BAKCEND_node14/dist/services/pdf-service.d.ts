@@ -7,6 +7,7 @@ interface LabelData {
     rollNo: string;
     barcodeImg: string;
     status: string;
+    model: string;
 }
 export declare function generateLabelPdf(data: LabelData): Promise<string>;
 export {};

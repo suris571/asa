@@ -47,7 +47,7 @@ export const saveWeighingController = async (req: Request, res: Response) => {
     console.log(`[PERF START] saveWeighingController execution initiated`);
 
     try {
-        const { id, weight, status, remark, model, diameter, hold_cause } = req.body;
+        const { id, weight, status, remark, model, diameter, hold_cause , createdAt } = req.body;
         const staffId = req.session.user?.staff_id;
         const productionLineId: any = Number(req.session.user?.productionLineId);
 
@@ -70,6 +70,7 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             model: model && model.trim() !== '' ? model.trim() : null,
             staffId: staffId,
             diameter: diameter && diameter.trim() !== '' ? diameter.trim() : null,
+            createdAt:createdAt,
             hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
         };
 
@@ -92,6 +93,7 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             roll: waitWeighingInfo.ROLL,
             diameter: payload.diameter,
             hold_cause: payload.hold_cause,
+            createdAt:createdAt,
             productionLineId
         });
 
