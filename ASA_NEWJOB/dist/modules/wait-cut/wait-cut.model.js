@@ -664,7 +664,7 @@ class WaitCutModel {
                         blade_size, 
                         size_id, 
                         grade_id,
-                        weigh, status, remark, CREATE_STAFF, CREATE_DATE
+                        weigh, status, remark, CREATE_STAFF, CREATE_DATE,part_date
                     ) VALUES (
                         :pl_order_id, 
                         :pl_order_detail_id, 
@@ -673,7 +673,7 @@ class WaitCutModel {
                         :bladeSize, 
                         :sizeId, 
                         :gradeId,
-                        NULL, NULL, NULL, :staffId, TO_TIMESTAMP(:createdAt, 'YYYY-MM-DD HH24:MI:SS')
+                        NULL, NULL, NULL, :staffId,SYSDATE, TO_DATE(:part_date, 'YYYY-MM-DD HH24:MI:SS')
                     )
                 `;
                 let dateinsert = Common_1.Common.getCurrentShiftPartAndCreateAt();
@@ -690,7 +690,7 @@ class WaitCutModel {
                         sizeId: roll.sizeId,
                         gradeId: roll.gradeId,
                         staffId: formattedStaffId,
-                        createdAt: resDateStapme
+                        part_date: resDateStapme
                     }, { autoCommit: false });
                 }
             }

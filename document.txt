@@ -214,6 +214,7 @@ CREATE TABLE pl_wait_weighing (
     size_id            NUMBER NULL,
     grade_id           NUMBER NULL,
     CREATE_DATE DATE DEFAULT SYSDATE,
+    part_date          DATE,
     create_staff       NUMBER NULL,
     created_at         DATE DEFAULT SYSDATE,
     UPDATE_STAFF NUMBER,
@@ -433,7 +434,7 @@ SELECT
     p_wei.status,
     p_wei.remark,
     p_wei.created_at,
-
+    p_wei.part_date,
     p_wei.roll,
     p_wei.roll_no,
     p_wei.blade_size AS blad,

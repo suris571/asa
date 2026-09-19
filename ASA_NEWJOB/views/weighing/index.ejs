@@ -571,6 +571,7 @@
                 const nextData = response.data;
                 $('#id').val(nextData.id);
                 $('#createdAt').val(nextData.createdAt);
+                $('#part_date').val(nextData.part_date);
                 $('#reelno').val(nextData.reel_no);
                 $('#grade').val(nextData.gradeName);
                 $('#size').val(nextData.sizeName);
@@ -635,12 +636,14 @@
             // 2. ล้างค่า Hidden ID เพื่อให้ฟอร์มว่างแบบ 100%
             $('#id').val('');
             $('#createdAt').val('');
+            $('#part_date').val('');
             $('#reelno').val('');
             $('#grade').val('');
             $('#size').val('');
             $('#model').val('');
             $('#diameter').val('');
             $('#part').val('');
+            $('#setNo').text('');
             
             // ล้างช่องกรอกรอชั่งลูกใหม่
             $('#remark, #hold_cause').val('').trigger('change');
@@ -672,6 +675,7 @@
             $('#id').val(rowData.id || '');                             // Hidden ID
             $('#orderNo').val(rowData.orderNo || '');                   // เลขใบสั่งผลิต
             $('#createdAt').val(rowData.createdAt || '');               // วันที่ผลิต
+            $('#part_date').val(rowData.part_date || '');               // เวลากะการทำงาน
             $('#grade').val(rowData.gradeName || '');                   // เกรด
             $('#model').val(rowData.model || '');                       // รุ่น
             $('#size').val(rowData.sizeName || '');                     // ขนาด

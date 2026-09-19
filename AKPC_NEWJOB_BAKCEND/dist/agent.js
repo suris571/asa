@@ -49,19 +49,8 @@ io.on("connection", (socket) => {
         console.log("❌ หน้าเว็บหลักตัดสายสัญญาณการดักจับน้ำหนักไปแล้ว");
     });
 });
-app.post("/preview-label", async (req, res) => {
-    let mode = "view1";
-    const { id, createdAt, part, // 'บ่าย'
-    gradeName, // 'CA125'
-    model, // 'FF'
-    size, // '46'
-    diameter, // '48'
-    reelno, // '113001920'
-    weight, // '29.06'
-    status, // 'Pass'
-    remark, // '852'
-    roll_no, // 2
-     } = req.body;
+app.get("/preview-label", async (req, res) => {
+    let mode = "view";
     // const {
     //     id,
     //     createdAt,
@@ -75,7 +64,18 @@ app.post("/preview-label", async (req, res) => {
     //     status, // 'Pass'
     //     remark, // '852'
     //     roll_no, // 2
-    // } = {"id":"254","createdAt":"31/07/2026","part":"บ่าย","gradeName":"CA125","model":"FF","size":"46","diameter":"48","reelno":"113001920","weight":"29.06","status":"Pass","remark":"852","roll_no":"0123456789"}
+    // }:any = req.body;
+    const { id, createdAt, part, // 'บ่าย'
+    gradeName, // 'CA125'
+    model, // 'F'
+    size, // '46'
+    diameter, // '48'
+    reelno, // '113001920'
+    weight, // '29.06'
+    status, // 'Pass'
+    remark, // '852'
+    roll_no, // 2
+     } = { "id": "254", "createdAt": "31/07/2026", "part": "บ่าย", "gradeName": "CA125", "model": "FF", "size": "46", "diameter": "48", "reelno": "113001920", "weight": "29.06", "status": "Pass", "remark": "852", "roll_no": "0123456789" };
     let savedPdfPath;
     let res_status = "HOLD";
     if (status && status != "HOLD" && status != "Hold" && status != "hold") {

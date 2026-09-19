@@ -62,6 +62,7 @@ class WeighingModel {
                     status              AS "status",
                     remark              AS "remark",
                     created_at          AS "createdAt",
+                    part_date           AS "part_date",
                     order_no            AS "orderNo",
                     order_item          AS "orderItem",
                     set_no              AS "setNo",
@@ -150,6 +151,14 @@ class WeighingModel {
                     const dateObj = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
                     if (!isNaN(dateObj.getTime())) {
                         row.createdAt = dateObj.toLocaleDateString("en-GB", {
+                            timeZone: "Asia/Bangkok",
+                        });
+                    }
+                }
+                if (row.part_date) {
+                    const dateObj = row.part_date instanceof Date ? row.part_date : new Date(row.part_date);
+                    if (!isNaN(dateObj.getTime())) {
+                        row.part_date = dateObj.toLocaleDateString("en-GB", {
                             timeZone: "Asia/Bangkok",
                         });
                     }
@@ -482,7 +491,7 @@ class WeighingModel {
                     'N',
                     :roll,
                     :hold_cause,
-                    v.created_at,
+                    v.part_date,
                     v.split_set_id
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight

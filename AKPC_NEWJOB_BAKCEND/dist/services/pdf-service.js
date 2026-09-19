@@ -40,6 +40,8 @@ export async function generateLabelPdf(data) {
         await page.pdf({
             path: pdfPath,
             format: 'A4',
+            pageRanges: '1',
+            preferCSSPageSize: true,
             printBackground: true,
             margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' }
         });

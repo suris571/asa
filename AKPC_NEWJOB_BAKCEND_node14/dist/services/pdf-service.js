@@ -17,7 +17,6 @@ async function generateLabelPdf(data) {
         }
         const templatePath = path_1.default.join(__dirname, '../../views/label-preview.ejs');
         const htmlContent = await ejs_1.default.renderFile(templatePath, data);
-        console.log(`⏳ [Agent] กำลังติดเครื่องยนต์บราวเซอร์จำลองเพื่อเรนเดอร์ PDF...`);
         process.env.ELECTRON_HIDE_INTERNAL_WINDOWS = "true";
         browser = await puppeteer_1.default.launch({
             headless: true,
@@ -40,9 +39,10 @@ async function generateLabelPdf(data) {
             path: pdfPath,
             format: 'A4',
             printBackground: true,
+            pageRanges: '1',
+            preferCSSPageSize: true,
             margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' }
         });
-        console.log(`✅ [Agent Success] เขียนไฟล์ PDF ลงเครื่องจักรสำเร็จ: ${pdfPath}`);
         return pdfPath;
     }
     catch (error) {
