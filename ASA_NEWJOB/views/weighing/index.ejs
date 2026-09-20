@@ -162,7 +162,23 @@
             productionLineId: userProductionLineId 
         }
     });
-    let socketScale = io('http://127.0.0.1:4000');
+
+    // 🟢 1. ใส่ option closeOnBeforeunload: true ตอนสร้าง socketScale
+    let socketScale = io('http://127.0.0.1:4000', {
+        closeOnBeforeunload: true
+    });
+
+    // 🟢 2. ดักทั้ง pagehide และ beforeunload เพื่อสั่ง disconnect() แบบบังคับ
+    function forceDisconnect() {
+        if (socketScale && socketScale.connected) {
+            socketScale.disconnect();
+        }
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+    }
+    window.addEventListener('pagehide', forceDisconnect);
+    window.addEventListener('beforeunload', forceDisconnect);
     let urlPrintBarcode = 'http://127.0.0.1:4000/preview-label';
 
     socketScale.off('connect');

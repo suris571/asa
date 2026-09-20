@@ -52,6 +52,21 @@ app.use(express.json());
 
 const httpServer = createServer(app);
 
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+    },
+});
+
+io.on("connection", (socket) => {
+    console.log(`[Socket] Web client connected, ID: ${socket.id}`);
+
+    socket.on("disconnect", () => {
+        console.log("[Socket] Web client disconnected");
+    });
+});
+
 app.post("/preview-label", async (req, res) => {
     let mode = "view1";
     const {
@@ -123,62 +138,22 @@ app.post("/preview-label", async (req, res) => {
     }
 });
 
-
-
-// 🚀 4. สั่งให้ Agent สแตนด์บายต้อนรับสาย Hardware ที่พอร์ต 4000
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-    },
-});
-
-SerialService.initialize(io, "COM1", 2400);
-
-// ช่องทางดักฟังเมื่อหน้าเว็บ EJS ทำการต่อสายเชื่อมเน็ตเวิร์กเข้ามา
-io.on("connection", (socket) => {
-    const clientCount = io.engine.clientsCount;
-    console.log(`🔌 [Socket] Web client connected, ID: ${socket.id} | Active clients: ${clientCount}`);
-
-    if (clientCount > 0) {
-        SerialService.openPort();
-    }
-
-    socket.on("disconnect", () => {
-        const remainingClients = io.engine.clientsCount;
-        // console.log(`❌ [Socket] Web client disconnected, ID: ${socket.id} | Remaining clients: ${remainingClients}`);
-
-        // สั่งปิด COM1 คืนพอร์ตทันทีเมื่อคนใช้งานเหลือ 0
-        if (remainingClients === 0) {
-            SerialService.closePort();
-        }
-    });
-});
-
 const AGENT_PORT = 4000;
 httpServer
     .listen(AGENT_PORT, () => {
-        console.log(`====== ⚙️ WEIGHT & PRINT AGENT IS RUNNING ======`);
-        console.log(`🟢 โปรแกรมตัวเล็กพร้อมประจำการเงียบๆ ที่พอร์ต: ${AGENT_PORT}`);
-        console.log(`===============================================`);
+        console.log("===============================================");
+        console.log("====== WEIGHT & PRINT AGENT IS RUNNING ======");
+        console.log("Agent listening on port: 4000");
+        console.log("===============================================");
     })
     .on("error", (err: NodeJS.ErrnoException) => {
         if (err.code === "EADDRINUSE") {
-            console.error(`🔴 พอร์ต ${AGENT_PORT} ถูกใช้งานอยู่แล้ว! กรุณาปิดโปรแกรมอื่นที่ใช้พอร์ตนี้ก่อนครับ`);
+            console.error(`[Server Error] Port ${AGENT_PORT} is already in use!`);
         } else {
-            console.error(`🔴 เกิดข้อผิดพลาดกับ HTTP Server: ${err.message}`);
+            console.error(`[Server Error] HTTP Server error: ${err.message}`);
         }
         process.exit(1);
     });
 
-export { io }; // ส่งออกท่อส่งสัญญาณ Socket.io ให้โมดูลอื่นๆ ในโปรเจกต์สามารถใช้งานได้
-
-
-
-process.on("uncaughtException", (err) => {
-    console.error("💥 [Global Guard] Uncaught Exception Detected:", err.message);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-    console.error("💥 [Global Guard] Unhandled Rejection at:", promise, "reason:", reason);
-});
+export { io };
+SerialService.initialize(io, "COM1", 2400);

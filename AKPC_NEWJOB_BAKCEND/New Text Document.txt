@@ -1,0 +1,4 @@
+💡 ทริคเสริม: ตั้งค่าให้ Agent รันอัตโนมัติเมื่อเปิดคอมลูกค้า (Windows Startup)
+กดปุ่ม Win + R บนแป้นพิมพ์ พิมพ์ shell:startup แล้วกด Enter
+
+ทำการ Right-Click > Create Shortcut ของไฟล์ start-silent.vbs แล้วเอาไปวางในโฟลเดอร์ Startup นั้น

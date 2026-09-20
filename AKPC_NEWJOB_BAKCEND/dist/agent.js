@@ -28,27 +28,13 @@ async function generateBarcode(text) {
     }
 }
 const app = express();
-app.use(express.static('public')); // ⚓ 0. เปิดสิทธิ์ให้หน้าเว็บหลักเข้าถึงไฟล์ EJS ได้
+app.use(express.static("public")); // ⚓ 0. เปิดสิทธิ์ให้หน้าเว็บหลักเข้าถึงไฟล์ EJS ได้
 // ⚓ 1. ปลดล็อก CORS เปิดสิทธิ์ให้เบราว์เซอร์หน้าเว็บหลักยิงข้ามพอร์ตมาคุยได้ไร้รอยต่อ
 app.use(cors({
     origin: "*", // หรือใส่พิกัดเว็บหลักของกัปตัน เช่น 'http://localhost:3000' เพื่อความปลอดภัยสูงสุด
 }));
 app.use(express.json());
 const httpServer = createServer(app);
-// 📡 2. ประกาศตัวเปิดท่อ Socket.io Server ประจำเครื่องหน้างาน
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-    },
-});
-// ช่องทางดักฟังเมื่อหน้าเว็บ EJS ทำการต่อสายเชื่อมเน็ตเวิร์กเข้ามา
-io.on("connection", (socket) => {
-    console.log(`🔌 หน้าเว็บหลักสอยสายเข้ามาเชื่อมต่อจับน้ำหนักแล้ว ไอดี: ${socket.id}`);
-    socket.on("disconnect", () => {
-        console.log("❌ หน้าเว็บหลักตัดสายสัญญาณการดักจับน้ำหนักไปแล้ว");
-    });
-});
 app.get("/preview-label", async (req, res) => {
     let mode = "view";
     // const {
@@ -75,7 +61,20 @@ app.get("/preview-label", async (req, res) => {
     status, // 'Pass'
     remark, // '852'
     roll_no, // 2
-     } = { "id": "254", "createdAt": "31/07/2026", "part": "บ่าย", "gradeName": "CA125", "model": "FF", "size": "46", "diameter": "48", "reelno": "113001920", "weight": "29.06", "status": "Pass", "remark": "852", "roll_no": "0123456789" };
+     } = {
+        id: "254",
+        createdAt: "31/07/2026",
+        part: "บ่าย",
+        gradeName: "CA125",
+        model: "FF",
+        size: "46",
+        diameter: "48",
+        reelno: "113001920",
+        weight: "29.06",
+        status: "Pass",
+        remark: "852",
+        roll_no: "0123456789",
+    };
     let savedPdfPath;
     let res_status = "HOLD";
     if (status && status != "HOLD" && status != "Hold" && status != "hold") {
@@ -95,7 +94,7 @@ app.get("/preview-label", async (req, res) => {
                 date: createdAt,
                 barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
                 status: res_status,
-                model: model
+                model: model,
             });
             await PrintService.printPdfFile(savedPdfPath);
             try {
@@ -131,11 +130,34 @@ app.get("/preview-label", async (req, res) => {
             date: createdAt,
             barcodeImg: barcodeString, // 👈 ยัดสตริงรูปภาพใส่ตัวแปรชื่อ barcodeImg
             status: res_status,
-            model: model
+            model: model,
         });
     }
 });
 // 🚀 4. สั่งให้ Agent สแตนด์บายต้อนรับสาย Hardware ที่พอร์ต 4000
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+    },
+});
+SerialService.initialize(io, "COM1", 9600);
+// ช่องทางดักฟังเมื่อหน้าเว็บ EJS ทำการต่อสายเชื่อมเน็ตเวิร์กเข้ามา
+io.on("connection", (socket) => {
+    const clientCount = io.engine.clientsCount;
+    console.log(`🔌 [Socket] Web client connected, ID: ${socket.id} | Active clients: ${clientCount}`);
+    if (clientCount > 0) {
+        SerialService.openPort();
+    }
+    socket.on("disconnect", () => {
+        const remainingClients = io.engine.clientsCount;
+        // console.log(`❌ [Socket] Web client disconnected, ID: ${socket.id} | Remaining clients: ${remainingClients}`);
+        // สั่งปิด COM1 คืนพอร์ตทันทีเมื่อคนใช้งานเหลือ 0
+        if (remainingClients === 0) {
+            SerialService.closePort();
+        }
+    });
+});
 const AGENT_PORT = 4000;
 httpServer
     .listen(AGENT_PORT, () => {
@@ -153,5 +175,10 @@ httpServer
     process.exit(1);
 });
 export { io }; // ส่งออกท่อส่งสัญญาณ Socket.io ให้โมดูลอื่นๆ ในโปรเจกต์สามารถใช้งานได้
-SerialService.initialize(io, "COM1", 9600);
+process.on("uncaughtException", (err) => {
+    console.error("💥 [Global Guard] Uncaught Exception Detected:", err.message);
+});
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("💥 [Global Guard] Unhandled Rejection at:", promise, "reason:", reason);
+});
 //# sourceMappingURL=agent.js.map
