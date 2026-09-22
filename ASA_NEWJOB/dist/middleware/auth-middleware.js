@@ -5,6 +5,20 @@ exports.requireAuth = requireAuth;
 function requireAuth(req, res, next) {
     // ตรรกะเด็ดขาด: ถ้าไม่มีตั๋วคุกกี้ฝังในแรมเบราว์เซอร์ ดีดกลับไปหน้าล็อกอินสถานเดียว!
     if (!req.session.user) {
+        // 🟢 1. ตรวจสอบว่าเป็น AJAX/Fetch Request หรือไม่
+        const isAjax = req.xhr ||
+            req.headers['x-requested-with'] === 'XMLHttpRequest' ||
+            req.headers.accept?.includes('application/json') ||
+            req.get('Content-Type') === 'application/json';
+        if (isAjax) {
+            // 🔴 ถ้ายิงมาจาก AJAX/Fetch -> ตอบกลับเป็น HTTP 401 Unauthorized พร้อม JSON
+            return res.status(401).json({
+                success: false,
+                message: 'SESSION_EXPIRED_PLEASE_LOGIN',
+                redirectUrl: '/login'
+            });
+        }
+        // 🟢 2. ถ้าเป็นการกดเปลี่ยนหน้าเว็บปกติ -> Redirect ไปหน้า Login
         return res.redirect('/login');
     }
     next(); // มีตั๋วแล้ว ผ่านประตูไปทำคิวงานต่อได้!

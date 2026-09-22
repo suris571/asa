@@ -57,7 +57,7 @@ class Common {
         const formattedDate = `${year}-${month}-${day}`;
         const formattedTimestamp = `${formattedDate} ${hours}:${minutes}:${seconds}`;
         return {
-            date: formattedTimestamp,
+            date: formattedDate,
             part: shiftPart
         };
     };

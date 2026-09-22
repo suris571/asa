@@ -332,7 +332,7 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'เกิดข้อผิดพลาด',
-                    text: "💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+                    text: "💥 เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ "+ err.responseJSON.message,
                     showConfirmButton: false, // 👈 ซ่อนปุ่ม OK
                     timer: 2000,              // 👈 ปิดเองใน 2000 ms (2 วินาที)
                     timerProgressBar: true    // 👈 เพิ่มหลอดเวลาวิ่งถอยหลัง (ใส่หรือไม่ใส่ก็ได้)

@@ -155,6 +155,10 @@ CREATE TABLE pl_cut_split_set (
     GRADE2_ID	        NUMBER,	
     GRADE3_ID	        NUMBER,	
     GRADE4_ID	        NUMBER,
+    K1	                VARCHAR2(1) NULL,
+    K2	                VARCHAR2(1) NULL,
+    K3	                VARCHAR2(1) NULL,
+    K4	                VARCHAR2(1) NULL,
     status              NUMBER DEFAULT 1 NOT NULL,
     sub_status          VARCHAR2(50) NULL,
     set_no              VARCHAR2(50) NULL,
@@ -207,6 +211,7 @@ CREATE TABLE pl_wait_weighing (
     weigh              NUMBER(10, 3) NULL,
     status             VARCHAR2(20) NULL,
     PART               VARCHAR2(30) NULL,
+    K                  VARCHAR2(1) NULL,
     remark             VARCHAR2(500) NULL,
     roll               NUMBER NULL,
     roll_no            VARCHAR2(50) NULL,
@@ -313,7 +318,6 @@ LEFT JOIN (
 
 
 
-
 CREATE OR REPLACE VIEW PL_ORDER_VIEW AS
 SELECT 
     p_or.id as pl_order_id,
@@ -340,8 +344,17 @@ SELECT
     p_de.QUEUE_NO,
     p_de.cut_status_id,
     p_or.pl_production_line_id,
-    COMPLETED_SET_QTY,
-    COMPLETED_ROLL_QTY,
+    NVL(r.roll_count, 0) AS COMPLETED_ROLL_QTY,
+    FLOOR(
+        NVL(r.roll_count, 0) / 
+        NULLIF(
+            (CASE WHEN pz1.p_size IS NOT NULL THEN 1 ELSE 0 END +
+             CASE WHEN pz2.p_size IS NOT NULL THEN 1 ELSE 0 END +
+             CASE WHEN pz3.p_size IS NOT NULL THEN 1 ELSE 0 END +
+             CASE WHEN pz4.p_size IS NOT NULL THEN 1 ELSE 0 END), 0
+        )
+    ) AS COMPLETED_SET_QTY,
+
     CASE 
         WHEN EXISTS (
             SELECT 1 
@@ -355,6 +368,12 @@ SELECT
 
 FROM pl_order p_or
 JOIN pl_order_detail p_de ON p_or.id = p_de.pl_order_id
+LEFT JOIN (
+    SELECT pl_order_id, pl_order_detail_id, COUNT(*) AS roll_count
+    FROM PD_ROLL
+    GROUP BY pl_order_id, pl_order_detail_id
+) r ON r.pl_order_id = p_or.id AND r.pl_order_detail_id = p_de.id
+
 LEFT JOIN p_size pz1 ON p_de.size1_id = pz1.id
 LEFT JOIN p_size pz2 ON p_de.size2_id = pz2.id
 LEFT JOIN p_size pz3 ON p_de.size3_id = pz3.id
@@ -437,6 +456,7 @@ SELECT
     p_wei.part_date,
     p_wei.roll,
     p_wei.roll_no,
+	p_wei.k,
     p_wei.blade_size AS blad,
     g.grade AS grade_name,
     g.id AS grade_id,
@@ -606,6 +626,10 @@ CREATE INDEX idx_wait_weigh_order_stat ON PL_WAIT_WEIGHING (PL_ORDER_ID, STATUS)
 -- ==========================================
 CREATE INDEX idx_qc_reel_grade_id ON QC_REEL (GRADE_ID) ONLINE;
 CREATE INDEX idx_qc_reel_quality_reel_id ON QC_REEL_QUALITY (QC_REEL_ID) ONLINE;
+
+สำหรับ view pl_order_view
+CREATE INDEX IDX_PD_ROLL_ORDER_LOOKUP 
+ON PD_ROLL (PL_ORDER_ID, PL_ORDER_DETAIL_ID);
 
 
 

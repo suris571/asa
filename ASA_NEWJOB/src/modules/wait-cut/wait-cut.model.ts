@@ -382,7 +382,11 @@ export class WaitCutModel {
                         grade1_id,
                         grade2_id,
                         grade3_id,
-                        grade4_id
+                        grade4_id,
+                        k1,
+                        k2,
+                        k3,
+                        k4
                     ) 
                     SELECT 
                         sq_pl_cut_split_set.NEXTVAL, 
@@ -404,7 +408,11 @@ export class WaitCutModel {
                         grade1_id,
                         grade2_id,
                         grade3_id,
-                        grade4_id
+                        grade4_id,
+                        k1,
+                        k2,
+                        k3,
+                        k4
                     FROM pl_order_detail
                     WHERE id = :orderDetailId
                 `;
@@ -727,7 +735,8 @@ export class WaitCutModel {
                     SELECT 
                         over_size1 AS BLAD1, over_size2 AS BLAD2, over_size3 AS BLAD3, over_size4 AS BLAD4,
                         size_id1   AS SIZE1_ID, size_id2 AS SIZE2_ID, size_id3 AS SIZE3_ID, size_id4 AS SIZE4_ID,
-                        grade1_id  AS GRADE1_ID, grade2_id AS GRADE2_ID, grade3_id AS GRADE3_ID, grade4_id AS GRADE4_ID
+                        grade1_id  AS GRADE1_ID, grade2_id AS GRADE2_ID, grade3_id AS GRADE3_ID, grade4_id AS GRADE4_ID,
+                        k1, k2, k3, k4
                     FROM pl_cut_split_set
                     WHERE id = :split_set_id
                 `;
@@ -743,10 +752,10 @@ export class WaitCutModel {
                 const row: any = result.rows[0];
                 const rollsToInsert = [];
 
-                if (Number(row.BLAD1) > 0) rollsToInsert.push({ rollNo: 1, bladeSize: row.BLAD1, sizeId: row.SIZE1_ID, gradeId: row.GRADE1_ID });
-                if (Number(row.BLAD2) > 0) rollsToInsert.push({ rollNo: 2, bladeSize: row.BLAD2, sizeId: row.SIZE2_ID, gradeId: row.GRADE2_ID });
-                if (Number(row.BLAD3) > 0) rollsToInsert.push({ rollNo: 3, bladeSize: row.BLAD3, sizeId: row.SIZE3_ID, gradeId: row.GRADE3_ID });
-                if (Number(row.BLAD4) > 0) rollsToInsert.push({ rollNo: 4, bladeSize: row.BLAD4, sizeId: row.SIZE4_ID, gradeId: row.GRADE4_ID });
+                if (Number(row.BLAD1) > 0) rollsToInsert.push({ rollNo: 1, bladeSize: row.BLAD1, sizeId: row.SIZE1_ID, gradeId: row.GRADE1_ID , k_value:row.K1 });
+                if (Number(row.BLAD2) > 0) rollsToInsert.push({ rollNo: 2, bladeSize: row.BLAD2, sizeId: row.SIZE2_ID, gradeId: row.GRADE2_ID , k_value:row.K2  });
+                if (Number(row.BLAD3) > 0) rollsToInsert.push({ rollNo: 3, bladeSize: row.BLAD3, sizeId: row.SIZE3_ID, gradeId: row.GRADE3_ID , k_value:row.K3  });
+                if (Number(row.BLAD4) > 0) rollsToInsert.push({ rollNo: 4, bladeSize: row.BLAD4, sizeId: row.SIZE4_ID, gradeId: row.GRADE4_ID , k_value:row.K4  });
 
                 if (rollsToInsert.length === 0) {
                     rollsToInsert.push({ rollNo: 1, bladeSize: null, sizeId: null, gradeId: null });
@@ -763,6 +772,7 @@ export class WaitCutModel {
                         blade_size, 
                         size_id, 
                         grade_id,
+                        k,
                         weigh, status, remark, CREATE_STAFF, CREATE_DATE,part_date
                     ) VALUES (
                         :pl_order_id, 
@@ -772,7 +782,8 @@ export class WaitCutModel {
                         :bladeSize, 
                         :sizeId, 
                         :gradeId,
-                        NULL, NULL, NULL, :staffId,SYSDATE, TO_DATE(:part_date, 'YYYY-MM-DD HH24:MI:SS')
+                        :k,
+                        NULL, NULL, NULL, :staffId,SYSDATE, TO_DATE(:part_date, 'YYYY-MM-DD')
                     )
                 `; 
                 let dateinsert = Common.getCurrentShiftPartAndCreateAt()
@@ -789,6 +800,7 @@ export class WaitCutModel {
                         sizeId: roll.sizeId,
                         gradeId: roll.gradeId,
                         staffId: formattedStaffId,
+                        k:roll.k_value,
                         part_date:resDateStapme
                     }, { autoCommit: false });
                 }
@@ -1994,6 +2006,8 @@ export class WaitCutModel {
                     over_size${posB} = over_size${posA},
                     grade${posA}_id = grade${posB}_id,
                     grade${posB}_id = grade${posA}_id,
+                    k${posA} = k${posB},
+                    k${posB} = k${posA},
                     update_staff = :staffId,
                     update_date = SYSDATE
                 WHERE id IN (${idList.map((_, i) => `:id_${i}`).join(',')})

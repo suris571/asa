@@ -65,7 +65,7 @@ export class Common {
         const formattedTimestamp = `${formattedDate} ${hours}:${minutes}:${seconds}`;
 
         return {
-            date: formattedTimestamp,
+            date: formattedDate,
             part: shiftPart
         };
     };

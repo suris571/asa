@@ -448,7 +448,6 @@ class WeighingModel {
                     PL_PRODUCTION_LINE_ID,
                     QC_REEL_ID,
                     ROLL_NO,
-                    ROLL_NO_REF,
                     ROLL_BARCODE,
                     ROLL_DATE,
                     GRADE_ID,
@@ -464,7 +463,8 @@ class WeighingModel {
                     R_ROLL,
                     HOLD_CAUSE,
                     PART_DATE,
-                    SPLIT_SET_ID
+                    SPLIT_SET_ID,
+                    vat_type
                 )
                 SELECT
                     :newPdRollId,                               -- 🟢 3. ใช้ ID ที่ดึงเตรียมไว้
@@ -476,7 +476,6 @@ class WeighingModel {
                     v.pl_production_line_id,
                     NVL(:qc_reel_id, 0),
                     :roll_no,
-                    :roll_no_ref,
                     :roll_no_barcode,
                     SYSDATE,
                     v.grade_id,
@@ -492,7 +491,8 @@ class WeighingModel {
                     :roll,
                     :hold_cause,
                     v.part_date,
-                    v.split_set_id
+                    v.split_set_id,
+                    DECODE(v.k, 'N', 'VAT', 'NOVAT')
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
             `;
@@ -505,7 +505,6 @@ class WeighingModel {
                 staffId: data.staffId,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
-                roll_no_ref: roll_no,
                 roll_no_barcode: roll_no,
                 qc_reel_id: data.qc_reel_id || 0,
                 roll: data.roll,
