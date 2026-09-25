@@ -270,7 +270,7 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🔍 ขั้นตอนที่ 1: เช็คก่อนว่ามีข้อมูลเซ็ตย่อยใน PL_CUT_SPLIT_SET แล้วหรือยัง
+            // 🔍 ขั้นตอนที่ 1: เช็กข้อมูลเซ็ตย่อยเดิมที่มีอยู่
             const checkExistingQuery = `
                 SELECT COUNT(*) AS COUNT_SETS
                 FROM pl_cut_split_set
@@ -278,37 +278,17 @@ class WaitCutModel {
             `;
             const checkResult = await conn.execute(checkExistingQuery, { orderDetailId });
             const existingCount = checkResult.rows[0]?.COUNT_SETS || checkResult.rows[0]?.[0] || 0;
-            // 📝 Query สำหรับ Insert เซ็ตย่อย (เตรียมไว้ใช้ร่วมกันทั้ง CASE A และ CASE B)
+            // 📝 Query สำหรับ Insert เซ็ตย่อย
             const insertSplitQuery = `
                 INSERT INTO pl_cut_split_set (
-                    id, 
-                    pl_order_id, 
-                    pl_order_detail_id, 
-                    set_no, 
-                    cut_length, 
-                    status, 
-                    create_staff,
-                    create_date,
-                    size_id1, size_id2, size_id3, size_id4,
-                    over_size1, over_size2, over_size3, over_size4,
-                    grade1_id, grade2_id, grade3_id, grade4_id,
-                    k1, k2, k3, k4,
-                    model1, model2, model3, model4
+                    id, pl_order_id, pl_order_detail_id, set_no, cut_length, status, create_staff, create_date,
+                    size_id1, size_id2, size_id3, size_id4, over_size1, over_size2, over_size3, over_size4,
+                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4
                 ) 
                 SELECT 
-                    sq_pl_cut_split_set.NEXTVAL, 
-                    :orderId, 
-                    :orderDetailId, 
-                    :setNo, 
-                    0, 
-                    2, 
-                    :staffId,
-                    SYSDATE,
-                    size1_id, size2_id, size3_id, size4_id,
-                    over_size1, over_size2, over_size3, over_size4,
-                    grade1_id, grade2_id, grade3_id, grade4_id,
-                    k1, k2, k3, k4,
-                    model1, model2, model3, model4
+                    sq_pl_cut_split_set.NEXTVAL, :orderId, :orderDetailId, :setNo, 0, 2, :staffId, SYSDATE,
+                    size1_id, size2_id, size3_id, size4_id, over_size1, over_size2, over_size3, over_size4,
+                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4
                 FROM pl_order_detail
                 WHERE id = :orderDetailId
             `;
@@ -317,22 +297,16 @@ class WaitCutModel {
                 // 1. ปลดสถานะ "บังคับเสร็จสิ้น" กลับมาเป็นรอตัด (status = 2)
                 const updateExistingQuery = `
                     UPDATE pl_cut_split_set
-                    SET 
-                        status = 2,
-                        finish_at = NULL,
-                        sub_status = NULL,
-                        update_staff = :staffId,
-                        update_date = SYSDATE
-                    WHERE pl_order_detail_id = :orderDetailId
-                    AND sub_status = 'บังคับเสร็จสิ้น'
+                    SET status = 2, finish_at = NULL, sub_status = NULL, update_staff = :staffId, update_date = SYSDATE
+                    WHERE pl_order_detail_id = :orderDetailId AND sub_status = 'บังคับเสร็จสิ้น'
                 `;
                 await conn.execute(updateExistingQuery, {
                     orderDetailId,
                     staffId: staff_id ? Number(staff_id) : null
                 });
-                // 2. ดึงรายการเดิมที่มีอยู่ทั้งหมด เรียงตาม ID เพื่อนำมาอัปเดต set_no ใหม่ให้ถูกต้อง
+                // 2. ดึงจำนวนแถวปัจจุบัน
                 const getSetsQuery = `
-                    SELECT id 
+                    SELECT id, status 
                     FROM pl_cut_split_set 
                     WHERE pl_order_detail_id = :orderDetailId 
                     ORDER BY id ASC
@@ -340,46 +314,73 @@ class WaitCutModel {
                 const setsResult = await conn.execute(getSetsQuery, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
                 const existingRows = setsResult.rows || [];
                 const currentTotal = existingRows.length;
-                // 3. อัปเดต set_no ของแถวเดิมทั้งหมดให้ลงท้ายด้วย /qty ใหม่ (เช่น 1/3, 2/3)
-                const updateSetNoQuery = `
-                    UPDATE pl_cut_split_set 
-                    SET set_no = :setNo,
-                        update_staff = :staffId,
-                        update_date = SYSDATE
-                    WHERE id = :id
-                `;
-                for (let i = 0; i < currentTotal; i++) {
-                    const setNoStr = `${i + 1}/${qty}`;
-                    await conn.execute(updateSetNoQuery, {
-                        setNo: setNoStr,
-                        staffId: staff_id ? Number(staff_id) : null,
-                        id: existingRows[i].ID
-                    });
-                }
-                // 4. 🎯 ถ้าจำนวนที่มีอยู่น้อยกว่า qty ที่ส่งมา ให้ INSERT เพิ่มเฉพาะส่วนต่าง
                 if (currentTotal < qty) {
+                    // 🟢 กรณีที่ 1: ข้อมูลเดิมน้อยกว่า qty -> เพิ่มแถวส่วนต่าง
                     const neededInsertCount = qty - currentTotal;
                     for (let i = 0; i < neededInsertCount; i++) {
-                        const currentSetIndex = currentTotal + i + 1; // ลำดับต่อจากของเดิม
-                        const setNoStr = `${currentSetIndex}/${qty}`;
+                        const currentSetIndex = currentTotal + i + 1;
                         await conn.execute(insertSplitQuery, {
-                            orderId,
-                            orderDetailId,
-                            setNo: setNoStr,
+                            orderId, orderDetailId,
+                            setNo: `${currentSetIndex}/${qty}`,
                             staffId: staff_id ? Number(staff_id) : null
                         });
                     }
                 }
+                else if (currentTotal > qty) {
+                    // 🔴 กรณีที่ 2: ข้อมูลเดิมมากกว่า qty -> ลบแถวส่วนเกินจากล่างสุดขึ้นบน (เฉพาะที่ยังทำไม่เสร็จ status != 5)
+                    const deleteCount = currentTotal - qty;
+                    // 1. ค้นหา ID ที่เข้าเงื่อนไขลบได้ เรียงจากล่างขึ้นบน (ID DESC)
+                    const selectTargetIdsQuery = `
+                        SELECT ss.id 
+                        FROM pl_cut_split_set ss
+                        WHERE ss.pl_order_detail_id = :orderDetailId
+                        AND ss.status != 5
+                        AND NOT EXISTS (
+                            SELECT 1 
+                            FROM pl_wait_weighing w 
+                            WHERE w.split_set_id = ss.id 
+                                AND w.roll_no IS NOT NULL
+                        )
+                        ORDER BY ss.id DESC
+                    `;
+                    const targetRes = await conn.execute(selectTargetIdsQuery, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+                    // ตัดมาเฉพาะจำนวนที่ต้องการลบ (deleteCount)
+                    const idsToDelete = (targetRes.rows || [])
+                        .slice(0, deleteCount)
+                        .map((r) => r.ID);
+                    // 2. ถ้ามี ID ให้ลบ ค่อยสั่ง DELETE
+                    if (idsToDelete.length > 0) {
+                        const deleteByIdsQuery = `
+                            DELETE FROM pl_cut_split_set
+                            WHERE id = :id
+                        `;
+                        for (const id of idsToDelete) {
+                            await conn.execute(deleteByIdsQuery, { id });
+                        }
+                    }
+                }
+                // 3. 🎯 อัปเดต set_no ของแถวที่เหลือทั้งหมดให้กลายเป็น x/qty ล่าสุด (เช่น 1/5, 2/5, ..., 5/5)
+                const remainingSetsResult = await conn.execute(getSetsQuery, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+                const remainingRows = remainingSetsResult.rows || [];
+                const updateSetNoQuery = `
+                    UPDATE pl_cut_split_set 
+                    SET set_no = :setNo, update_staff = :staffId, update_date = SYSDATE
+                    WHERE id = :id
+                `;
+                for (let i = 0; i < remainingRows.length; i++) {
+                    await conn.execute(updateSetNoQuery, {
+                        setNo: `${i + 1}/${remainingRows.length}`,
+                        staffId: staff_id ? Number(staff_id) : null,
+                        id: remainingRows[i].ID
+                    });
+                }
             }
             else {
-                // 🚀 CASE B: ยังไม่มีข้อมูลเดิม -> วนลูป INSERT ใหม่ทั้งหมดตามจำนวน qty
+                // 🚀 CASE B: ยังไม่มีข้อมูลเดิม -> INSERT ใหม่ทั้งหมดตามจำนวน qty
                 for (let i = 0; i < qty; i++) {
-                    const currentSet = i + 1;
-                    const setNoStr = `${currentSet}/${qty}`;
                     await conn.execute(insertSplitQuery, {
-                        orderId,
-                        orderDetailId,
-                        setNo: setNoStr,
+                        orderId, orderDetailId,
+                        setNo: `${i + 1}/${qty}`,
                         staffId: staff_id ? Number(staff_id) : null
                     });
                 }
@@ -409,17 +410,13 @@ class WaitCutModel {
             // 🔒 ขั้นตอนที่ 3: อัปเดตสถานะลงตารางหลัก pl_order_detail
             const updateDetailQuery = `
                 UPDATE pl_order_detail 
-                SET cut_status_id = :targetCutStatusId,
-                    update_staff = :staffId,
-                    update_date = SYSDATE
+                SET cut_status_id = :targetCutStatusId, update_staff = :staffId, update_date = SYSDATE
                 WHERE id = :orderDetailId
             `;
             await conn.execute(updateDetailQuery, {
-                targetCutStatusId,
-                orderDetailId,
+                targetCutStatusId, orderDetailId,
                 staffId: staff_id ? Number(staff_id) : null
             });
-            // ยืนยันกระบวนการ Transaction ทั้งหมด
             await conn.commit();
             return true;
         }
