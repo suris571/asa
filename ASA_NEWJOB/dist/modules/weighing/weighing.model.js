@@ -221,6 +221,7 @@ class WeighingModel {
                 UPDATE pl_wait_weighing
                 SET 
                     weigh = :weigh,
+                    model = :model,
                     status = :status,
                     remark = :remark,
                     part = :part,
@@ -233,6 +234,7 @@ class WeighingModel {
                 weigh: data.weigh,
                 status: data.status,
                 remark: data.remark,
+                model: data.model,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
                 staffId: formattedStaffId,
@@ -427,71 +429,64 @@ class WeighingModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
-            // 🟢 1. ดึง ID ล่าสุดจาก Sequence มารอก่อน (< 1 ms) ไม่ต้องไปรัน SELECT MAX(ID) ทีหลัง
+            // 🟢 1. ดึงข้อมูลอ้างอิงจาก pl_wait_weighing_view เพื่อเอา SPLIT_SET_ID และ PL_ORDER_DETAIL_ID
+            const checkViewQuery = `
+                SELECT v.split_set_id, v.pl_order_detail_id 
+                FROM pl_wait_weighing_view v 
+                WHERE v.id = :id_pl_wait_weight
+            `;
+            const viewRes = await conn.execute(checkViewQuery, { id_pl_wait_weight: data.id_pl_wait_weight }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (!viewRes.rows || viewRes.rows.length === 0) {
+                console.warn(`⚠️ ไม่พบข้อมูลใน pl_wait_weighing_view สำหรับ ID: ${data.id_pl_wait_weight}`);
+                return null;
+            }
+            const waitData = viewRes.rows[0];
+            // 🟢 2. เช็กซ้ำใน PD_ROLL ด้วย 3 คีย์: SPLIT_SET_ID, R_ROLL, PL_ORDER_DETAIL_ID
+            const duplicateCheckQuery = `
+                SELECT ID, ROLL_NO 
+                FROM PD_ROLL 
+                WHERE SPLIT_SET_ID = :split_set_id 
+                AND R_ROLL = :roll 
+                AND PL_ORDER_DETAIL_ID = :pl_order_detail_id
+                AND ROWNUM = 1
+            `;
+            const dupRes = await conn.execute(duplicateCheckQuery, {
+                split_set_id: waitData.SPLIT_SET_ID,
+                roll: data.roll,
+                pl_order_detail_id: waitData.PL_ORDER_DETAIL_ID
+            }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            // 🛑 ถ้าพบข้อมูลซ้ำ ให้คืนค่าเดิมกลับทันที ไม่ทำการ Insert
+            if (dupRes.rows && dupRes.rows.length > 0) {
+                console.warn(`⚠️ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว (ID: ${dupRes.rows[0].ID}, ROLL_NO: ${dupRes.rows[0].ROLL_NO})`);
+                return {
+                    status: false,
+                    message: "ไม่สามารถบันทึกซ้ำได้ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว"
+                };
+            }
+            // 🟢 3. ดึง ID ล่าสุดจาก Sequence
             const seqResult = await conn.execute(`SELECT sq_pd_roll.nextval AS NEW_ID FROM DUAL`, [], { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             const newPdRollId = seqResult.rows[0]?.NEW_ID;
-            // 🟢 2. ดึง roll_no จาก Index ตัวใหม่ (< 1 ms)
+            // 🟢 4. ดึง roll_no
             let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId);
             if (!roll_no || String(roll_no).trim() === '') {
                 console.error("❌ ไม่สามารถสร้างเลข Roll No ได้เนื่องจากข้อผิดพลาดใน Model");
-                // หากเป็น Controller ให้ res.status(500).json(...) หรือ throw error ออกไป
                 return null;
             }
+            // 🟢 5. บันทึกข้อมูลลง PD_ROLL
             const insertPDQuery = `
                 INSERT INTO PD_ROLL (
-                    ID,
-                    CREATE_DATE,
-                    CREATE_STAFF,
-                    PART,
-                    ROLL_FROM,
-                    PL_ORDER_ID,
-                    PL_PRODUCTION_LINE_ID,
-                    QC_REEL_ID,
-                    ROLL_NO,
-                    ROLL_BARCODE,
-                    ROLL_DATE,
-                    GRADE_ID,
-                    P_SIZE_ID,
-                    MODEL,
-                    WEIGHT,
-                    DIAMETER,
-                    STATUS,
-                    STOCK_STATUS,
-                    REMARKS,
-                    PL_ORDER_DETAIL_ID,
-                    RETURN_OLD_ROLL,
-                    R_ROLL,
-                    HOLD_CAUSE,
-                    PART_DATE,
-                    SPLIT_SET_ID,
-                    vat_type
+                    ID, CREATE_DATE, CREATE_STAFF, PART, ROLL_FROM,
+                    PL_ORDER_ID, PL_PRODUCTION_LINE_ID, QC_REEL_ID, ROLL_NO, ROLL_BARCODE,
+                    ROLL_DATE, GRADE_ID, P_SIZE_ID, MODEL, WEIGHT,
+                    DIAMETER, STATUS, STOCK_STATUS, REMARKS, PL_ORDER_DETAIL_ID,
+                    RETURN_OLD_ROLL, R_ROLL, HOLD_CAUSE, PART_DATE, SPLIT_SET_ID, vat_type
                 )
                 SELECT
-                    :newPdRollId,                               -- 🟢 3. ใช้ ID ที่ดึงเตรียมไว้
-                    SYSDATE,
-                    :staffId,
-                    :part,
-                    'จากการผลิต',
-                    v.pl_order_id,
-                    v.pl_production_line_id,
-                    NVL(:qc_reel_id, 0),
-                    :roll_no,
-                    :roll_no_barcode,
-                    SYSDATE,
-                    v.grade_id,
-                    v.size_id,
-                    v.model,
-                    :weigh,
-                    NVL(:diameter, 0),
-                    :status,
-                    'No',
-                    :remark,
-                    v.pl_order_detail_id,
-                    'N',
-                    :roll,
-                    :hold_cause,
-                    v.part_date,
-                    v.split_set_id,
+                    :newPdRollId, SYSDATE, :staffId, :part, 'จากการผลิต',
+                    v.pl_order_id, v.pl_production_line_id, NVL(:qc_reel_id, 0), :roll_no, :roll_no_barcode,
+                    SYSDATE, v.grade_id, v.size_id, :model, :weigh,
+                    NVL(:diameter, 0), :status, 'No', :remark, v.pl_order_detail_id,
+                    'N', :roll, :hold_cause, v.part_date, v.split_set_id,
                     DECODE(v.k, 'N', 'VAT', 'NOVAT')
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
@@ -509,14 +504,15 @@ class WeighingModel {
                 qc_reel_id: data.qc_reel_id || 0,
                 roll: data.roll,
                 diameter: data.diameter || null,
+                model: data.model,
                 hold_cause: data.hold_cause || null,
             };
             const result = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
-            const isSuccess = result.rowsAffected && result.rowsAffected > 0;
-            if (isSuccess) {
+            if (result.rowsAffected && result.rowsAffected > 0) {
                 await conn.commit();
-                // 🟢 4. คืนค่า newPdRollId ได้ทันที ไม่ต้องรัน SELECT MAX(ID) ให้ช้าอีกต่อไป
                 return {
+                    status: true,
+                    message: "success",
                     id: newPdRollId,
                     roll_no: roll_no,
                 };

@@ -82,12 +82,13 @@ const saveWeighingController = async (req, res) => {
             roll: waitWeighingInfo.ROLL,
             diameter: payload.diameter,
             hold_cause: payload.hold_cause,
+            model: payload.model,
             createdAt: createdAt,
             productionLineId
         });
         // ⏱️ Step 3: Measure InsertPD_ROLL_QUALITY
         let isSuccess = false;
-        if (insertPD_ROLL?.id) {
+        if (insertPD_ROLL?.id && insertPD_ROLL.status) {
             await weighing_model_1.WeighingModel.InsertPD_ROLL_QUALITY({
                 id_pl_wait_weight: payload.id,
                 pd_roll_id: insertPD_ROLL.id,
@@ -98,7 +99,7 @@ const saveWeighingController = async (req, res) => {
         }
         // ⏱️ Step 4: Measure updateWeighingResult
         if (!isSuccess) {
-            return res.status(400).json({ success: false, message: "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
+            return res.status(400).json({ success: false, message: insertPD_ROLL.message || "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
         }
         const io = (0, socket_1.getIO)();
         const targetRoom = productionLineId ? io.of("/socket/weighing").to(`machine_room_${productionLineId}`) : io.of("/socket/weighing");

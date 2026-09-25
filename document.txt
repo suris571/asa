@@ -340,6 +340,8 @@ SELECT
     TO_CHAR(p_de.FINISH_DATE_TIME, 'YYYY-MM-DD') AS finish_date,
     TO_CHAR(p_de.FINISH_DATE_TIME, 'HH24:MI') AS finish_time,
     p_or.diameter,
+		p_or.create_date,
+		p_or.update_date,
     p_or.status,
     p_de.QUEUE_NO,
     p_de.cut_status_id,
@@ -448,7 +450,7 @@ SELECT
     p_wei.pl_order_detail_id,
     p_wei.split_set_id,
     p_wei.part,
-    p_or.model,
+    p_wei.model,
     p_wei.weigh,
     p_wei.status,
     p_wei.remark,
@@ -456,13 +458,12 @@ SELECT
     p_wei.part_date,
     p_wei.roll,
     p_wei.roll_no,
-	p_wei.k,
+    p_wei.k,
     p_wei.blade_size AS blad,
     g.grade AS grade_name,
     g.id AS grade_id,
     pz.p_size AS size_name,
     pz.id AS size_id,
-        
     p_or.order_no,
     p_de.order_item,
     p_cut.set_no,
@@ -478,7 +479,6 @@ SELECT
     NVL(tot.total, 0) AS total,
     NVL(done.already_done, 0) AS already_done,
     NVL(cal.done_cal_pl_cut_split_set, 0) AS done_cal_pl_cut_split_set
-
 FROM pl_wait_weighing p_wei
 INNER JOIN pl_cut_split_set p_cut ON p_wei.split_set_id = p_cut.id
 INNER JOIN pl_order_detail p_de ON p_wei.pl_order_detail_id = p_de.id
@@ -659,3 +659,15 @@ PERMISSION
 16801 รับน้ำหนักลูกกระดาษ
 16861 เครื่องตัด1
 16862 เครื่องตัด2
+
+
+
+PL_WAIT_WEIGHING_VIEW
+ALTER TABLE pl_wait_weighing ADD MODEL VARCHAR2(20),
+
+ALTER TABLE PL_CUT_SPLIT_SET ADD (
+    MODEL1 VARCHAR2(20),
+    MODEL2 VARCHAR2(20),
+    MODEL3 VARCHAR2(20),
+    MODEL4 VARCHAR2(20)
+);

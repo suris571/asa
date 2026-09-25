@@ -46,7 +46,6 @@ export class WaitCutModel {
             // 🟢 ดึงข้อมูลระดับสถิติ ครอบคลุมทั้ง Insert ใหม่ (NULL) และ Update งานเดิม
             const sql = `
                 SELECT 
-                    COUNT(*) AS TOTAL_ROWS,
                     MAX(pl_order_detail_id) AS MAX_ID,
                     MAX(NVL(update_date, create_date)) AS LAST_ACTIVITY,
                     NVL(SUM(NVL(completed_set_qty, 0) + NVL(completed_roll_qty, 0)), 0) AS TOTAL_COMPLETED,
@@ -338,16 +337,51 @@ export class WaitCutModel {
             const checkResult: any = await conn.execute(checkExistingQuery, { orderDetailId });
             const existingCount = checkResult.rows[0]?.COUNT_SETS || checkResult.rows[0]?.[0] || 0;
 
+            // 📝 Query สำหรับ Insert เซ็ตย่อย (เตรียมไว้ใช้ร่วมกันทั้ง CASE A และ CASE B)
+            const insertSplitQuery = `
+                INSERT INTO pl_cut_split_set (
+                    id, 
+                    pl_order_id, 
+                    pl_order_detail_id, 
+                    set_no, 
+                    cut_length, 
+                    status, 
+                    create_staff,
+                    create_date,
+                    size_id1, size_id2, size_id3, size_id4,
+                    over_size1, over_size2, over_size3, over_size4,
+                    grade1_id, grade2_id, grade3_id, grade4_id,
+                    k1, k2, k3, k4,
+                    model1, model2, model3, model4
+                ) 
+                SELECT 
+                    sq_pl_cut_split_set.NEXTVAL, 
+                    :orderId, 
+                    :orderDetailId, 
+                    :setNo, 
+                    0, 
+                    2, 
+                    :staffId,
+                    SYSDATE,
+                    size1_id, size2_id, size3_id, size4_id,
+                    over_size1, over_size2, over_size3, over_size4,
+                    grade1_id, grade2_id, grade3_id, grade4_id,
+                    k1, k2, k3, k4,
+                    model1, model2, model3, model4
+                FROM pl_order_detail
+                WHERE id = :orderDetailId
+            `;
+
             if (existingCount > 0) {
-                // 🔄 CASE A: มีข้อมูลเดิมอยู่แล้ว -> อัปเดตรายการที่ถูก "บังคับเสร็จสิ้น" ให้กลับมาเป็นสถานะ 2 (รอตัด)
-                // 🎯 เพิ่ม update_staff และ update_date
+                // 🔄 CASE A: มีข้อมูลเดิมอยู่แล้ว 
+
+                // 1. ปลดสถานะ "บังคับเสร็จสิ้น" กลับมาเป็นรอตัด (status = 2)
                 const updateExistingQuery = `
                     UPDATE pl_cut_split_set
                     SET 
                         status = 2,
                         finish_at = NULL,
                         sub_status = NULL,
-                        qc_reel_id = NULL,
                         update_staff = :staffId,
                         update_date = SYSDATE
                     WHERE pl_order_detail_id = :orderDetailId
@@ -358,65 +392,53 @@ export class WaitCutModel {
                     staffId: staff_id ? Number(staff_id) : null 
                 });
 
-            } else {
-                // 🚀 CASE B: ยังไม่มีข้อมูลเดิม -> วนลูป INSERT เซ็ตย่อยใหม่ตามจำนวน qty
-                // 🎯 เพิ่ม create_date = SYSDATE (และคอลัมน์ create_staff มีอยู่แล้ว)
-                const insertSplitQuery = `
-                    INSERT INTO pl_cut_split_set (
-                        id, 
-                        pl_order_id, 
-                        pl_order_detail_id, 
-                        set_no, 
-                        cut_length, 
-                        status, 
-                        create_staff,
-                        create_date,
-                        size_id1, 
-                        size_id2, 
-                        size_id3, 
-                        size_id4,
-                        over_size1,
-                        over_size2,
-                        over_size3,
-                        over_size4,
-                        grade1_id,
-                        grade2_id,
-                        grade3_id,
-                        grade4_id,
-                        k1,
-                        k2,
-                        k3,
-                        k4
-                    ) 
-                    SELECT 
-                        sq_pl_cut_split_set.NEXTVAL, 
-                        :orderId, 
-                        :orderDetailId, 
-                        :setNo, 
-                        0, 
-                        2, 
-                        :staffId,
-                        SYSDATE,
-                        size1_id, 
-                        size2_id, 
-                        size3_id, 
-                        size4_id,
-                        over_size1,
-                        over_size2,
-                        over_size3,
-                        over_size4,
-                        grade1_id,
-                        grade2_id,
-                        grade3_id,
-                        grade4_id,
-                        k1,
-                        k2,
-                        k3,
-                        k4
-                    FROM pl_order_detail
-                    WHERE id = :orderDetailId
+                // 2. ดึงรายการเดิมที่มีอยู่ทั้งหมด เรียงตาม ID เพื่อนำมาอัปเดต set_no ใหม่ให้ถูกต้อง
+                const getSetsQuery = `
+                    SELECT id 
+                    FROM pl_cut_split_set 
+                    WHERE pl_order_detail_id = :orderDetailId 
+                    ORDER BY id ASC
                 `;
+                const setsResult: any = await conn.execute(getSetsQuery, { orderDetailId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+                const existingRows = setsResult.rows || [];
+                const currentTotal = existingRows.length;
 
+                // 3. อัปเดต set_no ของแถวเดิมทั้งหมดให้ลงท้ายด้วย /qty ใหม่ (เช่น 1/3, 2/3)
+                const updateSetNoQuery = `
+                    UPDATE pl_cut_split_set 
+                    SET set_no = :setNo,
+                        update_staff = :staffId,
+                        update_date = SYSDATE
+                    WHERE id = :id
+                `;
+                for (let i = 0; i < currentTotal; i++) {
+                    const setNoStr = `${i + 1}/${qty}`;
+                    await conn.execute(updateSetNoQuery, {
+                        setNo: setNoStr,
+                        staffId: staff_id ? Number(staff_id) : null,
+                        id: existingRows[i].ID
+                    });
+                }
+
+                // 4. 🎯 ถ้าจำนวนที่มีอยู่น้อยกว่า qty ที่ส่งมา ให้ INSERT เพิ่มเฉพาะส่วนต่าง
+                if (currentTotal < qty) {
+                    const neededInsertCount = qty - currentTotal;
+
+                    for (let i = 0; i < neededInsertCount; i++) {
+                        const currentSetIndex = currentTotal + i + 1; // ลำดับต่อจากของเดิม
+                        const setNoStr = `${currentSetIndex}/${qty}`;
+
+                        await conn.execute(insertSplitQuery, { 
+                            orderId, 
+                            orderDetailId, 
+                            setNo: setNoStr,
+                            staffId: staff_id ? Number(staff_id) : null
+                        });
+                    }
+                }
+
+            } else {
+                // 🚀 CASE B: ยังไม่มีข้อมูลเดิม -> วนลูป INSERT ใหม่ทั้งหมดตามจำนวน qty
                 for (let i = 0; i < qty; i++) {
                     const currentSet = i + 1;
                     const setNoStr = `${currentSet}/${qty}`;
@@ -430,7 +452,7 @@ export class WaitCutModel {
                 }
             }
 
-            // 🎯 ขั้นตอนที่ 2: คำนวณหา ว่าทำเสร็จไปกี่เซ็ตแล้ว
+            // 🎯 ขั้นตอนที่ 2: คำนวณหาว่าทำเสร็จไปกี่เซ็ตแล้ว เพื่อปรับปรุง cut_status_id ในตารางหลัก
             const checkStatusQuery = `
                 SELECT 
                     COUNT(*) AS TOTAL_SETS,
@@ -455,7 +477,6 @@ export class WaitCutModel {
             }
 
             // 🔒 ขั้นตอนที่ 3: อัปเดตสถานะลงตารางหลัก pl_order_detail
-            // 🎯 เพิ่ม update_staff และ update_date
             const updateDetailQuery = `
                 UPDATE pl_order_detail 
                 SET cut_status_id = :targetCutStatusId,
@@ -736,7 +757,7 @@ export class WaitCutModel {
                         over_size1 AS BLAD1, over_size2 AS BLAD2, over_size3 AS BLAD3, over_size4 AS BLAD4,
                         size_id1   AS SIZE1_ID, size_id2 AS SIZE2_ID, size_id3 AS SIZE3_ID, size_id4 AS SIZE4_ID,
                         grade1_id  AS GRADE1_ID, grade2_id AS GRADE2_ID, grade3_id AS GRADE3_ID, grade4_id AS GRADE4_ID,
-                        k1, k2, k3, k4
+                        k1, k2, k3, k4, model1, model2, model3, model4
                     FROM pl_cut_split_set
                     WHERE id = :split_set_id
                 `;
@@ -752,10 +773,10 @@ export class WaitCutModel {
                 const row: any = result.rows[0];
                 const rollsToInsert = [];
 
-                if (Number(row.BLAD1) > 0) rollsToInsert.push({ rollNo: 1, bladeSize: row.BLAD1, sizeId: row.SIZE1_ID, gradeId: row.GRADE1_ID , k_value:row.K1 });
-                if (Number(row.BLAD2) > 0) rollsToInsert.push({ rollNo: 2, bladeSize: row.BLAD2, sizeId: row.SIZE2_ID, gradeId: row.GRADE2_ID , k_value:row.K2  });
-                if (Number(row.BLAD3) > 0) rollsToInsert.push({ rollNo: 3, bladeSize: row.BLAD3, sizeId: row.SIZE3_ID, gradeId: row.GRADE3_ID , k_value:row.K3  });
-                if (Number(row.BLAD4) > 0) rollsToInsert.push({ rollNo: 4, bladeSize: row.BLAD4, sizeId: row.SIZE4_ID, gradeId: row.GRADE4_ID , k_value:row.K4  });
+                if (Number(row.BLAD1) > 0) rollsToInsert.push({ rollNo: 1, bladeSize: row.BLAD1, sizeId: row.SIZE1_ID, gradeId: row.GRADE1_ID , k_value:row.K1 , model:row.MODEL1 });
+                if (Number(row.BLAD2) > 0) rollsToInsert.push({ rollNo: 2, bladeSize: row.BLAD2, sizeId: row.SIZE2_ID, gradeId: row.GRADE2_ID , k_value:row.K2 , model:row.MODEL2 });
+                if (Number(row.BLAD3) > 0) rollsToInsert.push({ rollNo: 3, bladeSize: row.BLAD3, sizeId: row.SIZE3_ID, gradeId: row.GRADE3_ID , k_value:row.K3 , model:row.MODEL3 });
+                if (Number(row.BLAD4) > 0) rollsToInsert.push({ rollNo: 4, bladeSize: row.BLAD4, sizeId: row.SIZE4_ID, gradeId: row.GRADE4_ID , k_value:row.K4 , model:row.MODEL4 });
 
                 if (rollsToInsert.length === 0) {
                     rollsToInsert.push({ rollNo: 1, bladeSize: null, sizeId: null, gradeId: null });
@@ -772,6 +793,7 @@ export class WaitCutModel {
                         blade_size, 
                         size_id, 
                         grade_id,
+                        model,
                         k,
                         weigh, status, remark, CREATE_STAFF, CREATE_DATE,part_date
                     ) VALUES (
@@ -782,7 +804,8 @@ export class WaitCutModel {
                         :bladeSize, 
                         :sizeId, 
                         :gradeId,
-                        :k,
+                        :model,
+                        NVL(:k, 'N'),
                         NULL, NULL, NULL, :staffId,SYSDATE, TO_DATE(:part_date, 'YYYY-MM-DD')
                     )
                 `; 
@@ -800,7 +823,8 @@ export class WaitCutModel {
                         sizeId: roll.sizeId,
                         gradeId: roll.gradeId,
                         staffId: formattedStaffId,
-                        k:roll.k_value,
+                        k: roll.k_value || null,
+                        model: roll.model || null,
                         part_date:resDateStapme
                     }, { autoCommit: false });
                 }
@@ -1417,7 +1441,7 @@ export class WaitCutModel {
                         { 
                             orderId: currentOrderId,
                             staffId: formattedStaffId,
-                            status: WaitCutModel.last_status || 'เสร็จสิ้น'
+                            status: WaitCutModel.last_status
                         },
                         { autoCommit: false }
                     );
@@ -1426,27 +1450,27 @@ export class WaitCutModel {
 
                 } else {
                     // 🔴 5.3 ถ้ายึดตามเงื่อนไขที่ยังเหลือรายการไม่เสร็จ (REMAINING_COUNT > 0) -> ถอย status กลับเป็น default_status และล้างค่า FINISH_ORDER = NULL
-                    const revertOrderSql = `
-                        UPDATE pl_order
-                        SET 
-                            status = :status,
-                            FINISH_ORDER = NULL,
-                            UPDATE_STAFF = :staffId,
-                            UPDATE_DATE = SYSDATE
-                        WHERE id = :orderId
-                    `;
+                    // const revertOrderSql = `
+                    //     UPDATE pl_order
+                    //     SET 
+                    //         status = :status,
+                    //         FINISH_ORDER = NULL,
+                    //         UPDATE_STAFF = :staffId,
+                    //         UPDATE_DATE = SYSDATE
+                    //     WHERE id = :orderId
+                    // `;
 
-                    const orderResult = await conn.execute(
-                        revertOrderSql,
-                        { 
-                            orderId: currentOrderId,
-                            staffId: formattedStaffId,
-                            status: WaitCutModel.default_status || 'ส่งให้ Rewinder'
-                        },
-                        { autoCommit: false }
-                    );
+                    // const orderResult = await conn.execute(
+                    //     revertOrderSql,
+                    //     { 
+                    //         orderId: currentOrderId,
+                    //         staffId: formattedStaffId,
+                    //         status: WaitCutModel.default_status || 'ส่งให้ Rewinder'
+                    //     },
+                    //     { autoCommit: false }
+                    // );
 
-                    orderUpdatedCount = orderResult.rowsAffected || 0;
+                    // orderUpdatedCount = orderResult.rowsAffected || 0;
                 }
             }
 
@@ -1624,21 +1648,21 @@ export class WaitCutModel {
             }
 
             // 🎯 Step 2: ยกเลิกสถานะบังคับเสร็จสิ้นใน PL_CUT_SPLIT_SET (ถ้ามี)
-            const resetSetsSql = `
-                UPDATE pl_cut_split_set
-                SET 
-                    status = 1,
-                    finish_at = NULL,
-                    update_staff = :staffId,
-                    update_date = SYSDATE
-                WHERE pl_order_detail_id = :orderDetailId
-                AND sub_status = 'บังคับเสร็จสิ้น'
-            `;
-            const setsResult = await conn.execute(
-                resetSetsSql,
-                { orderDetailId: orderDetailId, staffId: formattedStaffId },
-                { autoCommit: false }
-            );
+            // const resetSetsSql = `
+            //     UPDATE pl_cut_split_set
+            //     SET 
+            //         status = 1,
+            //         finish_at = NULL,
+            //         update_staff = :staffId,
+            //         update_date = SYSDATE
+            //     WHERE pl_order_detail_id = :orderDetailId
+            //     AND sub_status = 'บังคับเสร็จสิ้น'
+            // `;
+            // const setsResult = await conn.execute(
+            //     resetSetsSql,
+            //     { orderDetailId: orderDetailId, staffId: formattedStaffId },
+            //     { autoCommit: false }
+            // );
 
             // 🎯 Step 3: อัปเดตสถานะใน PL_ORDER_DETAIL ให้ cut_status_id = 1
             const resetDetailSql = `
@@ -1681,7 +1705,6 @@ export class WaitCutModel {
             return {
                 orderDetailId: orderDetailId,
                 orderId: orderId || null,
-                setsResetCount: setsResult.rowsAffected,
                 detailResetCount: detailResult.rowsAffected,
                 orderResetCount: orderResetCount,
                 message: "Successfully reset order detail status to 1 and reverted pl_order status"
@@ -2008,6 +2031,8 @@ export class WaitCutModel {
                     grade${posB}_id = grade${posA}_id,
                     k${posA} = k${posB},
                     k${posB} = k${posA},
+                    model${posA} = model${posB},
+                    model${posB} = model${posA},
                     update_staff = :staffId,
                     update_date = SYSDATE
                 WHERE id IN (${idList.map((_, i) => `:id_${i}`).join(',')})
