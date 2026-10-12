@@ -1,8 +1,9 @@
-// 🟢 ใช้ require ผ่านการสร้าง custom require หรือใช้ import บรรทัดเดียวที่รันได้ทั้ง Node 14 และ Node 22
+// 🟢 ใช้ require ผ่านการสร้าง custom require เพื่อรองรับทั้ง Node 14 และ Node 22
 import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const SerialPort = require("serialport");
-const ReadlineParser = require("@serialport/parser-readline");
+const customRequire = createRequire(__filename);
+// 🟢 ประกาศเรียกใช้งานเพียงรอบเดียว
+const SerialPort = customRequire("serialport");
+const ReadlineParser = customRequire("@serialport/parser-readline");
 export class SerialService {
     static port = null;
     static parser = null;

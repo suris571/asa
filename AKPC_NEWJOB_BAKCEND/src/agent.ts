@@ -10,7 +10,10 @@ import { PrintService } from "./print-service.js";
 
 import bwipjs from "bwip-js";
 import { generateLabelPdf } from "./services/pdf-service.js";
+import { SlitterService } from "./slitter/slitter-service.js"; // 👈 1. Import เพิ่ม
 import fs from "fs/promises";
+
+
 
 // 1. ฟังก์ชันเสกบาร์โค้ดสากล
 async function generateBarcode(text: string) {
@@ -156,6 +159,29 @@ const io = new Server(httpServer, {
 });
 
 SerialService.initialize(io, "COM1", 9600);
+SlitterService.initialize(io);
+SlitterService.connect();
+
+// 2. ทดลองยิงเฉพาะคำสั่งเซตสเปก R04 คำสั่งเดียวก่อน
+setTimeout(async () => {
+    console.log('\n🚀 [TEST] --- เริ่มทดสอบยิงคำสั่ง R04 (Set Spec) ---');
+
+    const mockPayload = {
+        seqNo: '02',
+        orderId: '1052',       // ID ของ pl_cut_split_set
+        length: 3500,          // ความยาว 3,500 เมตร
+        makeCnt: 5,            // จำนวน 5 ชุด
+        blades: [500, 500, 1000, 0, 0, 0, 0, 0, 0, 0] // ระยะมีด W1 - W10
+    };
+
+    try {
+        console.log('🧪 กำลังส่งคำสั่ง R04 ออกไปหาเครื่องตัด...');
+        const result = await SlitterService.setSpec(mockPayload);
+        console.log('✅ [SUCCESS] เครื่องตัดตอบ ACK P04 กลับมาสำเร็จ!:', result);
+    } catch (err: any) {
+        console.error('❌ [FAILED] เกิดข้อผิดพลาด:', err.message);
+    }
+}, 2000);
 
 // ช่องทางดักฟังเมื่อหน้าเว็บ EJS ทำการต่อสายเชื่อมเน็ตเวิร์กเข้ามา
 io.on("connection", (socket) => {
@@ -165,6 +191,42 @@ io.on("connection", (socket) => {
     if (clientCount > 0) {
         SerialService.openPort();
     }
+
+// =========================================================
+    // ✂️ SECTION: SLITTER MACHINE EVENTS (เครื่องตัด YUELI)
+    // =========================================================
+
+    /**
+     * 1. ดักรับคำสั่งเซตสเปกคิวงานตัด (R04) จากหน้าเว็บ
+     * Payload: { seqNo, splitSetId, length, makeCnt, blades }
+     */
+    socket.on("slitter_set_spec", async (payload: any, ackCallback?: (res: any) => void) => {
+        try {
+            console.log("📩 [Agent Received slitter_set_spec]:", payload);
+
+            // ใช้ splitSetId จากหน้าเว็บ เป็น orderId สื่อสารกับเครื่องตัดได้เลย
+            const specData = {
+                seqNo: payload.seqNo,                      // '02' - '05'
+                orderId: String(payload.splitSetId),       // เช่น '1052'
+                length: Number(payload.length || 0),
+                makeCnt: Number(payload.makeCnt || 0),
+                blades: payload.blades || []               // Array [w1..w10]
+            };
+
+            // ยิงส่งเข้า SlitterService ไปออกสาย TCP พอร์ต 8000
+            const result = await SlitterService.setSpec(specData);
+
+            // ตอบ Confirm ผลลัพธ์กลับไปหาหน้าเว็บ
+            if (ackCallback) {
+                ackCallback({ success: true, data: result });
+            }
+        } catch (error: any) {
+            console.error("❌ [Agent Error - slitter_set_spec]:", error.message);
+            if (ackCallback) {
+                ackCallback({ success: false, error: error.message });
+            }
+        }
+    });
 
     socket.on("disconnect", () => {
         const remainingClients = io.engine.clientsCount;
@@ -194,6 +256,9 @@ httpServer
     });
 
 export { io }; // ส่งออกท่อส่งสัญญาณ Socket.io ให้โมดูลอื่นๆ ในโปรเจกต์สามารถใช้งานได้
+
+
+
 
 
 

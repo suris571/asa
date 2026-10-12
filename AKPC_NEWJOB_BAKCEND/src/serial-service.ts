@@ -2,7 +2,14 @@ import { Server } from "socket.io";
 
 // 🟢 ใช้ require ผ่านการสร้าง custom require เพื่อรองรับทั้ง Node 14 และ Node 22
 import { createRequire } from "module";
-const customRequire = createRequire(__filename);
+import { fileURLToPath } from 'url';
+
+// แปลง URL ให้เป็น File Path รองรับตั้งแต่ Node 14.18+ จนถึง Node 22+
+const currentFilePath = typeof __filename !== 'undefined' 
+    ? __filename 
+    : fileURLToPath(import.meta.url);
+
+const customRequire = createRequire(currentFilePath);
 
 // 🟢 ประกาศเรียกใช้งานเพียงรอบเดียว
 const SerialPort: any = customRequire("serialport");

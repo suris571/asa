@@ -9,6 +9,7 @@ import { SerialService } from "./serial-service.js";
 import { PrintService } from "./print-service.js";
 import bwipjs from "bwip-js";
 import { generateLabelPdf } from "./services/pdf-service.js";
+import { SlitterService } from "./slitter/slitter-service.js"; // 👈 1. Import เพิ่ม
 import fs from "fs/promises";
 // 1. ฟังก์ชันเสกบาร์โค้ดสากล
 async function generateBarcode(text) {
@@ -142,6 +143,8 @@ const io = new Server(httpServer, {
     },
 });
 SerialService.initialize(io, "COM1", 9600);
+SlitterService.initialize(io);
+SlitterService.connect();
 // ช่องทางดักฟังเมื่อหน้าเว็บ EJS ทำการต่อสายเชื่อมเน็ตเวิร์กเข้ามา
 io.on("connection", (socket) => {
     const clientCount = io.engine.clientsCount;
@@ -149,6 +152,38 @@ io.on("connection", (socket) => {
     if (clientCount > 0) {
         SerialService.openPort();
     }
+    // =========================================================
+    // ✂️ SECTION: SLITTER MACHINE EVENTS (เครื่องตัด YUELI)
+    // =========================================================
+    /**
+     * 1. ดักรับคำสั่งเซตสเปกคิวงานตัด (R04) จากหน้าเว็บ
+     * Payload: { seqNo, splitSetId, length, makeCnt, blades }
+     */
+    socket.on("slitter_set_spec", async (payload, ackCallback) => {
+        try {
+            console.log("📩 [Agent Received slitter_set_spec]:", payload);
+            // ใช้ splitSetId จากหน้าเว็บ เป็น orderId สื่อสารกับเครื่องตัดได้เลย
+            const specData = {
+                seqNo: payload.seqNo, // '02' - '05'
+                orderId: String(payload.splitSetId), // เช่น '1052'
+                length: Number(payload.length || 0),
+                makeCnt: Number(payload.makeCnt || 0),
+                blades: payload.blades || [] // Array [w1..w10]
+            };
+            // ยิงส่งเข้า SlitterService ไปออกสาย TCP พอร์ต 8000
+            const result = await SlitterService.setSpec(specData);
+            // ตอบ Confirm ผลลัพธ์กลับไปหาหน้าเว็บ
+            if (ackCallback) {
+                ackCallback({ success: true, data: result });
+            }
+        }
+        catch (error) {
+            console.error("❌ [Agent Error - slitter_set_spec]:", error.message);
+            if (ackCallback) {
+                ackCallback({ success: false, error: error.message });
+            }
+        }
+    });
     socket.on("disconnect", () => {
         const remainingClients = io.engine.clientsCount;
         // console.log(`❌ [Socket] Web client disconnected, ID: ${socket.id} | Remaining clients: ${remainingClients}`);
