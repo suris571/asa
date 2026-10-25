@@ -240,11 +240,12 @@ export class WeighingModel {
             staffId?: number | string | null; // 🎯 รับ staffId ผ่าน object data
         }, 
         roll_no: string,
-        staffId?: number | string | null // 🎯 หรือรับผ่านพารามิเตอร์แยก
+        staffId?: number | string | null, // 🎯 หรือรับผ่านพารามิเตอร์แยก
+        connection?: oracledb.Connection
     ): Promise<boolean> {
         let conn;
         try {
-            conn = await getConnection();
+            conn = connection ?? await getConnection();
             const currentStaffId = data.staffId || staffId;
             const formattedStaffId = currentStaffId ? Number(currentStaffId) : null;
 
@@ -339,18 +340,18 @@ export class WeighingModel {
                 }
 
                 // 🔒 Commit ธุรกรรมทั้งหมดพร้อมกันแบบ Atomic Transaction
-                await conn.commit();
+                if (!connection) await conn.commit();
             } else {
-                await conn.rollback();
+                if (!connection) await conn.rollback();
             }
 
-            return isSuccess;
+            return Boolean(isSuccess && orderDetailId);
         } catch (error) {
-            if (conn) await conn.rollback();
+            if (conn && !connection) await conn.rollback();
             // console.error("❌ เกิดข้อผิดพลาดใน Model [updateWeighingResult]:", error);
             throw error;
         } finally {
-            if (conn) await conn.close();
+            if (conn && !connection) await conn.close();
         }
     }
 
@@ -429,10 +430,10 @@ export class WeighingModel {
         return "ดึก"; // หรือใส่ 'กะดึก'
     };
 
-    static async GetWaitWeighingInfoById(id_pl_wait_weight: number | string): Promise<any | null> {
+    static async GetWaitWeighingInfoById(id_pl_wait_weight: number | string, connection?: oracledb.Connection): Promise<any | null> {
         let conn;
         try {
-            conn = await getConnection();
+            conn = connection ?? await getConnection();
             const sql = `
                 SELECT 
                     id,
@@ -453,14 +454,14 @@ export class WeighingModel {
             // console.error("❌ เกิดข้อผิดพลาดใน Model [GetWaitWeighingInfoById]:", error);
             throw error;
         } finally {
-            if (conn) await conn.close();
+            if (conn && !connection) await conn.close();
         }
     }
 
-    static async getMaxRollNo(productionLineId: number): Promise<string> {
+    static async getMaxRollNo(productionLineId: number, connection?: oracledb.Connection): Promise<string> {
     let conn;
     try {
-        conn = await getConnection();
+        conn = connection ?? await getConnection();
 
         let prefixFilter = '';
         let defaultStartNo = 1;
@@ -497,7 +498,7 @@ export class WeighingModel {
         if (Number(productionLineId) === 162) return "";
         return "1";
     } finally {
-        if (conn) await conn.close();
+        if (conn && !connection) await conn.close();
     }
 }
 
@@ -515,10 +516,10 @@ export class WeighingModel {
         createdAt: string;
         model: string;
         productionLineId: number
-    }): Promise<{ id?: number; roll_no?: string ; status?: any; message?: any;} | null> {
+    }, connection?: oracledb.Connection): Promise<{ id?: number; roll_no?: string ; status?: any; message?: any;} | null> {
         let conn;
         try {
-            conn = await getConnection();
+            conn = connection ?? await getConnection();
 
             // 🟢 1. ดึงข้อมูลอ้างอิงจาก pl_wait_weighing_view เพื่อเอา SPLIT_SET_ID และ PL_ORDER_DETAIL_ID
             const checkViewQuery = `
@@ -538,6 +539,21 @@ export class WeighingModel {
             }
 
             const waitData = viewRes.rows[0];
+
+            const lockWaitWeighingQuery = `
+                SELECT id
+                FROM pl_wait_weighing
+                WHERE id = :id_pl_wait_weight
+                FOR UPDATE
+            `;
+            const waitWeighingResult = await conn.execute(lockWaitWeighingQuery, {
+                id_pl_wait_weight: data.id_pl_wait_weight
+            }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+
+            if (!waitWeighingResult.rows?.length) {
+                if (!connection) await conn.rollback();
+                return null;
+            }
 
             // 🟢 2. เช็กซ้ำใน PD_ROLL ด้วย 3 คีย์: SPLIT_SET_ID, R_ROLL, PL_ORDER_DETAIL_ID
             const duplicateCheckQuery = `
@@ -562,6 +578,7 @@ export class WeighingModel {
             // 🛑 ถ้าพบข้อมูลซ้ำ ให้คืนค่าเดิมกลับทันที ไม่ทำการ Insert
             if (dupRes.rows && dupRes.rows.length > 0) {
                 console.warn(`⚠️ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว (ID: ${dupRes.rows[0].ID}, ROLL_NO: ${dupRes.rows[0].ROLL_NO})`);
+                if (!connection) await conn.rollback();
                 return {
                     status:false,
                     message:"ไม่สามารถบันทึกซ้ำได้ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว"
@@ -577,9 +594,10 @@ export class WeighingModel {
             const newPdRollId = seqResult.rows[0]?.NEW_ID;
 
             // 🟢 4. ดึง roll_no
-            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId);
+            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId, conn);
             if (!roll_no || String(roll_no).trim() === '') {
                 console.error("❌ ไม่สามารถสร้างเลข Roll No ได้เนื่องจากข้อผิดพลาดใน Model");
+                if (!connection) await conn.rollback();
                 return null; 
             }
 
@@ -623,7 +641,7 @@ export class WeighingModel {
             const result: any = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
 
             if (result.rowsAffected && result.rowsAffected > 0) {
-                await conn.commit();
+                if (!connection) await conn.commit();
                 return {
                     status:true,
                     message:"success",
@@ -631,14 +649,14 @@ export class WeighingModel {
                     roll_no: roll_no,
                 };
             } else {
-                await conn.rollback();
+                if (!connection) await conn.rollback();
                 return null;
             }
         } catch (error) {
-            if (conn) await conn.rollback();
+            if (conn && !connection) await conn.rollback();
             throw error;
         } finally {
-            if (conn) await conn.close();
+            if (conn && !connection) await conn.close();
         }
     }
 
@@ -647,10 +665,10 @@ export class WeighingModel {
         pd_roll_id: number | string;
         staffId?: number | string;
         qcReelQualityId: number | string;
-    }): Promise<boolean> {
+    }, connection?: oracledb.Connection): Promise<boolean> {
         let conn;
         try {
-            conn = await getConnection();
+            conn = connection ?? await getConnection();
             let result;
             const formattedStaffId:any = data.staffId;
 
@@ -721,18 +739,18 @@ export class WeighingModel {
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
 
             if (isSuccess) {
-                await conn.commit();
+                if (!connection) await conn.commit();
                 return true;
             } else {
-                await conn.rollback();
+                if (!connection) await conn.rollback();
                 return false;
             }
         } catch (error) {
-            if (conn) await conn.rollback();
+            if (conn && !connection) await conn.rollback();
             // console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL_QUALITY]:", error);
             throw error;
         } finally {
-            if (conn) await conn.close();
+            if (conn && !connection) await conn.close();
         }
     }
 

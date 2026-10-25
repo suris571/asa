@@ -328,6 +328,20 @@ export class WaitCutModel {
         try {
             conn = await getConnection();
 
+            const lockOrderDetailQuery = `
+                SELECT id
+                FROM pl_order_detail
+                WHERE id = :orderDetailId
+                FOR UPDATE
+            `;
+            const orderDetailResult = await conn.execute(lockOrderDetailQuery, { orderDetailId }, {
+                outFormat: oracledb.OUT_FORMAT_OBJECT
+            });
+
+            if (!orderDetailResult.rows?.length) {
+                throw new Error(`ไม่พบข้อมูลรายละเอียดออเดอร์ ID: ${orderDetailId}`);
+            }
+
             // 🔍 ขั้นตอนที่ 1: เช็กข้อมูลเซ็ตย่อยเดิมที่มีอยู่
             const checkExistingQuery = `
                 SELECT COUNT(*) AS COUNT_SETS
@@ -711,6 +725,7 @@ export class WaitCutModel {
                 SELECT status 
                 FROM pl_cut_split_set 
                 WHERE id = :split_set_id
+                FOR UPDATE
             `;
             const currentStatusResult: any = await conn.execute(
                 checkCurrentStatusQuery, 
@@ -718,7 +733,16 @@ export class WaitCutModel {
                 { outFormat: oracledb.OUT_FORMAT_OBJECT }
             );
 
+            if (!currentStatusResult.rows?.length) {
+                throw new Error(`ไม่พบข้อมูลรายละเอียดเซ็ต ID: ${split_set_id}`);
+            }
+
             const previousStatus = currentStatusResult.rows?.[0]?.STATUS ? Number(currentStatusResult.rows[0].STATUS) : null;
+
+            if (previousStatus === 5) {
+                await conn.commit();
+                return true;
+            }
 
             // 🔄 2. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น) 
             // 🎯 เพิ่ม update_staff และ update_date = SYSDATE

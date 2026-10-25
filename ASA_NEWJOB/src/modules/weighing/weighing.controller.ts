@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { WeighingModel } from './weighing.model';
 import { getIO, FnNextRoll, FnNextQcCloseReel, FnNextCutSplitSet } from "../../socket";
 import { Common } from '../util/Common';
+import { getConnection } from '../../database';
 
 export const getWeighingPage = async (req: Request, res: Response) => {
     const productionLineId = Number(req.session.user?.productionLineId);
@@ -45,6 +46,8 @@ export const getWeighingPage = async (req: Request, res: Response) => {
 export const saveWeighingController = async (req: Request, res: Response) => {
     const totalStart = performance.now();
     console.log(`[PERF START] saveWeighingController execution initiated`);
+    let conn;
+    let transactionActive = false;
 
     try {
         const { id, weight, status, remark, model, diameter, hold_cause , createdAt } = req.body;
@@ -74,10 +77,15 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
         };
 
+        conn = await getConnection();
+        transactionActive = true;
+
         // ⏱️ Step 1: Measure GetWaitWeighingInfoById
-        const waitWeighingInfo: any = await WeighingModel.GetWaitWeighingInfoById(payload.id);
+        const waitWeighingInfo: any = await WeighingModel.GetWaitWeighingInfoById(payload.id, conn);
 
         if (!waitWeighingInfo) {
+            await conn.rollback();
+            transactionActive = false;
             return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลในระบบ' });
         }
 
@@ -96,26 +104,33 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             model: payload.model,
             createdAt:createdAt,
             productionLineId
-        });
+        }, conn);
 
         // ⏱️ Step 3: Measure InsertPD_ROLL_QUALITY
         let isSuccess = false;
         if (insertPD_ROLL?.id && insertPD_ROLL.status) {
-            await WeighingModel.InsertPD_ROLL_QUALITY({
+            const qualitySaved = await WeighingModel.InsertPD_ROLL_QUALITY({
                 id_pl_wait_weight: payload.id,
                 pd_roll_id: insertPD_ROLL.id,
                 qcReelQualityId: waitWeighingInfo.QC_REEL_QUALITY_ID,
                 staffId: staffId
-            });
+            }, conn);
 
-            isSuccess = await WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId);
+            if (qualitySaved) {
+                isSuccess = await WeighingModel.updateWeighingResult(payload, insertPD_ROLL.roll_no, staffId, conn);
+            }
         }
 
         // ⏱️ Step 4: Measure updateWeighingResult
 
         if (!isSuccess) {
-            return res.status(400).json({ success: false, message: insertPD_ROLL.message || "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
+            await conn.rollback();
+            transactionActive = false;
+            return res.status(400).json({ success: false, message: insertPD_ROLL?.message || "ไม่สามารถอัปเดตข้อมูลใน Database ได้" });
         }
+
+        await conn.commit();
+        transactionActive = false;
         
         const io = getIO();
         const targetRoom = productionLineId ? io.of("/socket/weighing").to(`machine_room_${productionLineId}`) : io.of("/socket/weighing");
@@ -132,8 +147,23 @@ export const saveWeighingController = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
+        if (conn && transactionActive) {
+            try {
+                await conn.rollback();
+            } catch (rollbackError) {
+                console.error("Weighing rollback failed:", rollbackError);
+            }
+        }
         console.error("[PERF ERROR] Controller Save Error:", error);
         return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์" });
+    } finally {
+        if (conn) {
+            try {
+                await conn.close();
+            } catch (closeError) {
+                console.error("Weighing connection close failed:", closeError);
+            }
+        }
     }
 };
 
