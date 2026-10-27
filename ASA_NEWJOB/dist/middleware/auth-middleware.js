@@ -25,7 +25,7 @@ function requireAuth(req, res, next) {
 }
 const requirePermission = (permissionId) => {
     return (req, res, next) => {
-        console.log("🔑 ตรวจสอบสิทธิ์ Permission ID:", permissionId);
+        // console.log("🔑 ตรวจสอบสิทธิ์ Permission ID:", permissionId);
         // 🟢 เปลี่ยนมาอ่านค่าสดจาก res.locals.data ที่ดึงจาก DB
         const userPermissions = res.locals.data?.permissions || [];
         // 🟢 เช็คสิทธิ์ตรง หรือเช็คสิทธิ์ Admin (168)

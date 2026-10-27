@@ -1,0 +1,111 @@
+// src/routes/auth-routes.ts
+import { Router, Request, Response } from 'express';
+import { AuthModel } from './auth.model';
+import 'express-session';
+
+// 🎯 ขยายประเภทข้อมูล SessionData ให้รองรับ machineNo และ productionLineId
+declare module 'express-session' {
+  interface SessionData {
+    user?: { 
+      username: string; 
+      role?: string; 
+      name: string; 
+      permissions: number[];
+      staff_id: number;          // เพิ่ม staff_id
+      machineNo: number;         // เช่น 1 หรือ 2
+      productionLineId: number;  // ID จริงจากตาราง PL_PRODUCTION_LINE
+    };
+  }
+}
+
+const router = Router();
+
+// 🔓 หน้ากากหน้าจอ Login (GET: /login)
+router.get('/login', (req: Request, res: Response) => {
+  if (req.session.user) {
+    return res.redirect('/');
+  }
+  res.render('login/login', { error: null });
+});
+
+
+router.get('/auth/logout', (req: Request, res: Response) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('❌ เกิดข้อผิดพลาดในการ Destroy Session:', err);
+        }
+        // ล้าง cookie และส่งกลับหน้า login
+        res.clearCookie('connect.sid');
+        res.redirect('/login');
+    });
+});
+
+// 🔑 ตรวจจับรหัสผ่าน และเครื่องจักรที่เลือก (POST: /login)
+router.post('/login', async (req: Request, res: Response) => {
+  let { username, password, machineNo } = req.body;
+
+  // ค้นหารายชื่อในตรรกะคลังแสงจำลอง
+  const user = await AuthModel.validateStaff(username, password);
+  if(!user && !user?.permissions){
+    return res.status(401).json({ 
+      success: false, 
+      error: '❌ รหัสผ่านหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้' 
+    });
+  }
+
+  if(user?.permissions.includes(16861) && user.permissions.includes(16862) && machineNo == ""){
+    return res.status(500).json({ 
+      success: false, 
+      error: 'กรุณาเลือก line ผลิต',
+      status:"select"
+    });
+  }else if(!user.permissions.includes(16861) && !user.permissions.includes(16862)){
+    return res.status(500).json({ 
+        success: false, 
+        error: 'กรุณาระบุ line ผลิต PM1,PM2 ให้กับผู้ใช้งาน' 
+    });
+  }else if(user?.permissions.includes(16861) && user.permissions.includes(16862) && machineNo){
+
+  }else if(user.permissions.includes(16861)){
+      machineNo = "1"
+  }else if(user.permissions.includes(16862)){
+    machineNo = "2"
+  }
+  
+  if (user.permissions.includes(16800) || user.permissions.includes(16801) || user.permissions.includes(16802) || user.permissions.includes(16803) || user.permissions.includes(16804)) {
+    try {
+      // 🎯 ดึง ID จริงจากตาราง PL_PRODUCTION_LINE โดยใช้ machineNo (เช่น 1 หรือ 2)
+      const productionLineId = await AuthModel.getProductionLineIdByNo(Number(machineNo));
+      // 🎯 ยัดสิทธิ์, ชื่อ, และข้อมูลเครื่องจักรลง Session
+      req.session.user = {
+        username: username,
+        role: "",
+        name: `${user.first_name} ${user.last_name}`,
+        staff_id: Number(user?.id), // เพิ่ม staff_id ลงใน session
+        machineNo: Number(machineNo),
+        permissions: user.permissions,
+        productionLineId: productionLineId
+      };
+
+      return res.status(200).json({
+        success: true,
+        redirectUrl: "/"
+      });
+
+    } catch (dbError: any) {
+      console.error("❌ เกิดข้อผิดพลาดในการดึงข้อมูลเครื่องจักร:", dbError);
+      return res.status(500).json({ 
+        success: false, 
+        error: dbError.message || 'เกิดข้อผิดพลาดภายในระบบในการดึงข้อมูลเครื่องจักร' 
+      });
+    }
+
+  } else {
+    return res.status(401).json({ 
+      success: false, 
+      error: '❌ รหัสผ่านหรือชื่อผู้ใช้ไม่ถูกต้อง หรือคุณอาจะไม่มีสิทธิ์เข้าถึงระบบนี้' 
+    });
+  }
+});
+
+export default router;

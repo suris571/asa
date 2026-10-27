@@ -488,7 +488,13 @@
                         formattedVal = '';
                     }
                     const isDisabled = (setStatus === 5) ? 'disabled readonly' : '';
-
+                    if(setStatus === 5 ){
+                         return `
+                            <div class="d-flex justify-content-center align-items-center">
+                                ${formattedVal}
+                            </div>
+                        `;
+                    }
                     return `
                         <div class="d-flex justify-content-center align-items-center">
                             <input type="text" 

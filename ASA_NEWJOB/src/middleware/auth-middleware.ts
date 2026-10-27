@@ -27,7 +27,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 export const requirePermission = (permissionId: number) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    console.log("🔑 ตรวจสอบสิทธิ์ Permission ID:", permissionId);
+    // console.log("🔑 ตรวจสอบสิทธิ์ Permission ID:", permissionId);
 
     // 🟢 เปลี่ยนมาอ่านค่าสดจาก res.locals.data ที่ดึงจาก DB
     const userPermissions: number[] = res.locals.data?.permissions || [];

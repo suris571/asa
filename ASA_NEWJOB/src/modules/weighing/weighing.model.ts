@@ -161,11 +161,7 @@ export class WeighingModel {
             } else {
                 sql = `${baseSql} ${whereClause} ${orderByClause}`;
             }
-
-            console.log(sql)
             
-
-            // console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });
@@ -237,6 +233,8 @@ export class WeighingModel {
             status: string; 
             remark: string | null;
             model: string | null;
+            gradeId: number;
+            partDate: string;
             staffId?: number | string | null; // 🎯 รับ staffId ผ่าน object data
         }, 
         roll_no: string,
@@ -273,6 +271,8 @@ export class WeighingModel {
                     status = :status,
                     remark = :remark,
                     part = :part,
+                    GRADE_ID = :grade_id,
+                    PART_DATE = TO_DATE(:partDate, 'YYYY-MM-DD HH24:MI:SS'),
                     roll_no = :roll_no,
                     update_staff = :staffId,
                     update_date = SYSDATE
@@ -288,6 +288,8 @@ export class WeighingModel {
                     model: data.model,
                     part: WeighingModel.getCurrentShift(),
                     roll_no: roll_no,
+                    grade_id: data.gradeId,
+                    partDate: data.partDate,
                     staffId: formattedStaffId,
                     id: data.id,
                 },
@@ -382,7 +384,6 @@ export class WeighingModel {
 
             // 2. ถ้าเจอข้อมูล (มีการชั่งน้ำหนักแล้ว) ให้ส่งออก false ทันที
             if (result.rows && result.rows.length > 0) {
-                // console.log("reset ไม่ได้เจอข้อมูล");
                 return false;
             }
 
@@ -515,6 +516,8 @@ export class WeighingModel {
         hold_cause: string | null;
         createdAt: string;
         model: string;
+        gradeid: number;
+        partDate: string;
         productionLineId: number
     }, connection?: oracledb.Connection): Promise<{ id?: number; roll_no?: string ; status?: any; message?: any;} | null> {
         let conn;
@@ -613,9 +616,9 @@ export class WeighingModel {
                 SELECT
                     :newPdRollId, SYSDATE, :staffId, :part, 'จากการผลิต',
                     v.pl_order_id, v.pl_production_line_id, NVL(:qc_reel_id, 0), :roll_no, :roll_no_barcode,
-                    SYSDATE, v.grade_id, v.size_id, :model, :weigh,
+                    SYSDATE, :grade_id, v.size_id, :model, :weigh,
                     NVL(:diameter, 0), :status, 'No', :remark, v.pl_order_detail_id,
-                    'N', :roll, :hold_cause, v.part_date, v.split_set_id,
+                    'N', :roll, :hold_cause, TO_DATE(:partDate, 'YYYY-MM-DD HH24:MI:SS'), v.split_set_id,
                     DECODE(v.k, 'N', 'VAT', 'NOVAT')
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
@@ -635,6 +638,8 @@ export class WeighingModel {
                 roll: data.roll,
                 diameter: data.diameter || null,
                 model: data.model,
+                grade_id: data.gradeid,
+                partDate: data.partDate,
                 hold_cause: data.hold_cause || null,
             };
 
@@ -672,7 +677,6 @@ export class WeighingModel {
             let result;
             const formattedStaffId:any = data.staffId;
 
-            // console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
                 // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert พร้อมบันทึก CREATE_STAFF
                 const insertFromQcSql = `
@@ -778,5 +782,71 @@ export class WeighingModel {
             }, 
             { autoCommit: false }
         );
+    }
+
+    static async GetgradeId(
+        gradeName: string, 
+        connection?: oracledb.Connection
+    ): Promise<number | null> {
+        let conn;
+        try {
+            // เช็กค่า input เบื้องต้น
+            if (!gradeName || gradeName.trim() === '') {
+                return null;
+            }
+
+            conn = connection ?? await getConnection();
+
+            // SQL ค้นหา ID จากชื่อ GRADE (ใช้ TRIM และ UPPER เพื่อกันปัญหาช่องว่าง/ตัวพิมพ์เล็กใหญ่)
+            const sql = `
+                SELECT ID 
+                FROM GRADE 
+                WHERE UPPER(TRIM(GRADE)) = UPPER(TRIM(:gradeName))
+                AND ROWNUM = 1
+            `;
+
+            const result: any = await conn.execute(
+                sql,
+                { gradeName: gradeName.trim() },
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+
+            if (result.rows && result.rows.length > 0) {
+                const gradeId = result.rows[0].ID;
+                return gradeId ? Number(gradeId) : null;
+            }
+
+            return null;
+
+        } catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [GetgradeId]:", error);
+            throw error;
+        } finally {
+            // คืน/ปิด connection เฉพาะเมื่อไม่ได้รับ connection จากภายนอกเข้ามา
+            if (conn && !connection) {
+                try {
+                    await conn.close();
+                } catch (closeErr) {
+                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                }
+            }
+        }
+    }
+
+    public static getPartDate(dateObj: Date = new Date()): string {
+        const workDate = new Date(dateObj);
+        const currentHour = workDate.getHours();
+
+        // 🎯 ถ้าเวลาก่อน 08:00 น. (คือช่วง 00:00 - 07:59 น.) ถือว่ายังอยู่ในกะดึกของ "เมื่อวาน" -> ถอยวันที่ลง 1 วัน
+        if (currentHour < 8) {
+            workDate.setDate(workDate.getDate() - 1);
+        }
+
+        // จัดฟอร์แมตให้อยู่ในรูป YYYY-MM-DD
+        const year = workDate.getFullYear();
+        const month = String(workDate.getMonth() + 1).padStart(2, '0');
+        const day = String(workDate.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day} 00:00:00`;
     }
 }

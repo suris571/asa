@@ -137,8 +137,6 @@ class WeighingModel {
             else {
                 sql = `${baseSql} ${whereClause} ${orderByClause}`;
             }
-            console.log(sql);
-            // console.log("SQL Query:", sql);
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -197,11 +195,11 @@ class WeighingModel {
             }
         }
     }
-    static async updateWeighingResult(data, roll_no, staffId // 🎯 หรือรับผ่านพารามิเตอร์แยก
-    ) {
+    static async updateWeighingResult(data, roll_no, staffId, // 🎯 หรือรับผ่านพารามิเตอร์แยก
+    connection) {
         let conn;
         try {
-            conn = await (0, database_1.getConnection)();
+            conn = connection ?? await (0, database_1.getConnection)();
             const currentStaffId = data.staffId || staffId;
             const formattedStaffId = currentStaffId ? Number(currentStaffId) : null;
             // 🔍 STEP 1: SELECT หา pl_order_detail_id และ split_set_id จาก pl_wait_weighing
@@ -225,6 +223,8 @@ class WeighingModel {
                     status = :status,
                     remark = :remark,
                     part = :part,
+                    GRADE_ID = :grade_id,
+                    PART_DATE = TO_DATE(:partDate, 'YYYY-MM-DD HH24:MI:SS'),
                     roll_no = :roll_no,
                     update_staff = :staffId,
                     update_date = SYSDATE
@@ -237,6 +237,8 @@ class WeighingModel {
                 model: data.model,
                 part: WeighingModel.getCurrentShift(),
                 roll_no: roll_no,
+                grade_id: data.gradeId,
+                partDate: data.partDate,
                 staffId: formattedStaffId,
                 id: data.id,
             }, { autoCommit: false });
@@ -274,21 +276,23 @@ class WeighingModel {
                     }
                 }
                 // 🔒 Commit ธุรกรรมทั้งหมดพร้อมกันแบบ Atomic Transaction
-                await conn.commit();
+                if (!connection)
+                    await conn.commit();
             }
             else {
-                await conn.rollback();
+                if (!connection)
+                    await conn.rollback();
             }
-            return isSuccess;
+            return Boolean(isSuccess && orderDetailId);
         }
         catch (error) {
-            if (conn)
+            if (conn && !connection)
                 await conn.rollback();
             // console.error("❌ เกิดข้อผิดพลาดใน Model [updateWeighingResult]:", error);
             throw error;
         }
         finally {
-            if (conn)
+            if (conn && !connection)
                 await conn.close();
         }
     }
@@ -311,7 +315,6 @@ class WeighingModel {
             });
             // 2. ถ้าเจอข้อมูล (มีการชั่งน้ำหนักแล้ว) ให้ส่งออก false ทันที
             if (result.rows && result.rows.length > 0) {
-                // console.log("reset ไม่ได้เจอข้อมูล");
                 return false;
             }
             // 3. ถ้าไม่เจอข้อมูล ให้ลบข้อมูลใน PL_WAIT_WEIGHING ของ split_set_id นี้
@@ -353,10 +356,10 @@ class WeighingModel {
         // 🎯 3. ช่วงเวลา 00:00 ถึง 07:59 (0 ถึง 7) -> กะดึก
         return "ดึก"; // หรือใส่ 'กะดึก'
     };
-    static async GetWaitWeighingInfoById(id_pl_wait_weight) {
+    static async GetWaitWeighingInfoById(id_pl_wait_weight, connection) {
         let conn;
         try {
-            conn = await (0, database_1.getConnection)();
+            conn = connection ?? await (0, database_1.getConnection)();
             const sql = `
                 SELECT 
                     id,
@@ -378,14 +381,14 @@ class WeighingModel {
             throw error;
         }
         finally {
-            if (conn)
+            if (conn && !connection)
                 await conn.close();
         }
     }
-    static async getMaxRollNo(productionLineId) {
+    static async getMaxRollNo(productionLineId, connection) {
         let conn;
         try {
-            conn = await (0, database_1.getConnection)();
+            conn = connection ?? await (0, database_1.getConnection)();
             let prefixFilter = '';
             let defaultStartNo = 1;
             if (Number(productionLineId) === 161) {
@@ -421,14 +424,14 @@ class WeighingModel {
             return "1";
         }
         finally {
-            if (conn)
+            if (conn && !connection)
                 await conn.close();
         }
     }
-    static async InsertPD_ROLL(data) {
+    static async InsertPD_ROLL(data, connection) {
         let conn;
         try {
-            conn = await (0, database_1.getConnection)();
+            conn = connection ?? await (0, database_1.getConnection)();
             // 🟢 1. ดึงข้อมูลอ้างอิงจาก pl_wait_weighing_view เพื่อเอา SPLIT_SET_ID และ PL_ORDER_DETAIL_ID
             const checkViewQuery = `
                 SELECT v.split_set_id, v.pl_order_detail_id 
@@ -441,6 +444,20 @@ class WeighingModel {
                 return null;
             }
             const waitData = viewRes.rows[0];
+            const lockWaitWeighingQuery = `
+                SELECT id
+                FROM pl_wait_weighing
+                WHERE id = :id_pl_wait_weight
+                FOR UPDATE
+            `;
+            const waitWeighingResult = await conn.execute(lockWaitWeighingQuery, {
+                id_pl_wait_weight: data.id_pl_wait_weight
+            }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (!waitWeighingResult.rows?.length) {
+                if (!connection)
+                    await conn.rollback();
+                return null;
+            }
             // 🟢 2. เช็กซ้ำใน PD_ROLL ด้วย 3 คีย์: SPLIT_SET_ID, R_ROLL, PL_ORDER_DETAIL_ID
             const duplicateCheckQuery = `
                 SELECT ID, ROLL_NO 
@@ -458,6 +475,8 @@ class WeighingModel {
             // 🛑 ถ้าพบข้อมูลซ้ำ ให้คืนค่าเดิมกลับทันที ไม่ทำการ Insert
             if (dupRes.rows && dupRes.rows.length > 0) {
                 console.warn(`⚠️ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว (ID: ${dupRes.rows[0].ID}, ROLL_NO: ${dupRes.rows[0].ROLL_NO})`);
+                if (!connection)
+                    await conn.rollback();
                 return {
                     status: false,
                     message: "ไม่สามารถบันทึกซ้ำได้ ข้อมูลซ้ำ! มีใน PD_ROLL แล้ว"
@@ -467,9 +486,11 @@ class WeighingModel {
             const seqResult = await conn.execute(`SELECT sq_pd_roll.nextval AS NEW_ID FROM DUAL`, [], { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             const newPdRollId = seqResult.rows[0]?.NEW_ID;
             // 🟢 4. ดึง roll_no
-            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId);
+            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId, conn);
             if (!roll_no || String(roll_no).trim() === '') {
                 console.error("❌ ไม่สามารถสร้างเลข Roll No ได้เนื่องจากข้อผิดพลาดใน Model");
+                if (!connection)
+                    await conn.rollback();
                 return null;
             }
             // 🟢 5. บันทึกข้อมูลลง PD_ROLL
@@ -484,9 +505,9 @@ class WeighingModel {
                 SELECT
                     :newPdRollId, SYSDATE, :staffId, :part, 'จากการผลิต',
                     v.pl_order_id, v.pl_production_line_id, NVL(:qc_reel_id, 0), :roll_no, :roll_no_barcode,
-                    SYSDATE, v.grade_id, v.size_id, :model, :weigh,
+                    SYSDATE, :grade_id, v.size_id, :model, :weigh,
                     NVL(:diameter, 0), :status, 'No', :remark, v.pl_order_detail_id,
-                    'N', :roll, :hold_cause, v.part_date, v.split_set_id,
+                    'N', :roll, :hold_cause, TO_DATE(:partDate, 'YYYY-MM-DD HH24:MI:SS'), v.split_set_id,
                     DECODE(v.k, 'N', 'VAT', 'NOVAT')
                 FROM pl_wait_weighing_view v
                 WHERE v.id = :id_pl_wait_weight
@@ -505,11 +526,14 @@ class WeighingModel {
                 roll: data.roll,
                 diameter: data.diameter || null,
                 model: data.model,
+                grade_id: data.gradeid,
+                partDate: data.partDate,
                 hold_cause: data.hold_cause || null,
             };
             const result = await conn.execute(insertPDQuery, bindVars, { autoCommit: false });
             if (result.rowsAffected && result.rowsAffected > 0) {
-                await conn.commit();
+                if (!connection)
+                    await conn.commit();
                 return {
                     status: true,
                     message: "success",
@@ -518,27 +542,27 @@ class WeighingModel {
                 };
             }
             else {
-                await conn.rollback();
+                if (!connection)
+                    await conn.rollback();
                 return null;
             }
         }
         catch (error) {
-            if (conn)
+            if (conn && !connection)
                 await conn.rollback();
             throw error;
         }
         finally {
-            if (conn)
+            if (conn && !connection)
                 await conn.close();
         }
     }
-    static async InsertPD_ROLL_QUALITY(data) {
+    static async InsertPD_ROLL_QUALITY(data, connection) {
         let conn;
         try {
-            conn = await (0, database_1.getConnection)();
+            conn = connection ?? await (0, database_1.getConnection)();
             let result;
             const formattedStaffId = data.staffId;
-            // console.log("qcReelQualityId:", data.qcReelQualityId);
             if (data.qcReelQualityId) {
                 // 🟢 CASE A: มี qc_reel_quality_id -> ดึงค่าวัดจาก qc_reel_quality มา Insert พร้อมบันทึก CREATE_STAFF
                 const insertFromQcSql = `
@@ -598,22 +622,24 @@ class WeighingModel {
             }
             const isSuccess = result.rowsAffected && result.rowsAffected > 0;
             if (isSuccess) {
-                await conn.commit();
+                if (!connection)
+                    await conn.commit();
                 return true;
             }
             else {
-                await conn.rollback();
+                if (!connection)
+                    await conn.rollback();
                 return false;
             }
         }
         catch (error) {
-            if (conn)
+            if (conn && !connection)
                 await conn.rollback();
             // console.error("❌ เกิดข้อผิดพลาดใน Model [InsertPD_ROLL_QUALITY]:", error);
             throw error;
         }
         finally {
-            if (conn)
+            if (conn && !connection)
                 await conn.close();
         }
     }
@@ -637,6 +663,57 @@ class WeighingModel {
             pd_roll_id,
             staffId: formattedStaffId
         }, { autoCommit: false });
+    }
+    static async GetgradeId(gradeName, connection) {
+        let conn;
+        try {
+            // เช็กค่า input เบื้องต้น
+            if (!gradeName || gradeName.trim() === '') {
+                return null;
+            }
+            conn = connection ?? await (0, database_1.getConnection)();
+            // SQL ค้นหา ID จากชื่อ GRADE (ใช้ TRIM และ UPPER เพื่อกันปัญหาช่องว่าง/ตัวพิมพ์เล็กใหญ่)
+            const sql = `
+                SELECT ID 
+                FROM GRADE 
+                WHERE UPPER(TRIM(GRADE)) = UPPER(TRIM(:gradeName))
+                AND ROWNUM = 1
+            `;
+            const result = await conn.execute(sql, { gradeName: gradeName.trim() }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (result.rows && result.rows.length > 0) {
+                const gradeId = result.rows[0].ID;
+                return gradeId ? Number(gradeId) : null;
+            }
+            return null;
+        }
+        catch (error) {
+            console.error("❌ เกิดข้อผิดพลาดใน Model [GetgradeId]:", error);
+            throw error;
+        }
+        finally {
+            // คืน/ปิด connection เฉพาะเมื่อไม่ได้รับ connection จากภายนอกเข้ามา
+            if (conn && !connection) {
+                try {
+                    await conn.close();
+                }
+                catch (closeErr) {
+                    console.error("⚠️ ไม่สามารถปิด DB Connection ได้:", closeErr);
+                }
+            }
+        }
+    }
+    static getPartDate(dateObj = new Date()) {
+        const workDate = new Date(dateObj);
+        const currentHour = workDate.getHours();
+        // 🎯 ถ้าเวลาก่อน 08:00 น. (คือช่วง 00:00 - 07:59 น.) ถือว่ายังอยู่ในกะดึกของ "เมื่อวาน" -> ถอยวันที่ลง 1 วัน
+        if (currentHour < 8) {
+            workDate.setDate(workDate.getDate() - 1);
+        }
+        // จัดฟอร์แมตให้อยู่ในรูป YYYY-MM-DD
+        const year = workDate.getFullYear();
+        const month = String(workDate.getMonth() + 1).padStart(2, '0');
+        const day = String(workDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day} 00:00:00`;
     }
 }
 exports.WeighingModel = WeighingModel;

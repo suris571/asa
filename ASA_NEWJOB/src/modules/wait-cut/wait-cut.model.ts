@@ -600,7 +600,11 @@ export class WaitCutModel {
             }
 
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
-            sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            if(binds.status && binds.status == 5){
+                sql += ` ORDER BY queue_no ASC, split_set_id DESC`;
+            }else{
+                sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            }
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb.OUT_FORMAT_OBJECT,
             });

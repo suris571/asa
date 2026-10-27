@@ -7,8 +7,6 @@ import { getConnection } from '../../database';
 export const getWeighingPage = async (req: Request, res: Response) => {
     const productionLineId = Number(req.session.user?.productionLineId);
     try {
-        console.time("⏱️ [TOTAL] Weighing Page Load");
-
         const today = new Date();
         const twoDaysAgo = new Date();
         twoDaysAgo.setDate(today.getDate() - 2);
@@ -17,15 +15,12 @@ export const getWeighingPage = async (req: Request, res: Response) => {
         const endDate = Common.formatDateDDMMYYYY(today);
 
         // 🎯 ดึงแบบ Parallel พร้อมจับเวลา
-        console.time("[TIME] 1. Fetching DB");
         let [getNextWeighing, historyWeighing]:any = await Promise.all([
             WeighingModel.getNextWeighing(productionLineId),
             WeighingModel.getNextWeighing(productionLineId, null, 'history', null, startDate, endDate)
         ]);
-        console.timeEnd("[TIME] 1. Fetching DB");
         // let getNextWeighing: any[] = [];
         // let historyWeighing: any[] = [];
-        console.time("[TIME] 2. Render EJS");
         res.render('weighing/index', {
             nextData: getNextWeighing, 
             historyData: historyWeighing,
@@ -33,9 +28,6 @@ export const getWeighingPage = async (req: Request, res: Response) => {
             startDate: startDate,
             endDate: endDate
         });
-        console.timeEnd("[TIME] 2. Render EJS");
-
-        console.timeEnd("[TOTAL] Weighing Page Load");
     } catch (error) {
         console.error("ระบบหน้าจอชั่งน้ำหนักขัดข้อง:", error);
         res.status(500).send("เกิดข้อผิดพลาดภายในระบบวิศวกรรม");
@@ -44,19 +36,25 @@ export const getWeighingPage = async (req: Request, res: Response) => {
 
 
 export const saveWeighingController = async (req: Request, res: Response) => {
-    const totalStart = performance.now();
-    console.log(`[PERF START] saveWeighingController execution initiated`);
     let conn;
     let transactionActive = false;
 
     try {
-        const { id, weight, status, remark, model, diameter, hold_cause , createdAt } = req.body;
+        const { id, weight, status, remark, model, diameter, hold_cause , createdAt , gradeName } = req.body;
         const staffId = req.session.user?.staff_id;
         const productionLineId: any = Number(req.session.user?.productionLineId);
 
         if (!id) {
             return res.status(400).json({ success: false, message: "ไม่พบ ID ของคิวชั่งน้ำหนัก" });
         }
+
+        let gradeId = await WeighingModel.GetgradeId(gradeName)
+        if(!gradeId){
+            return res.status(404).json({ success: false, message: 'ไม่พบ grade ในระบบ กรุณาระบุให้ถูกต้อง' });
+        }
+
+        let partDate = WeighingModel.getPartDate();
+        
 
         const cleanWeightString = String(weight ?? '0')
             .replace(/,/g, '')
@@ -74,7 +72,9 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             staffId: staffId,
             diameter: diameter && diameter.trim() !== '' ? diameter.trim() : null,
             createdAt:createdAt,
-            hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null
+            hold_cause: hold_cause && hold_cause.trim() !== '' ? hold_cause.trim() : null,
+            gradeId,
+            partDate
         };
 
         conn = await getConnection();
@@ -103,6 +103,8 @@ export const saveWeighingController = async (req: Request, res: Response) => {
             hold_cause: payload.hold_cause,
             model: payload.model,
             createdAt:createdAt,
+            gradeid:payload.gradeId,
+            partDate:payload.partDate,
             productionLineId
         }, conn);
 
@@ -137,8 +139,6 @@ export const saveWeighingController = async (req: Request, res: Response) => {
         targetRoom.emit("historyUpdate", { success: true });
 
         // ⏱️ Total Execution Time
-        const totalDuration = (performance.now() - totalStart).toFixed(2);
-        console.log(`[PERF END] Total saveWeighingController duration: ${totalDuration} ms`);
 
         return res.json({
             success: true,
@@ -172,8 +172,6 @@ export const fetchweighinglist = async (req: Request, res: Response) => {
     const productionLineId = Number(req.session.user?.productionLineId);
     try {
         const search = req.query.order_no ? String(req.query.order_no).trim() : '%';
-
-        console.log(search)
 
         const data =  await WeighingModel.getNextWeighing(productionLineId,search);
 

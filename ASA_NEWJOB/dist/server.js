@@ -60,12 +60,12 @@ app.use(async (req, res, next) => {
         // 3. 🎯 เช็กว่ามี "อย่างน้อย 1 สิทธิ์" ตรงกับระบบนี้หรือไม่
         const hasAccess = freshPermissions.some((p) => validSystemPermissions.includes(p));
         // 🔍 LOG สิทธิ์ทั้งหมดเพื่อ Debug
-        console.log(`--------------------------------------------------`);
-        console.log(`🔍 [Permission Check] Staff ID: ${staffId}`);
-        console.log(`   - สิทธิ์ทั้งหมดที่พนักงานคนนี้มีใน DB :`, freshPermissions);
-        console.log(`   - สิทธิ์ที่ระบบนี้อนุญาตให้เข้าใช้งาน :`, validSystemPermissions);
-        console.log(`   - ผลการตรวจสอบ (ขออย่างน้อย 1 สิทธิ์)  : ${hasAccess ? '✅ ผ่าน' : '❌ ไม่ผ่าน'}`);
-        console.log(`--------------------------------------------------`);
+        // console.log(`--------------------------------------------------`);
+        // console.log(`🔍 [Permission Check] Staff ID: ${staffId}`);
+        // console.log(`   - สิทธิ์ทั้งหมดที่พนักงานคนนี้มีใน DB :`, freshPermissions);
+        // console.log(`   - สิทธิ์ที่ระบบนี้อนุญาตให้เข้าใช้งาน :`, validSystemPermissions);
+        // console.log(`   - ผลการตรวจสอบ (ขออย่างน้อย 1 สิทธิ์)  : ${hasAccess ? '✅ ผ่าน' : '❌ ไม่ผ่าน'}`);
+        // console.log(`--------------------------------------------------`);
         // 🛑 ถ้าไม่มีสิทธิ์เลยแม้แต่อันเดียว ให้ Redirect ไป Logout
         if (!hasAccess) {
             console.warn(`⚠️ Staff ID: ${staffId} ไม่มีสิทธิ์ใช้งานระบบนี้ -> Redirect ไป /auth/logout`);

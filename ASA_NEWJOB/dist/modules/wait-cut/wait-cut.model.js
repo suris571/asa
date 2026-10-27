@@ -270,6 +270,18 @@ class WaitCutModel {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
+            const lockOrderDetailQuery = `
+                SELECT id
+                FROM pl_order_detail
+                WHERE id = :orderDetailId
+                FOR UPDATE
+            `;
+            const orderDetailResult = await conn.execute(lockOrderDetailQuery, { orderDetailId }, {
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+            });
+            if (!orderDetailResult.rows?.length) {
+                throw new Error(`ไม่พบข้อมูลรายละเอียดออเดอร์ ID: ${orderDetailId}`);
+            }
             // 🔍 ขั้นตอนที่ 1: เช็กข้อมูลเซ็ตย่อยเดิมที่มีอยู่
             const checkExistingQuery = `
                 SELECT COUNT(*) AS COUNT_SETS
@@ -511,7 +523,12 @@ class WaitCutModel {
                 binds.item = item.trim();
             }
             // 🎯 จัดเรียงตามลำดับคิวหลัก และ ลำดับเซ็ตย่อย
-            sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            if (binds.status && binds.status == 5) {
+                sql += ` ORDER BY queue_no ASC, split_set_id DESC`;
+            }
+            else {
+                sql += ` ORDER BY queue_no ASC, split_set_id ASC`;
+            }
             const result = await conn.execute(sql, binds, {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
@@ -619,9 +636,17 @@ class WaitCutModel {
                 SELECT status 
                 FROM pl_cut_split_set 
                 WHERE id = :split_set_id
+                FOR UPDATE
             `;
             const currentStatusResult = await conn.execute(checkCurrentStatusQuery, { split_set_id }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (!currentStatusResult.rows?.length) {
+                throw new Error(`ไม่พบข้อมูลรายละเอียดเซ็ต ID: ${split_set_id}`);
+            }
             const previousStatus = currentStatusResult.rows?.[0]?.STATUS ? Number(currentStatusResult.rows[0].STATUS) : null;
+            if (previousStatus === 5) {
+                await conn.commit();
+                return true;
+            }
             // 🔄 2. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น) 
             // 🎯 เพิ่ม update_staff และ update_date = SYSDATE
             const updateStatusQuery = `
