@@ -1,9 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.closeReel = exports.swapSplitSetSize = exports.saveQcCloseReelController = exports.getQcReelListController = exports.saveRemarkController = exports.qcCloseReel = exports.startWeighing = exports.startProduction = exports.getWaitCutSplitSet = exports.getWaitCutPage = void 0;
 const wait_cut_model_1 = require("./wait-cut.model");
 const socket_1 = require("../../socket");
 const Common_1 = require("../util/Common");
+const axios_1 = __importDefault(require("axios"));
+const processingOrderDetails = new Set();
 const getWaitCutPage = async (req, res) => {
     try {
         const productionLineId = Number(req.session.user?.productionLineId);
@@ -38,7 +43,15 @@ const startProduction = async (req, res) => {
     if (!orderId || !orderDetailId) {
         return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน (กรุณาระบุ orderId และ orderDetailId)" });
     }
+    const lockKey = String(orderDetailId);
+    if (processingOrderDetails.has(lockKey)) {
+        return res.status(429).json({
+            success: false,
+            message: "รายการนี้อยู่ระหว่างดำเนินการ กรุณารอสักครู่...",
+        });
+    }
     try {
+        processingOrderDetails.add(lockKey);
         const io = (0, socket_1.getIO)();
         // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/wait-cut").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut");
@@ -92,7 +105,37 @@ const startProduction = async (req, res) => {
         if (!qty || isNaN(Number(qty)) || Number(qty) <= 0) {
             return res.status(400).json({ success: false, message: "จำนวนเซ็ตไม่ถูกต้อง" });
         }
-        const createResult = await wait_cut_model_1.WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId);
+        const orderSpec = await wait_cut_model_1.WaitCutModel.getOrderDetailSpecById(orderDetailId);
+        if (!orderSpec) {
+            return res.status(404).json({ success: false, message: "ไม่พบข้อมูลสเปกใบสั่งผลิต" });
+        }
+        // 3. เช็กว่าเคยมี orderId / sequenceNo เดิมใน DB หรือยัง
+        const existingSpec = await wait_cut_model_1.WaitCutModel.getExistingOrderSpecForAgent(orderDetailId);
+        // 4. เตรียม Payload ยิงหา Agent
+        const agentPayload = {
+            payload: {
+                order_no: orderSpec.order_no,
+                SetCount: Number(qty),
+                blad1: orderSpec.blad1,
+                blad2: orderSpec.blad2,
+                blad3: orderSpec.blad3,
+                blad4: orderSpec.blad4,
+                ...(existingSpec.hasExisting && {
+                    orderId: existingSpec.orderId,
+                    sequenceNo: existingSpec.sequenceNo,
+                }),
+            },
+        };
+        // 5. ยิง HTTP POST ไปที่ Agent (/api/slitter/set-spec)
+        const agentRes = await axios_1.default.post("http://127.0.0.1:5000/api/slitter/set-spec", agentPayload);
+        if (!agentRes.data || !agentRes.data.status) {
+            return res.status(400).json({
+                success: false,
+                message: `เครื่องตัดปฏิเสธคำสั่ง: ${agentRes.data?.message || "ติดต่อ Agent ไม่สำเร็จ"}`,
+            });
+        }
+        const updateSplitSet = await wait_cut_model_1.WaitCutModel.updateAgentRefToSplitSet(Number(orderDetailId), agentRes.data.order_id, agentRes.data.sequenceNo);
+        const createResult = await wait_cut_model_1.WaitCutModel.createOrderSplitSet(Number(orderId), Number(orderDetailId), Number(qty), staffId, agentRes.data.sequenceNo, agentRes.data.order_id);
         await (0, socket_1.FnNextCutSplitSet)(productionLineId);
         // 🔊 Broadcast เฉพาะเครื่องตัวเอง!
         targetRoom.emit("queue_structure_changed", { success: true });
@@ -108,6 +151,10 @@ const startProduction = async (req, res) => {
             success: false,
             message: error.message || "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ในการดำเนินการ",
         });
+    }
+    finally {
+        // 🔓 3. คืน Lock ใน block finally เสมอ เพื่อการันตีว่าไม่ว่าสำเร็จหรือพัง Lock จะถูกปลดแน่นอน!
+        processingOrderDetails.delete(lockKey);
     }
 };
 exports.startProduction = startProduction;
@@ -194,7 +241,7 @@ const qcCloseReel = async (req, res) => {
             orders: queueData,
             productionLineId: productionLineId,
             startDate: startDate,
-            endDate: endDate
+            endDate: endDate,
         });
     }
     catch (error) {
@@ -318,13 +365,13 @@ const swapSplitSetSize = async (req, res) => {
         // 3. ตอบกลับสถานะสำเร็จ
         return res.status(200).json({
             success: true,
-            message: "สลับขนาดเรียบร้อยแล้ว"
+            message: "สลับขนาดเรียบร้อยแล้ว",
         });
     }
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "เกิดข้อผิดพลาดในการสลับขนาด"
+            message: error.message || "เกิดข้อผิดพลาดในการสลับขนาด",
         });
     }
 };
@@ -335,7 +382,7 @@ const closeReel = async (req, res) => {
     if (!id) {
         return res.status(400).json({
             success: false,
-            message: "กรุณาระบุ ID ของ Reel"
+            message: "กรุณาระบุ ID ของ Reel",
         });
     }
     try {
@@ -343,13 +390,13 @@ const closeReel = async (req, res) => {
         await wait_cut_model_1.WaitCutModel.closeReelStatus(id, staffId);
         return res.status(200).json({
             success: true,
-            message: "ปิด Reel เรียบร้อยแล้ว"
+            message: "ปิด Reel เรียบร้อยแล้ว",
         });
     }
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: error.message || "เกิดข้อผิดพลาดในการปิด Reel"
+            message: error.message || "เกิดข้อผิดพลาดในการปิด Reel",
         });
     }
 };

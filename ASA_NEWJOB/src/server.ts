@@ -18,6 +18,7 @@ import waitCutRoutes from './modules/wait-cut/wait-cut.route.js';
 import weighingRoutes from './modules/weighing/weighing.route.js';
 import { AuthModel } from './modules/authen/auth.model.js';
 import { WaitCutModel } from './modules/wait-cut/wait-cut.model.js';
+import agentApiRoutes from './modules/agent-api/agent-api.route.js'; // 👈 1. Import เข้ามา
 
 
 const app = express();
@@ -45,8 +46,11 @@ app.use(session({
     httpOnly: true 
   }
 }));
-
+app.use('/api', agentApiRoutes);
 app.use('/', authRoutes); // ท่อสำหรับหน้า /login และ /logout
+
+// 🟢 2. วาง Public API สำหรับ Agent ตรงนี้ (ก่อนติดล็อก Session)
+
 
 app.use(requireAuth); 
 

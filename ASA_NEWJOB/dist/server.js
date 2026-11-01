@@ -21,6 +21,7 @@ const wait_cut_route_js_1 = __importDefault(require("./modules/wait-cut/wait-cut
 const weighing_route_js_1 = __importDefault(require("./modules/weighing/weighing.route.js"));
 const auth_model_js_1 = require("./modules/authen/auth.model.js");
 const wait_cut_model_js_1 = require("./modules/wait-cut/wait-cut.model.js");
+const agent_api_route_js_1 = __importDefault(require("./modules/agent-api/agent-api.route.js")); // 👈 1. Import เข้ามา
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const PORT = 3000;
@@ -42,7 +43,9 @@ app.use((0, express_session_1.default)({
         httpOnly: true
     }
 }));
+app.use('/api', agent_api_route_js_1.default);
 app.use('/', auth_routes_js_1.default); // ท่อสำหรับหน้า /login และ /logout
+// 🟢 2. วาง Public API สำหรับ Agent ตรงนี้ (ก่อนติดล็อก Session)
 app.use(auth_middleware_js_1.requireAuth);
 app.use(async (req, res, next) => {
     try {

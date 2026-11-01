@@ -11,7 +11,7 @@ const Common_1 = require("../util/Common");
 const oracledb_1 = __importDefault(require("oracledb"));
 class WaitCutModel {
     static default_status = "ส่งให้ Rewinder";
-    static last_status = 'ยกเลิก';
+    static last_status = "ยกเลิก";
     static async getQueueFingerprint(productionLineId) {
         let conn;
         try {
@@ -30,7 +30,7 @@ class WaitCutModel {
             `;
             const result = await conn.execute(sql, {
                 productionLineId: Number(productionLineId),
-                defaultStatus: WaitCutModel.default_status
+                defaultStatus: WaitCutModel.default_status,
             }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             const row = result.rows[0];
             // ถ้าไม่มีข้อมูลเลย ให้คืนค่า string ว่าง
@@ -64,7 +64,7 @@ class WaitCutModel {
                 for (const row of result.rows) {
                     dataList.push({
                         id: row.ID,
-                        status: row.STATUS_NAME
+                        status: row.STATUS_NAME,
                     });
                 }
             }
@@ -87,19 +87,17 @@ class WaitCutModel {
     }
     static formatDateToDDMMYYYY(dateStr) {
         if (!dateStr)
-            return '-';
+            return "-";
         // ตัดเอาเฉพาะส่วนวันที่ (กรณีมี T หรือ เวลาติดมา)
-        const cleanDate = dateStr.toString().split('T')[0].split(' ')[0]; // ได้ '2026-08-08'
-        const parts = cleanDate.split('-'); // ['2026', '08', '08']
+        const cleanDate = dateStr.toString().split("T")[0].split(" ")[0]; // ได้ '2026-08-08'
+        const parts = cleanDate.split("-"); // ['2026', '08', '08']
         if (parts.length === 3) {
             const [year, month, day] = parts;
             return `${day}/${month}/${year}`; // สลับเป็น '08/08/2026'
         }
         return dateStr; // ถ้าฟอร์แมตไม่เข้าพวก ให้คืนค่าเดิม
     }
-    ;
-    static async getAllWaitingAndWeighing(Conn = null, status = null, order_no = null, startDate = null, endDate = null, productionLineId = null // 🎯 ต่อท้ายสุดตรงนี้
-    ) {
+    static async getAllWaitingAndWeighing(Conn = null, status = null, order_no = null, startDate = null, endDate = null, productionLineId = null) {
         let conn;
         let isLocalConn = false;
         try {
@@ -154,13 +152,13 @@ class WaitCutModel {
                 query += ` AND cut_status_id IN (null, 1, 2, 3, 4) `;
             }
             // ⚡ เงื่อนไขเดิม 3: วันที่เริ่มต้น
-            if (startDate && typeof startDate === 'string') {
+            if (startDate && typeof startDate === "string") {
                 // 🎯 แปลง :startDate ('08/08/2026') เป็น '2026-08-08' แล้วเทียบกับ finish_date ตรงๆ
                 query += ` AND finish_date >= TO_CHAR(TO_DATE(:startDate, 'DD/MM/YYYY'), 'YYYY-MM-DD')`;
                 bindParams.startDate = startDate.trim();
             }
             // ⚡ เงื่อนไขเดิม 4: วันที่สิ้นสุด`
-            if (endDate && typeof endDate === 'string') {
+            if (endDate && typeof endDate === "string") {
                 query += ` AND finish_date <= TO_CHAR(TO_DATE(:endDate, 'DD/MM/YYYY'), 'YYYY-MM-DD')`;
                 bindParams.endDate = endDate.trim();
             }
@@ -266,7 +264,7 @@ class WaitCutModel {
      * @param orderDetailId รหัสรายละเอียดออเดอร์
      * @param qty จำนวนเซ็ตที่ต้องการสร้าง
      */
-    static async createOrderSplitSet(orderId, orderDetailId, qty, staff_id) {
+    static async createOrderSplitSet(orderId, orderDetailId, qty, staff_id, agent_sequenceNo, agent_order_id) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -277,7 +275,7 @@ class WaitCutModel {
                 FOR UPDATE
             `;
             const orderDetailResult = await conn.execute(lockOrderDetailQuery, { orderDetailId }, {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             if (!orderDetailResult.rows?.length) {
                 throw new Error(`ไม่พบข้อมูลรายละเอียดออเดอร์ ID: ${orderDetailId}`);
@@ -295,17 +293,19 @@ class WaitCutModel {
                 INSERT INTO pl_cut_split_set (
                     id, pl_order_id, pl_order_detail_id, set_no, cut_length, status, create_staff, create_date,
                     size_id1, size_id2, size_id3, size_id4, over_size1, over_size2, over_size3, over_size4,
-                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4
+                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4,
+                    agent_sequence_no,agent_order_id
                 ) 
                 SELECT 
                     sq_pl_cut_split_set.NEXTVAL, :orderId, :orderDetailId, :setNo, 0, 2, :staffId, SYSDATE,
                     size1_id, size2_id, size3_id, size4_id, over_size1, over_size2, over_size3, over_size4,
-                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4
+                    grade1_id, grade2_id, grade3_id, grade4_id, k1, k2, k3, k4, model1, model2, model3, model4,
+                    :agent_sequenceNo,:agent_order_id
                 FROM pl_order_detail
                 WHERE id = :orderDetailId
             `;
             if (existingCount > 0) {
-                // 🔄 CASE A: มีข้อมูลเดิมอยู่แล้ว 
+                // 🔄 CASE A: มีข้อมูลเดิมอยู่แล้ว
                 // 1. ปลดสถานะ "บังคับเสร็จสิ้น" กลับมาเป็นรอตัด (status = 2)
                 const updateExistingQuery = `
                     UPDATE pl_cut_split_set
@@ -314,7 +314,7 @@ class WaitCutModel {
                 `;
                 await conn.execute(updateExistingQuery, {
                     orderDetailId,
-                    staffId: staff_id ? Number(staff_id) : null
+                    staffId: staff_id ? Number(staff_id) : null,
                 });
                 // 2. ดึงจำนวนแถวปัจจุบัน
                 const getSetsQuery = `
@@ -332,9 +332,12 @@ class WaitCutModel {
                     for (let i = 0; i < neededInsertCount; i++) {
                         const currentSetIndex = currentTotal + i + 1;
                         await conn.execute(insertSplitQuery, {
-                            orderId, orderDetailId,
+                            orderId,
+                            orderDetailId,
                             setNo: `${currentSetIndex}/${qty}`,
-                            staffId: staff_id ? Number(staff_id) : null
+                            staffId: staff_id ? Number(staff_id) : null,
+                            agent_sequenceNo: agent_sequenceNo,
+                            agent_order_id: agent_order_id,
                         });
                     }
                 }
@@ -357,9 +360,7 @@ class WaitCutModel {
                     `;
                     const targetRes = await conn.execute(selectTargetIdsQuery, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
                     // ตัดมาเฉพาะจำนวนที่ต้องการลบ (deleteCount)
-                    const idsToDelete = (targetRes.rows || [])
-                        .slice(0, deleteCount)
-                        .map((r) => r.ID);
+                    const idsToDelete = (targetRes.rows || []).slice(0, deleteCount).map((r) => r.ID);
                     // 2. ถ้ามี ID ให้ลบ ค่อยสั่ง DELETE
                     if (idsToDelete.length > 0) {
                         const deleteByIdsQuery = `
@@ -383,7 +384,7 @@ class WaitCutModel {
                     await conn.execute(updateSetNoQuery, {
                         setNo: `${i + 1}/${remainingRows.length}`,
                         staffId: staff_id ? Number(staff_id) : null,
-                        id: remainingRows[i].ID
+                        id: remainingRows[i].ID,
                     });
                 }
             }
@@ -391,9 +392,12 @@ class WaitCutModel {
                 // 🚀 CASE B: ยังไม่มีข้อมูลเดิม -> INSERT ใหม่ทั้งหมดตามจำนวน qty
                 for (let i = 0; i < qty; i++) {
                     await conn.execute(insertSplitQuery, {
-                        orderId, orderDetailId,
+                        orderId,
+                        orderDetailId,
                         setNo: `${i + 1}/${qty}`,
-                        staffId: staff_id ? Number(staff_id) : null
+                        staffId: staff_id ? Number(staff_id) : null,
+                        agent_sequenceNo: agent_sequenceNo,
+                        agent_order_id: agent_order_id,
                     });
                 }
             }
@@ -426,8 +430,9 @@ class WaitCutModel {
                 WHERE id = :orderDetailId
             `;
             await conn.execute(updateDetailQuery, {
-                targetCutStatusId, orderDetailId,
-                staffId: staff_id ? Number(staff_id) : null
+                targetCutStatusId,
+                orderDetailId,
+                staffId: staff_id ? Number(staff_id) : null,
             });
             await conn.commit();
             return true;
@@ -495,7 +500,7 @@ class WaitCutModel {
                 binds.lineId = lineId;
             }
             // 🔍 กรอง Order No ตามเงื่อนไข
-            if (orderNo && orderNo.trim() !== '') {
+            if (orderNo && orderNo.trim() !== "") {
                 sql += ` AND UPPER(order_no) LIKE :orderNo `;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
                 // sql += ` AND split_status_id IN (2, 4, 5) `;
@@ -504,12 +509,12 @@ class WaitCutModel {
                 sql += ` AND split_status_id = 2 `;
             }
             // 🔍 กรองตามช่วงวันที่
-            if (startDate && startDate.trim() !== '') {
+            if (startDate && startDate.trim() !== "") {
                 // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
                 binds.startDate = startDate.trim(); // เช่น "08/08/2026"
             }
-            if (endDate && endDate.trim() !== '') {
+            if (endDate && endDate.trim() !== "") {
                 // 🎯 แก้จาก 'YYYY-MM-DD' เป็น 'DD/MM/YYYY'
                 sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
                 binds.endDate = endDate.trim(); // เช่น "10/08/2026"
@@ -561,7 +566,7 @@ class WaitCutModel {
                         pl_order_detail_id: row.PL_ORDER_DETAIL_ID,
                         split_set_id: row.SPLIT_SET_ID,
                         main_cut_status_id: row.MAIN_CUT_STATUS_ID,
-                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID
+                        pl_production_line_id: row.PL_PRODUCTION_LINE_ID,
                     });
                 }
             }
@@ -647,7 +652,7 @@ class WaitCutModel {
                 await conn.commit();
                 return true;
             }
-            // 🔄 2. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น) 
+            // 🔄 2. อัปเดตสถานะของ PL_CUT_SPLIT_SET เป็น 5 (เสร็จสิ้น)
             // 🎯 เพิ่ม update_staff และ update_date = SYSDATE
             const updateStatusQuery = `
                 UPDATE PL_CUT_SPLIT_SET
@@ -661,7 +666,7 @@ class WaitCutModel {
             await conn.execute(updateStatusQuery, {
                 split_set_id,
                 cut_length,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: false });
             // 🎯 3. เงื่อนไขสำคัญ: ถ้าสถานะเดิมเท่ากับ 4 (HOLD) ให้ข้ามการสร้างคิวรอชั่งน้ำหนักทันที!
             if (previousStatus === 4 && false) {
@@ -681,7 +686,7 @@ class WaitCutModel {
                     WHERE id = :split_set_id
                 `;
                 const result = await conn.execute(queryDetail, { split_set_id }, {
-                    outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                    outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
                 });
                 if (!result.rows || result.rows.length === 0) {
                     throw new Error(`ไม่พบข้อมูลรายละเอียดเซ็ต ID: ${split_set_id}`);
@@ -742,7 +747,7 @@ class WaitCutModel {
                         staffId: formattedStaffId,
                         k: roll.k_value || null,
                         model: roll.model || null,
-                        part_date: resDateStapme
+                        part_date: resDateStapme,
                     }, { autoCommit: false });
                 }
             }
@@ -773,8 +778,7 @@ class WaitCutModel {
             }
         }
     }
-    static async ResetCutSlitSet(split_set_id, pl_order_id, pl_order_detail_id, staff_id // 🎯 รับ staff_id เพิ่มเติม
-    ) {
+    static async ResetCutSlitSet(split_set_id, pl_order_id, pl_order_detail_id, staff_id) {
         // 1. ตรวจสอบเงื่อนไขเบื้องต้นก่อนดึง Connection
         const canReset = await weighing_model_1.WeighingModel.CheckResetSplitSet(split_set_id);
         // ถ้าไม่อนุญาตให้ Reset (เช่น data เป็น false / null) ให้รีเทิร์นออกไปได้เลย ไม่ต้องต่อ DB
@@ -799,7 +803,7 @@ class WaitCutModel {
             `;
             await conn.execute(updateCurrentRow, {
                 id: split_set_id,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: false });
             await conn.commit();
             return true;
@@ -846,7 +850,7 @@ class WaitCutModel {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             // แปลงผลลัพธ์เป็น Array ของ String เช่น ["ผ่านเกณฑ์", "ชำรุด", "ขนาดไม่ได้มาตรฐาน"]
-            const listRemark = remarkResult.rows?.map(r => r.REMARK) || [];
+            const listRemark = remarkResult.rows?.map((r) => r.REMARK) || [];
             // 🎯 2. Query ข้อมูลหลักตามเงื่อนไขเดิม
             let sql = `
                 SELECT 
@@ -899,15 +903,15 @@ class WaitCutModel {
             else {
                 sql += ` AND reel_no IS NULL`;
             }
-            if (orderNo && orderNo.trim() !== '') {
+            if (orderNo && orderNo.trim() !== "") {
                 sql += ` AND UPPER(order_no) LIKE :orderNo`;
                 binds.orderNo = `%${orderNo.trim().toUpperCase()}%`;
             }
-            if (startDate && startDate.trim() !== '') {
+            if (startDate && startDate.trim() !== "") {
                 sql += ` AND TRUNC(finish_at) >= TO_DATE(:startDate, 'DD/MM/YYYY')`;
                 binds.startDate = startDate.trim();
             }
-            if (endDate && endDate.trim() !== '') {
+            if (endDate && endDate.trim() !== "") {
                 sql += ` AND TRUNC(finish_at) <= TO_DATE(:endDate, 'DD/MM/YYYY')`;
                 binds.endDate = endDate.trim();
             }
@@ -949,7 +953,7 @@ class WaitCutModel {
                         date: row.DATE_STR,
                         time: row.TIME_STR,
                         remark: row.REMARK,
-                        list_remark: listRemark // 🎯 ยัด Array หมายเหตุย้อนหลัง 3 เดือนเข้าทุกวัตถุ
+                        list_remark: listRemark, // 🎯 ยัด Array หมายเหตุย้อนหลัง 3 เดือนเข้าทุกวัตถุ
                     });
                 }
             }
@@ -982,9 +986,9 @@ class WaitCutModel {
                 WHERE id = :id
             `;
             // 🎯 แปลงข้อมูลที่ส่งมาให้อยู่ในฟอร์ม Binds สำหรับ executeMany
-            const bindDefs = items.map(item => ({
+            const bindDefs = items.map((item) => ({
                 id: item.id,
-                remark: item.remark ? item.remark.trim() : null
+                remark: item.remark ? item.remark.trim() : null,
             }));
             // 🎯 สั่ง Update ทุกรายการรวดเดียวแบบ Batch
             const result = await conn.executeMany(sql, bindDefs, { autoCommit: false });
@@ -1014,12 +1018,9 @@ class WaitCutModel {
         try {
             conn = await (0, database_1.getConnection)();
             // 🧹 1. ทำความสะอาด Keyword
-            const cleanKeyword = keyword ? String(keyword).trim() : '';
+            const cleanKeyword = keyword ? String(keyword).trim() : "";
             // 🔍 2. เช็กว่ามีการส่ง keyword จริงๆ หรือไม่ (ไม่ใช่ค่าว่าง, %, 'null', 'undefined')
-            const hasKeyword = cleanKeyword !== '' &&
-                cleanKeyword !== '%' &&
-                cleanKeyword !== 'null' &&
-                cleanKeyword !== 'undefined';
+            const hasKeyword = cleanKeyword !== "" && cleanKeyword !== "%" && cleanKeyword !== "null" && cleanKeyword !== "undefined";
             // 📝 3. ประกอบ Dynamic SQL
             let sql = `
                 SELECT 
@@ -1047,7 +1048,7 @@ class WaitCutModel {
             // 📌 ใส่ ORDER BY เพื่อให้ผลลัพธ์เรียงลำดับอ่านง่ายเสมอ (ปรับตามคอลัมน์ที่ต้องการได้ค่ะ)
             sql += ` ORDER BY id DESC`;
             const result = await conn.execute(sql, bindVars, {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             return result.rows || [];
         }
@@ -1075,7 +1076,7 @@ class WaitCutModel {
             if (!reelResult.rows || reelResult.rows.length === 0) {
                 return {
                     success: false,
-                    message: `ไม่พบข้อมูล QC Reel ID: ${reelId} หรือม้วนนี้โควตาเต็ม/ปิดงานไปแล้ว`
+                    message: `ไม่พบข้อมูล QC Reel ID: ${reelId} หรือม้วนนี้โควตาเต็ม/ปิดงานไปแล้ว`,
                 };
             }
             const reelNo = reelResult.rows[0]?.REEL_NO;
@@ -1090,7 +1091,7 @@ class WaitCutModel {
             if (!currentSetResult.rows || currentSetResult.rows.length === 0) {
                 return {
                     success: false,
-                    message: `ไม่พบข้อมูล Set ID: ${splitSetId}`
+                    message: `ไม่พบข้อมูล Set ID: ${splitSetId}`,
                 };
             }
             const requiredQty = currentSetResult.rows[0]?.WAIT_WEIGHING_QTY || 0;
@@ -1098,7 +1099,7 @@ class WaitCutModel {
             if (requiredQty > remainingQty) {
                 return {
                     success: false,
-                    message: `ไม่สามารถเลือกม้วน QC (${reelNo}) ได้! โควตาคงเหลือไม่พอ (ม้วน QC เหลือตัดได้อีก ${remainingQty} ลูก แต่ Set นี้ต้องใช้ ${requiredQty} ลูก)`
+                    message: `ไม่สามารถเลือกม้วน QC (${reelNo}) ได้! โควตาคงเหลือไม่พอ (ม้วน QC เหลือตัดได้อีก ${remainingQty} ลูก แต่ Set นี้ต้องใช้ ${requiredQty} ลูก)`,
                 };
             }
             // 🟢 4. โควตาเพียงพอ -> UPDATE ตารางที่เกี่ยวข้องกัน
@@ -1150,7 +1151,7 @@ class WaitCutModel {
             await conn.commit();
             return {
                 success: true,
-                rowsAffected: result.rowsAffected
+                rowsAffected: result.rowsAffected,
             };
         }
         catch (error) {
@@ -1169,8 +1170,7 @@ class WaitCutModel {
         }
     }
     static async ManagerStatusPlOrderDetail(orderDetailId, staffId, // 🎯 รับ staffId
-    orderId // 🎯 รับ orderId (Optional)
-    ) {
+    orderId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -1222,7 +1222,7 @@ class WaitCutModel {
             const updateResult = await conn.execute(updateDetailSql, {
                 statusId: newCutStatusId,
                 orderDetailId: orderDetailId,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: false });
             // 🎯 Step 5: ตรวจสอบตาราง PL_ORDER และจัดการสถานะ
             let orderUpdatedCount = 0;
@@ -1250,7 +1250,7 @@ class WaitCutModel {
                     `;
                     // const updateOrderSql = `
                     //     UPDATE pl_order
-                    //     SET 
+                    //     SET
                     //         FINISH_ORDER = SYSDATE,
                     //         UPDATE_STAFF = :staffId,
                     //         UPDATE_DATE = SYSDATE
@@ -1259,7 +1259,7 @@ class WaitCutModel {
                     const orderResult = await conn.execute(updateOrderSql, {
                         orderId: currentOrderId,
                         staffId: formattedStaffId,
-                        status: WaitCutModel.last_status
+                        status: WaitCutModel.last_status,
                     }, { autoCommit: false });
                     orderUpdatedCount = orderResult.rowsAffected || 0;
                 }
@@ -1267,7 +1267,7 @@ class WaitCutModel {
                     // 🔴 5.3 ถ้ายึดตามเงื่อนไขที่ยังเหลือรายการไม่เสร็จ (REMAINING_COUNT > 0) -> ถอย status กลับเป็น default_status และล้างค่า FINISH_ORDER = NULL
                     // const revertOrderSql = `
                     //     UPDATE pl_order
-                    //     SET 
+                    //     SET
                     //         status = :status,
                     //         FINISH_ORDER = NULL,
                     //         UPDATE_STAFF = :staffId,
@@ -1276,7 +1276,7 @@ class WaitCutModel {
                     // `;
                     // const orderResult = await conn.execute(
                     //     revertOrderSql,
-                    //     { 
+                    //     {
                     //         orderId: currentOrderId,
                     //         staffId: formattedStaffId,
                     //         status: WaitCutModel.default_status || 'ส่งให้ Rewinder'
@@ -1296,7 +1296,7 @@ class WaitCutModel {
                 status2Sets: status2Sets,
                 updatedCutStatusId: newCutStatusId,
                 detailRowsAffected: updateResult.rowsAffected,
-                orderUpdatedCount: orderUpdatedCount
+                orderUpdatedCount: orderUpdatedCount,
             };
         }
         catch (error) {
@@ -1333,7 +1333,7 @@ class WaitCutModel {
             `;
             const setsResult = await conn.execute(updateSetsSql, {
                 orderDetailId: orderDetailId,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: false });
             // 🎯 Step 2: อัปเดตสถานะใน PL_ORDER_DETAIL ให้ cut_status_id = 5 (เสร็จสิ้น)
             const updateDetailSql = `
@@ -1371,7 +1371,7 @@ class WaitCutModel {
                     const orderResult = await conn.execute(updateOrderSql, {
                         orderId: orderId,
                         staffId: formattedStaffId,
-                        status: WaitCutModel.last_status
+                        status: WaitCutModel.last_status,
                     }, { autoCommit: false });
                     orderUpdatedCount = orderResult.rowsAffected || 0;
                 }
@@ -1387,7 +1387,7 @@ class WaitCutModel {
                 setsUpdatedCount: setsResult.rowsAffected,
                 detailUpdatedCount: detailResult.rowsAffected,
                 orderUpdatedCount: orderUpdatedCount,
-                message: "Successfully forced status to completed (5) and evaluated order completion"
+                message: "Successfully forced status to completed (5) and evaluated order completion",
             };
         }
         catch (error) {
@@ -1427,7 +1427,7 @@ class WaitCutModel {
             // 🎯 Step 2: ยกเลิกสถานะบังคับเสร็จสิ้นใน PL_CUT_SPLIT_SET (ถ้ามี)
             // const resetSetsSql = `
             //     UPDATE pl_cut_split_set
-            //     SET 
+            //     SET
             //         status = 1,
             //         finish_at = NULL,
             //         update_staff = :staffId,
@@ -1472,7 +1472,7 @@ class WaitCutModel {
                 orderId: orderId || null,
                 detailResetCount: detailResult.rowsAffected,
                 orderResetCount: orderResetCount,
-                message: "Successfully reset order detail status to 1 and reverted pl_order status"
+                message: "Successfully reset order detail status to 1 and reverted pl_order status",
             };
         }
         catch (error) {
@@ -1493,8 +1493,7 @@ class WaitCutModel {
                 await conn.close();
         }
     }
-    static async holdCutSplitSet(splitSetId, orderId, orderDetailId, staffId // 🎯 รับ staffId เพิ่มเติม
-    ) {
+    static async holdCutSplitSet(splitSetId, orderId, orderDetailId, staffId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -1513,9 +1512,8 @@ class WaitCutModel {
                 splitSetId: splitSetId,
                 orderId: orderId,
                 orderDetailId: orderDetailId,
-                staffId: formattedStaffId
-            }, { autoCommit: true } // Commit ธุรกรรมลง Database ทันที
-            );
+                staffId: formattedStaffId,
+            }, { autoCommit: true });
             // เช็คว่ามีแถวถูกอัปเดตจริงหรือไม่
             if (result.rowsAffected === 0) {
                 throw new Error(`ไม่พบรายการเซ็ตย่อย ID: ${splitSetId} ที่ต้องการ HOLD`);
@@ -1525,7 +1523,7 @@ class WaitCutModel {
                 orderId: orderId,
                 orderDetailId: orderDetailId,
                 rowsAffected: result.rowsAffected,
-                message: "Successfully updated set status to HOLD (4)"
+                message: "Successfully updated set status to HOLD (4)",
             };
         }
         catch (error) {
@@ -1552,7 +1550,8 @@ class WaitCutModel {
             const mainOrderResult = await conn.execute(checkMainOrderQuery, { orderDetailId: orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             const mainCutStatus = mainOrderResult.rows[0]?.CUT_STATUS_ID;
             // ถ้าใบสั่งตัดหลักอยู่ในสถานะ HOLD (เช่น เท่ากับ 5 หรือ 4 ตามโครงสร้างตารางคุณ) ให้ดีด Error ออกทันที
-            if (mainCutStatus === 4) { // ปรับเลข 5 ให้ตรงกับสถานะ HOLD ของ PL_ORDER_DETAIL จริงในระบบ
+            if (mainCutStatus === 4) {
+                // ปรับเลข 5 ให้ตรงกับสถานะ HOLD ของ PL_ORDER_DETAIL จริงในระบบ
                 throw new Error(`ไม่สามารถปลด HOLD ได้ เนื่องจากใบสั่งตัดหลัก (Order Detail) อยู่ในสถานะ HOLD`);
             }
             // 🎯 2. UPDATE สถานะของรายการเซ็ตย่อยกลับเป็น 2 (รอตัด)
@@ -1566,7 +1565,7 @@ class WaitCutModel {
                 `;
             const result = await conn.execute(updateSql, {
                 splitSetId: splitSetId,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: true });
             // 🛡️ เช็คว่ามีแถวถูกอัปเดตหรือไม่
             if (result.rowsAffected === 0) {
@@ -1577,7 +1576,7 @@ class WaitCutModel {
                 orderId: orderId,
                 orderDetailId: orderDetailId,
                 rowsAffected: result.rowsAffected,
-                message: "Successfully unheld set status back to waiting (2)"
+                message: "Successfully unheld set status back to waiting (2)",
             };
         }
         catch (error) {
@@ -1589,8 +1588,7 @@ class WaitCutModel {
                 await conn.close();
         }
     }
-    static async holdOrderDetail(orderDetailId, orderId, staffId // 🎯 1. รับ staffId เพิ่มเติม
-    ) {
+    static async holdOrderDetail(orderDetailId, orderId, staffId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -1645,7 +1643,7 @@ class WaitCutModel {
             return {
                 success: true,
                 finishedCount,
-                rowsAffected: result.rowsAffected
+                rowsAffected: result.rowsAffected,
             };
         }
         catch (error) {
@@ -1663,8 +1661,7 @@ class WaitCutModel {
                 await conn.close();
         }
     }
-    static async unholdOrderDetail(orderDetailId, orderId, staffId // 🎯 1. รับ staffId เพิ่มเติม
-    ) {
+    static async unholdOrderDetail(orderDetailId, orderId, staffId) {
         let conn;
         try {
             conn = await (0, database_1.getConnection)();
@@ -1692,7 +1689,7 @@ class WaitCutModel {
             await conn.commit();
             return {
                 success: true,
-                rowsAffected: result.rowsAffected
+                rowsAffected: result.rowsAffected,
             };
         }
         catch (error) {
@@ -1736,11 +1733,11 @@ class WaitCutModel {
                     model${posB} = model${posA},
                     update_staff = :staffId,
                     update_date = SYSDATE
-                WHERE id IN (${idList.map((_, i) => `:id_${i}`).join(',')})
+                WHERE id IN (${idList.map((_, i) => `:id_${i}`).join(",")})
             `;
             // สร้าง Bind Parameters สำหรับ IN clause (:id_0, :id_1, :id_2, ...)
             const bindParams = {
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             };
             idList.forEach((id, index) => {
                 bindParams[`id_${index}`] = id;
@@ -1785,7 +1782,7 @@ class WaitCutModel {
             `;
             const result = await conn.execute(updateSql, {
                 id,
-                staffId: formattedStaffId
+                staffId: formattedStaffId,
             }, { autoCommit: false });
             if (result.rowsAffected === 0) {
                 throw new Error(`ไม่พบข้อมูล QC_REEL สำหรับ ID: ${id}`);
@@ -1824,7 +1821,7 @@ class WaitCutModel {
                 GROUP BY pl_production_line_id, cut_status_id
             `;
             const result = await conn.execute(sql, { defaultStatus: WaitCutModel.default_status }, {
-                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT
+                outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const dataList = [];
             if (result.rows) {
@@ -1832,7 +1829,7 @@ class WaitCutModel {
                     dataList.push({
                         pl_production_line_id: row.PL_PRODUCTION_LINE_ID,
                         cut_status_id: row.CUT_STATUS_ID,
-                        total: row.TOTAL
+                        total: row.TOTAL,
                     });
                 }
             }
@@ -1840,6 +1837,151 @@ class WaitCutModel {
         }
         catch (error) {
             console.error("❌ Model Error [countWaitingCutByProductionLine]:", error);
+            throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async getExistingOrderSpecForAgent(orderDetailId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // ดึงรายการเซ็ตแรกสุดของใบงานนี้ที่มี order_id และ sequence_no ผูกอยู่
+            const sql = `
+           SELECT 
+                agent_order_id    AS ORDER_ID,
+                agent_sequence_no AS SEQUENCE_NO
+            FROM pl_cut_split_set
+            WHERE pl_order_detail_id = :orderDetailId
+            AND agent_order_id IS NOT NULL
+            AND ROWNUM = 1
+        `;
+            const result = await conn.execute(sql, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (result.rows && result.rows.length > 0) {
+                const row = result.rows[0];
+                return {
+                    status: true,
+                    hasExisting: true,
+                    orderId: row.ORDER_ID,
+                    sequenceNo: row.SEQUENCE_NO,
+                };
+            }
+            return { status: true, hasExisting: false };
+        }
+        catch (error) {
+            console.error("❌ Model Error [getExistingOrderSpecForAgent]:", error);
+            return { status: false, hasExisting: false };
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async getOrderDetailSpecById(orderDetailId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            const sql = `
+            SELECT 
+                order_no AS ORDER_NO,
+                NVL(blad1, 0) AS BLAD1,
+                NVL(blad2, 0) AS BLAD2,
+                NVL(blad3, 0) AS BLAD3,
+                NVL(blad4, 0) AS BLAD4
+            FROM pl_order_view
+            WHERE pl_order_detail_id = :orderDetailId
+            AND ROWNUM = 1
+        `;
+            const result = await conn.execute(sql, { orderDetailId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (result.rows && result.rows.length > 0) {
+                const row = result.rows[0];
+                return {
+                    order_no: row.ORDER_NO,
+                    blad1: Number(row.BLAD1),
+                    blad2: Number(row.BLAD2),
+                    blad3: Number(row.BLAD3),
+                    blad4: Number(row.BLAD4),
+                };
+            }
+            return null;
+        }
+        catch (error) {
+            console.error("❌ Model Error [getOrderDetailSpecById]:", error);
+            throw error;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async updateAgentRefToSplitSet(orderDetailId, orderId, sequenceNo) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            const sql = `
+            UPDATE pl_cut_split_set
+            SET agent_order_id = :orderId,
+                agent_sequence_no = :sequenceNo,
+                update_date = SYSDATE
+            WHERE pl_order_detail_id = :orderDetailId
+        `;
+            const result = await conn.execute(sql, { orderId, sequenceNo, orderDetailId }, { autoCommit: true });
+            return (result.rowsAffected || 0) > 0;
+        }
+        catch (error) {
+            console.error("❌ Model Error [updateAgentRefToSplitSet]:", error);
+            return false;
+        }
+        finally {
+            if (conn)
+                await conn.close();
+        }
+    }
+    static async updateFirstPendingSetCutLength(productionLineId, cutLength, orderId) {
+        let conn;
+        try {
+            conn = await (0, database_1.getConnection)();
+            // 1. SELECT หา split_set_id คิวแรกสุดที่รอตัด (split_status_id = 2)
+            const selectSql = `
+            SELECT split_set_id AS SPLIT_SET_ID
+            FROM (
+                SELECT split_set_id
+                FROM pl_cut_split_set_view
+                WHERE pl_production_line_id = :productionLineId
+                  AND split_status_id = 2
+                  AND agent_order_id = :agentOrderId
+                ORDER BY queue_no ASC, split_set_id ASC
+            )
+            WHERE ROWNUM = 1
+        `;
+            const selectResult = await conn.execute(selectSql, { productionLineId: Number(productionLineId), agentOrderId: orderId }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+            if (!selectResult.rows || selectResult.rows.length === 0) {
+                return {
+                    success: false,
+                    message: `ไม่พบคิวที่รอตัด (status = 2) ในไลน์ผลิต ${productionLineId}`,
+                };
+            }
+            const splitSetId = selectResult.rows[0].SPLIT_SET_ID;
+            // 2. 🟢 UPDATE เฉพาะความยาว cut_length ลงตาราง pl_cut_split_set (คง status = 2 ไว้ตามเดิม)
+            const updateSql = `
+            UPDATE pl_cut_split_set
+            SET CUT_LENGTH = :cutLength
+            WHERE id = :splitSetId
+        `;
+            await conn.execute(updateSql, {
+                cutLength: Number(cutLength),
+                splitSetId: Number(splitSetId)
+            }, { autoCommit: true });
+            return {
+                success: true,
+                updatedSplitSetId: Number(splitSetId),
+                message: `บันทึกความยาว ${cutLength} เมตร ลงเซ็ตย่อย ID: ${splitSetId} เรียบร้อยแล้ว`,
+            };
+        }
+        catch (error) {
+            console.error("❌ Model Error [updateFirstPendingSetCutLength]:", error);
             throw error;
         }
         finally {

@@ -254,6 +254,8 @@ SELECT
     p_cut.pl_order_id,
     p_cut.pl_order_detail_id,
     p_cut.qc_reel_id,
+	p_cut.agent_order_id,
+    p_cut.agent_sequence_no,
         
     p_or.order_no,
     p_de.order_item,
@@ -670,4 +672,17 @@ ALTER TABLE PL_CUT_SPLIT_SET ADD (
     MODEL2 VARCHAR2(20),
     MODEL3 VARCHAR2(20),
     MODEL4 VARCHAR2(20)
+);
+
+
+
+
+
+
+
+
+
+ALTER TABLE PL_CUT_SPLIT_SET ADD (
+    AGENT_SEQUENCE_NO VARCHAR2(20),
+    AGENT_ORDER_ID VARCHAR2(20)
 );
