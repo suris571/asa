@@ -2231,8 +2231,8 @@ export class WaitCutModel {
                 SELECT split_set_id
                 FROM pl_cut_split_set_view
                 WHERE pl_production_line_id = :productionLineId
-                  AND split_status_id = 2
-                  AND agent_order_id = :agentOrderId
+                AND split_status_id = 2
+                AND agent_order_id = :agentOrderId
                 ORDER BY queue_no ASC, split_set_id ASC
             )
             WHERE ROWNUM = 1
@@ -2271,6 +2271,26 @@ export class WaitCutModel {
         } catch (error: any) {
             console.error("❌ Model Error [updateFirstPendingSetCutLength]:", error);
             throw error;
+        } finally {
+            if (conn) await conn.close();
+        }
+    }
+
+    static async getCompletedSplitSetCount(orderDetailId: number | string): Promise<number> {
+        let conn;
+        try {
+            conn = await getConnection();
+            const sql = `
+                SELECT COUNT(*) AS COMPLETED_COUNT
+                FROM pl_cut_split_set
+                WHERE pl_order_detail_id = :orderDetailId
+                AND status = 5
+            `;
+            const result: any = await conn.execute(sql, { orderDetailId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+            return Number(result.rows[0]?.COMPLETED_COUNT || 0);
+        } catch (error) {
+            console.error("❌ Model Error [getCompletedSplitSetCount]:", error);
+            return 0;
         } finally {
             if (conn) await conn.close();
         }
