@@ -2232,12 +2232,11 @@ export class WaitCutModel {
                 FROM pl_cut_split_set_view
                 WHERE pl_production_line_id = :productionLineId
                 AND split_status_id = 2
-                AND agent_order_id = :agentOrderId
                 ORDER BY queue_no ASC, split_set_id ASC
             )
             WHERE ROWNUM = 1
         `;
-            const selectResult: any = await conn.execute(selectSql, { productionLineId: Number(productionLineId),agentOrderId:orderId }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+            const selectResult: any = await conn.execute(selectSql, { productionLineId: Number(productionLineId)}, { outFormat: oracledb.OUT_FORMAT_OBJECT });
             if (!selectResult.rows || selectResult.rows.length === 0) {
                 return {
                     success: false,

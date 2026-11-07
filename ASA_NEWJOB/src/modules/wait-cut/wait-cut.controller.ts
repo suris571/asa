@@ -54,6 +54,27 @@ export const startProduction = async (req: Request, res: Response) => {
         // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/wait-cut").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut");
 
+        let allowList = ['success','reset','hold','unhold'];
+
+        if(type && allowList.includes(type) && productionLineId == 161){
+            
+            try {
+                const existingSpec = await WaitCutModel.getExistingOrderSpecForAgent(orderDetailId);
+                if (existingSpec.hasExisting) {
+                    let req_delete = {
+                        orderId: existingSpec.orderId,
+                        sequenceNo: existingSpec.sequenceNo,
+                    }
+                    axios.post("http://127.0.0.1:5000/api/slitter/delete-queue", req_delete);
+                }
+            } catch (error) {
+                
+            }
+                
+
+        }
+
+
         if (type && type === "success") {
             const result = await WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId, staffId);
             await FnNextCutSplitSet(productionLineId);

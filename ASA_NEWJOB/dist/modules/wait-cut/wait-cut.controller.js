@@ -55,6 +55,21 @@ const startProduction = async (req, res) => {
         const io = (0, socket_1.getIO)();
         // 🎯 Helper ยิง Event เฉพาะ Room ของเครื่องตัวเอง
         const targetRoom = productionLineId ? io.of("/socket/wait-cut").to(`machine_room_${productionLineId}`) : io.of("/socket/wait-cut");
+        let allowList = ['success', 'reset', 'hold', 'unhold'];
+        if (type && allowList.includes(type) && productionLineId == 161) {
+            try {
+                const existingSpec = await wait_cut_model_1.WaitCutModel.getExistingOrderSpecForAgent(orderDetailId);
+                if (existingSpec.hasExisting) {
+                    let req_delete = {
+                        orderId: existingSpec.orderId,
+                        sequenceNo: existingSpec.sequenceNo,
+                    };
+                    axios_1.default.post("http://127.0.0.1:5000/api/slitter/delete-queue", req_delete);
+                }
+            }
+            catch (error) {
+            }
+        }
         if (type && type === "success") {
             const result = await wait_cut_model_1.WaitCutModel.forceCompleteOrderDetail(orderDetailId, orderId, staffId);
             await (0, socket_1.FnNextCutSplitSet)(productionLineId);
@@ -111,11 +126,26 @@ const startProduction = async (req, res) => {
         }
         // 3. เช็กว่าเคยมี orderId / sequenceNo เดิมใน DB หรือยัง
         const existingSpec = await wait_cut_model_1.WaitCutModel.getExistingOrderSpecForAgent(orderDetailId);
+        // 🟢 3.1 คำนวณจำนวน SetCount ที่ต้องส่งให้ Agent จริง
+        let setCountToSend = Number(qty);
+        if (existingSpec.hasExisting) {
+            // ดึงจำนวนเซ็ตที่ตัดเสร็จสิ้นแล้ว (status = 5) ใน DB ของเรา
+            const completedSetsCount = await wait_cut_model_1.WaitCutModel.getCompletedSplitSetCount(orderDetailId);
+            // หายอดที่ต้องสั่งตัดเพิ่มจริง = ยอดใหม่ที่ต้องการ - ยอดที่ทำเสร็จไปแล้ว
+            setCountToSend = Number(qty) - completedSetsCount;
+            // ป้องกันกรณีผู้ใช้ระบุ qty น้อยกว่าหรือเท่ากับจำนวนที่เสร็จไปแล้ว
+            if (setCountToSend <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `ไม่สามารถส่งตัดได้ เนื่องจากทำเสร็จไปแล้ว ${completedSetsCount} เซ็ต (ระบุยอดใหม่ ${qty} เซ็ต)`,
+                });
+            }
+        }
         // 4. เตรียม Payload ยิงหา Agent
         const agentPayload = {
             payload: {
                 order_no: orderSpec.order_no,
-                SetCount: Number(qty),
+                SetCount: setCountToSend, // 👈 ใช้ยอดคำนวณใหม่ที่หักส่วนเสร็จออกแล้ว,
                 blad1: orderSpec.blad1,
                 blad2: orderSpec.blad2,
                 blad3: orderSpec.blad3,

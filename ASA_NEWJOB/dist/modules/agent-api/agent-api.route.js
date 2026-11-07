@@ -8,10 +8,16 @@ const router = (0, express_1.Router)();
  * 📥 Public API: รับ Report ผลการตัดจาก Agent เครื่องตัด Yueli ($R01)
  * POST /api/slitter/report
  */
+router.get('/slitter/reports', async (req, res) => {
+    return res.status(200).json({
+        success: true,
+        message: "รับข้อมูลจาก Agent เรียบร้อยแล้ว",
+        receivedData: {}
+    });
+});
 router.post('/slitter/reports', async (req, res) => {
     try {
-        // console.log("📥 [Agent API] ได้รับ Request จากเครื่องตัด:", req.body);
-        // ดึงข้อมูลที่ส่งมาจาก Agent
+        console.log("📥 [Agent API] ได้รับ Request จากเครื่องตัด:", req.body);
         const { orderId, makeCnt, length, productionLineId } = req.body;
         let resCon = await wait_cut_model_1.WaitCutModel.updateFirstPendingSetCutLength(productionLineId, length, orderId);
         if (resCon.success) {
