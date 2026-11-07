@@ -115,7 +115,7 @@ class WeighingModel {
             let orderByClause = ``;
             if (type === "history") {
                 whereClause += ` AND roll_no IS NOT NULL`;
-                orderByClause = ` ORDER BY roll_no DESC`;
+                orderByClause = ` ORDER BY update_date DESC`;
             }
             else {
                 if (productionLineId == 162) { // PM2
@@ -385,43 +385,75 @@ class WeighingModel {
                 await conn.close();
         }
     }
-    static async getMaxRollNo(productionLineId, connection) {
+    static async getMaxRollNo(productionLineId, connection, id_pl_wait_weight = "") {
         let conn;
+        let isVat = true; // Default เป็น VAT
         try {
             conn = connection ?? await (0, database_1.getConnection)();
+            // 🟢 1. ค้นหาค่า k จาก pl_wait_weighing_view เพื่อดูว่าเป็น VAT หรือ NOVAT
+            if (id_pl_wait_weight) {
+                const checkKSql = `
+                    SELECT k 
+                    FROM pl_wait_weighing_view 
+                    WHERE id = :id_pl_wait_weight
+                `;
+                const kResult = await conn.execute(checkKSql, { id_pl_wait_weight }, { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
+                const kValue = kResult.rows?.[0]?.K;
+                // ถ้า k != 'N' แสดงว่าเป็น NOVAT
+                if (kValue && kValue !== 'N') {
+                    isVat = false;
+                }
+            }
+            // -------------------------------------------------------------
+            // 🔴 CASE 1: NOVAT (กรองด้วย PL_PRODUCTION_LINE_ID และลงท้ายด้วย K)
+            // -------------------------------------------------------------
+            if (!isVat) {
+                const sqlNoVat = `
+                    SELECT MAX(TO_NUMBER(CASE 
+                        WHEN REGEXP_LIKE(SUBSTR(roll_no, 1, LENGTH(roll_no) - 1), '^[0-9]+$') 
+                        THEN SUBSTR(roll_no, 1, LENGTH(roll_no) - 1) 
+                    END)) + 1 AS NEXT_NUM
+                    FROM PD_ROLL
+                    WHERE PL_PRODUCTION_LINE_ID = :productionLineId
+                    AND roll_no LIKE '%K'
+                `;
+                const result = await conn.execute(sqlNoVat, { productionLineId: Number(productionLineId) }, {
+                    outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
+                });
+                const nextNum = result.rows[0]?.NEXT_NUM;
+                if (!nextNum)
+                    return ""; // ถ้าหา MAX ไม่ได้ (ไม่มีม้วนเดิม) คืนค่าว่างทันที
+                return `${nextNum}K`;
+            }
+            // -------------------------------------------------------------
+            // 🟢 CASE 2: VAT (กรองเฉพาะขึ้นต้น 1 หรือ 2 ความยาว 9 หลัก)
+            // -------------------------------------------------------------
             let prefixFilter = '';
-            let defaultStartNo = 1;
             if (Number(productionLineId) === 161) {
-                // 🎯 กรองเฉพาะขึ้นต้นด้วย 1, มีความยาว 9 หลัก และเป็นตัวเลขล้วนเท่านั้น
                 prefixFilter = "AND roll_no LIKE '1%' AND LENGTH(roll_no) = 9";
-                defaultStartNo = 100000001; // ค่าเริ่มต้น 9 หลักสำหรับสาย 161
             }
             else if (Number(productionLineId) === 162) {
-                // 🎯 กรองเฉพาะขึ้นต้นด้วย 2, มีความยาว 9 หลัก และเป็นตัวเลขล้วนเท่านั้น
                 prefixFilter = "AND roll_no LIKE '2%' AND LENGTH(roll_no) = 9";
-                defaultStartNo = 200000001; // ค่าเริ่มต้น 9 หลักสำหรับสาย 162
             }
-            const sql = `
-            SELECT NVL(
-                MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)), 
-                ${defaultStartNo - 1}
-            ) + 1 AS NEXT_ROLL_NO
-            FROM PD_ROLL
-            WHERE 1=1 ${prefixFilter}
-        `;
-            const result = await conn.execute(sql, [], {
+            else {
+                return ""; // ถ้าไม่ใช่ PM1 หรือ PM2 ให้คืนค่าว่าง
+            }
+            const sqlVat = `
+                SELECT MAX(TO_NUMBER(CASE WHEN REGEXP_LIKE(roll_no, '^[0-9]+$') THEN roll_no END)) + 1 AS NEXT_ROLL_NO
+                FROM PD_ROLL
+                WHERE 1=1 ${prefixFilter}
+            `;
+            const result = await conn.execute(sqlVat, [], {
                 outFormat: oracledb_1.default.OUT_FORMAT_OBJECT,
             });
             const nextRoll = result.rows[0]?.NEXT_ROLL_NO;
-            return String(nextRoll || defaultStartNo);
+            if (!nextRoll)
+                return ""; // ถ้าหา MAX ไม่ได้ ให้คืนค่าว่าง
+            return String(nextRoll);
         }
         catch (error) {
             console.error("❌ เกิดข้อผิดพลาดใน Model [getMaxRollNo]:", error);
-            if (Number(productionLineId) === 161)
-                return "";
-            if (Number(productionLineId) === 162)
-                return "";
-            return "1";
+            return ""; // หากเกิด Error คืนค่าว่างทันที
         }
         finally {
             if (conn && !connection)
@@ -486,7 +518,7 @@ class WeighingModel {
             const seqResult = await conn.execute(`SELECT sq_pd_roll.nextval AS NEW_ID FROM DUAL`, [], { outFormat: oracledb_1.default.OUT_FORMAT_OBJECT });
             const newPdRollId = seqResult.rows[0]?.NEW_ID;
             // 🟢 4. ดึง roll_no
-            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId, conn);
+            let roll_no = await WeighingModel.getMaxRollNo(data.productionLineId, conn, data.id_pl_wait_weight);
             if (!roll_no || String(roll_no).trim() === '') {
                 console.error("❌ ไม่สามารถสร้างเลข Roll No ได้เนื่องจากข้อผิดพลาดใน Model");
                 if (!connection)
