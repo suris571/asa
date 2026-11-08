@@ -134,12 +134,12 @@ const startProduction = async (req, res) => {
             // หายอดที่ต้องสั่งตัดเพิ่มจริง = ยอดใหม่ที่ต้องการ - ยอดที่ทำเสร็จไปแล้ว
             setCountToSend = Number(qty) - completedSetsCount;
             // ป้องกันกรณีผู้ใช้ระบุ qty น้อยกว่าหรือเท่ากับจำนวนที่เสร็จไปแล้ว
-            if (setCountToSend <= 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: `ไม่สามารถส่งตัดได้ เนื่องจากทำเสร็จไปแล้ว ${completedSetsCount} เซ็ต (ระบุยอดใหม่ ${qty} เซ็ต)`,
-                });
-            }
+            // if (setCountToSend <= 0) {
+            //     return res.status(400).json({
+            //         success: false,
+            //         message: `ไม่สามารถส่งตัดได้ เนื่องจากทำเสร็จไปแล้ว ${completedSetsCount} เซ็ต (ระบุยอดใหม่ ${qty} เซ็ต)`,
+            //     });
+            // }
         }
         // 4. เตรียม Payload ยิงหา Agent
         const agentPayload = {
