@@ -1325,6 +1325,7 @@ class WaitCutModel {
                 SET 
                     status = 5,
                     sub_status = 'บังคับเสร็จสิ้น',
+                    cut_length = 0,
                     finish_at = SYSDATE,
                     update_staff = :staffId,
                     update_date = SYSDATE

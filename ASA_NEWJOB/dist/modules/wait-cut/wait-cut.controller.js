@@ -171,7 +171,7 @@ const startProduction = async (req, res) => {
         targetRoom.emit("queue_structure_changed", { success: true });
         return res.status(200).json({
             success: true,
-            message: "บันทึกคำสั่งและสร้างรายการเซ็ตย่อยสำเร็จ",
+            message: agentRes?.data?.message || "บันทึกคำสั่งและสร้างรายการเซ็ตย่อยสำเร็จ",
             data: createResult,
         });
     }
